@@ -1,0 +1,367 @@
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  User,
+  Building2,
+  Phone,
+  Mail,
+  MapPin,
+  Briefcase,
+  Layers,
+  UserCheck,
+  FileText,
+  PlusCircle,
+  Loader2,
+  Palette,
+} from "lucide-react";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { createProspect, CreateProspectInput } from "@/lib/prospects";
+import { stagesQuery } from "@/lib/stages";
+import { servicesQueryOptions } from "@/lib/services";
+import { agentOptionsQueryOptions } from "@/lib/won-sales";
+import { useAuth } from "@/lib/auth";
+
+export type AddProspectDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
+};
+
+export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspectDialogProps) {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  // Form fields state
+  const [contactName, setContactName] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [designation, setDesignation] = useState("");
+  const [phone, setPhone] = useState("");
+  const [altPhone, setAltPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [serviceId, setServiceId] = useState<string>("none");
+  const [artist, setArtist] = useState<string>("none");
+  const [assignedTo, setAssignedTo] = useState<string>("none");
+  const [notes, setNotes] = useState("");
+
+  // Queries for dropdown options
+  const { data: rawStages = [] } = useQuery(stagesQuery());
+  const { data: rawServices = [] } = useQuery(servicesQueryOptions());
+  const { data: rawAgents = [] } = useQuery(agentOptionsQueryOptions());
+
+  const stages = Array.isArray(rawStages) ? rawStages : [];
+  const services = Array.isArray(rawServices) ? rawServices : [];
+  const agents = Array.isArray(rawAgents) ? rawAgents : [];
+
+  const resetForm = () => {
+    setContactName("");
+    setBusinessName("");
+    setDesignation("");
+    setPhone("");
+    setAltPhone("");
+    setEmail("");
+    setAddress("");
+    setServiceId("none");
+    setArtist("none");
+    setAssignedTo("none");
+    setNotes("");
+  };
+
+  const createMutation = useMutation({
+    mutationFn: async (input: CreateProspectInput) => createProspect(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["prospects"] });
+      queryClient.invalidateQueries({ queryKey: ["prospects-stats"] });
+      toast.success("Prospect added successfully!");
+      resetForm();
+      onOpenChange(false);
+      if (onSuccess) onSuccess();
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to add prospect. Please try again.");
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactName.trim()) {
+      toast.error("Contact Name is required.");
+      return;
+    }
+
+    // Default stage is Prospect
+    const prospectStage =
+      stages.find((s) => s.name.toLowerCase() === "prospect") || stages.find((s) => s.is_active);
+    const initialStageId = prospectStage?.id || "prospect";
+    const selectedAgent = agents.find((ag) => ag.id === assignedTo);
+    const agentTag = selectedAgent ? `[Agent: ${selectedAgent.name}]` : "";
+
+    const notesParts: string[] = [];
+    if (artist !== "none") notesParts.push(`[Artist: ${artist}]`);
+    if (agentTag) notesParts.push(agentTag);
+    if (notes.trim()) notesParts.push(notes.trim());
+
+    const finalNotes = notesParts.length > 0 ? notesParts.join(" ") : null;
+
+    createMutation.mutate({
+      contact_name: contactName.trim(),
+      business_name: businessName.trim() || null,
+      designation: designation.trim() || null,
+      phone: phone.trim() || null,
+      alternative_phone: altPhone.trim() || null,
+      email: email.trim() || null,
+      address: address.trim() || null,
+      service_id: serviceId !== "none" ? serviceId : null,
+      stage_id: initialStageId,
+      assigned_to: assignedTo !== "none" ? assignedTo : user?.id || null,
+      created_by: user?.id || null,
+      notes: finalNotes,
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-6 sm:p-7 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xl bg-white dark:bg-card">
+        {/* Header with Brand Icon */}
+        <div className="flex items-start gap-3.5">
+          <div className="size-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-[#67B239] font-bold flex items-center justify-center shrink-0 border border-emerald-200/60 dark:border-emerald-800/60 shadow-2xs">
+            <PlusCircle className="size-5" />
+          </div>
+          <div>
+            <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+              Add New Prospect
+            </DialogTitle>
+            <DialogDescription className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">
+              Create a new lead profile in Brandium CRM to start tracking sales stages.
+            </DialogDescription>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          {/* Section 1: Basic Information */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Contact Name */}
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <User className="size-3.5 text-[#67B239]" />
+                Contact Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                placeholder="e.g. Mehan Ahmed"
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+                required
+                className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"
+              />
+            </div>
+
+            {/* Business Name */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Building2 className="size-3.5 text-slate-500" />
+                Business Name
+              </Label>
+              <Input
+                placeholder="e.g. AurevixSoft"
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"
+              />
+            </div>
+
+            {/* Designation */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Briefcase className="size-3.5 text-slate-500" />
+                Designation / Title
+              </Label>
+              <Input
+                placeholder="e.g. Managing Director"
+                value={designation}
+                onChange={(e) => setDesignation(e.target.value)}
+                className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Section 2: Contact Details */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Phone */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Phone className="size-3.5 text-emerald-600" />
+                Phone Number
+              </Label>
+              <Input
+                placeholder="+8801711002233"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"
+              />
+            </div>
+
+            {/* Email */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Mail className="size-3.5 text-blue-500" />
+                Email Address
+              </Label>
+              <Input
+                type="email"
+                placeholder="mehan@aurevixsoft.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"
+              />
+            </div>
+
+            {/* Address */}
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <MapPin className="size-3.5 text-amber-500" />
+                Office Address / Location
+              </Label>
+              <Textarea
+                placeholder="House 42, Road 11, Banani, Dhaka"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 min-h-[75px] resize-y text-xs sm:text-sm rounded-xl focus:bg-white dark:focus:bg-card transition-all"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          {/* Section 3: CRM Assignment & Pipeline Stage */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Service Interested */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Briefcase className="size-3.5 text-purple-500" />
+                Service
+              </Label>
+              <Select value={serviceId} onValueChange={setServiceId}>
+                <SelectTrigger className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all">
+                  <SelectValue placeholder="Select Service" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800">
+                  <SelectItem value="none">No specific service</SelectItem>
+                  {services.map((srv) => (
+                    <SelectItem key={srv.id} value={srv.id}>
+                      {srv.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Select Artist */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Palette className="size-3.5 text-[#67B239]" />
+                Select Artist
+              </Label>
+              <Select value={artist} onValueChange={setArtist}>
+                <SelectTrigger className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all">
+                  <SelectValue placeholder="Select Artist" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800">
+                  <SelectItem value="none">No Artist Selected</SelectItem>
+                  {agents.map((ag) => (
+                    <SelectItem key={ag.id} value={ag.name}>
+                      {ag.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Assign Agent */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <UserCheck className="size-3.5 text-emerald-600" />
+                Assigned Agent
+              </Label>
+              <Select value={assignedTo} onValueChange={setAssignedTo}>
+                <SelectTrigger className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all">
+                  <SelectValue placeholder="Assign Agent" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800">
+                  <SelectItem value="none">Assign to Me</SelectItem>
+                  {agents.map((ag) => (
+                    <SelectItem key={ag.id} value={ag.id}>
+                      {ag.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Section 4: Requirement Notes */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <FileText className="size-3.5 text-slate-500" />
+              Notes / Key Requirements
+            </Label>
+            <Textarea
+              placeholder="Enter specific client requirements, budget details, or source info..."
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm rounded-xl focus:bg-white dark:focus:bg-card transition-all resize-y"
+            />
+          </div>
+
+          <DialogFooter className="pt-2 gap-2 sm:gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={createMutation.isPending}
+              className="font-bold text-xs sm:text-sm h-9.5 rounded-xl border-slate-200/90 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              className="bg-[#67B239] hover:bg-[#5aa030] text-white font-bold text-xs sm:text-sm h-9.5 rounded-xl shadow-2xs gap-1.5 transition-all cursor-pointer"
+              disabled={createMutation.isPending}
+            >
+              {createMutation.isPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Saving Prospect...
+                </>
+              ) : (
+                <>
+                  <PlusCircle className="size-4" />
+                  Save & Add Prospect
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

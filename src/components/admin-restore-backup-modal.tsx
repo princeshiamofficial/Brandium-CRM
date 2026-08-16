@@ -1,0 +1,315 @@
+import { useState, ChangeEvent } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  UploadCloud,
+  FileCheck,
+  AlertTriangle,
+  ShieldCheck,
+  CheckCircle2,
+  RotateCcw,
+  Database,
+  ArrowRight,
+} from "lucide-react";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+
+import {
+  validateBackupFile,
+  executeTransactionalRestore,
+  RestoreValidationResult,
+  RestoreMode,
+} from "@/lib/data-backup";
+
+type AdminRestoreBackupModalProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+export function AdminRestoreBackupModal({ open, onOpenChange }: AdminRestoreBackupModalProps) {
+  const queryClient = useQueryClient();
+
+  const [step, setStep] = useState<"upload" | "preview" | "confirm">("upload");
+  const [fileName, setFileName] = useState<string>("");
+  const [validationResult, setValidationResult] = useState<RestoreValidationResult | null>(null);
+  const [mode, setMode] = useState<RestoreMode>("merge");
+
+  const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      const res = validateBackupFile(content);
+      setValidationResult(res);
+      if (res.valid) {
+        setStep("preview");
+        toast.success("JSON backup file validated successfully!");
+      } else {
+        toast.error(res.error || "Validation failed.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const restoreMutation = useMutation({
+    mutationFn: async () => {
+      if (!validationResult?.rawPayload) {
+        throw new Error("No valid backup payload loaded.");
+      }
+      return executeTransactionalRestore(validationResult.rawPayload, mode);
+    },
+    onSuccess: (res) => {
+      toast.success(res.message);
+      resetWizard();
+      onOpenChange(false);
+      void queryClient.invalidateQueries();
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Transactional restore failed.");
+    },
+  });
+
+  const resetWizard = () => {
+    setStep("upload");
+    setFileName("");
+    setValidationResult(null);
+    setMode("merge");
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(op) => {
+        if (!op) resetWizard();
+        onOpenChange(op);
+      }}
+    >
+      <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-foreground">
+            <RotateCcw className="size-5 text-[#67B239]" />
+            Transactional CRM Restore Wizard
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            7-Stage validation & pre-restore safety snapshot protection. Do not blindly import JSON
+            files.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Wizard Steps Indicator */}
+        <div className="flex items-center justify-between text-xs border-b pb-3 pt-1 font-medium text-muted-foreground">
+          <div
+            className={`flex items-center gap-1 ${
+              step === "upload" ? "text-[#67B239] font-bold" : "text-slate-400"
+            }`}
+          >
+            <span>1. Upload & Validate</span>
+          </div>
+          <ArrowRight className="size-3 text-slate-300" />
+          <div
+            className={`flex items-center gap-1 ${
+              step === "preview" ? "text-[#67B239] font-bold" : "text-slate-400"
+            }`}
+          >
+            <span>2. Preview & Conflicts</span>
+          </div>
+          <ArrowRight className="size-3 text-slate-300" />
+          <div
+            className={`flex items-center gap-1 ${
+              step === "confirm" ? "text-[#67B239] font-bold" : "text-slate-400"
+            }`}
+          >
+            <span>3. Safety Snapshot & Commit</span>
+          </div>
+        </div>
+
+        {/* Stage 1: File Upload */}
+        {step === "upload" && (
+          <div className="py-6 space-y-4 text-center">
+            <div className="border-2 border-dashed border-slate-200 dark:border-border rounded-xl p-8 hover:bg-slate-50 dark:hover:bg-muted/30 transition-colors">
+              <UploadCloud className="size-12 text-[#67B239] mx-auto mb-2" />
+              <h3 className="font-bold text-sm text-foreground">Select CRM Backup JSON File</h3>
+              <p className="text-xs text-muted-foreground mt-1 mb-4">
+                Upload `.json` backup file generated by Brandium CRM.
+              </p>
+
+              <label className="cursor-pointer inline-flex items-center gap-2 bg-[#67B239] hover:bg-[#5aa030] text-white px-4 py-2 rounded-lg font-medium text-xs shadow-xs">
+                Browse File
+                <input type="file" accept=".json" className="hidden" onChange={handleFileUpload} />
+              </label>
+            </div>
+
+            {fileName && (
+              <p className="text-xs font-mono text-muted-foreground">
+                Selected: <strong>{fileName}</strong>
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Stage 2, 3, 4, 5: Preview Record Counts & Detect Conflicts */}
+        {step === "preview" && validationResult && (
+          <div className="space-y-4 py-2 text-xs">
+            {/* Schema Check */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200">
+              <div className="flex items-center gap-2">
+                <FileCheck className="size-4 text-emerald-600" />
+                <span className="font-bold text-emerald-900 dark:text-emerald-200">
+                  Schema Version: {validationResult.schema_version}
+                </span>
+              </div>
+              <Badge className="bg-emerald-600 text-white text-[10px]">Verified Valid</Badge>
+            </div>
+
+            {/* Entity Record Counts Table */}
+            <div className="space-y-1.5">
+              <h4 className="font-bold text-foreground">Backup Record Counts Preview:</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[11px]">
+                <div className="p-2 rounded bg-slate-50 border">
+                  Prospects: <strong>{validationResult.counts.prospects}</strong>
+                </div>
+                <div className="p-2 rounded bg-slate-50 border">
+                  Invoices: <strong>{validationResult.counts.invoices}</strong>
+                </div>
+                <div className="p-2 rounded bg-slate-50 border">
+                  Services: <strong>{validationResult.counts.services}</strong>
+                </div>
+                <div className="p-2 rounded bg-slate-50 border">
+                  Meetings: <strong>{validationResult.counts.meetings}</strong>
+                </div>
+                <div className="p-2 rounded bg-slate-50 border">
+                  Opportunities: <strong>{validationResult.counts.opportunities}</strong>
+                </div>
+                <div className="p-2 rounded bg-slate-50 border">
+                  Payments: <strong>{validationResult.counts.payments}</strong>
+                </div>
+                <div className="p-2 rounded bg-slate-50 border">
+                  SMS Logs: <strong>{validationResult.counts.sms_logs}</strong>
+                </div>
+                <div className="p-2 rounded bg-slate-50 border">
+                  Users (No Passwords): <strong>{validationResult.counts.users}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Conflicts Warning */}
+            {validationResult.conflict_messages.length > 0 && (
+              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-200">
+                  <AlertTriangle className="size-4 text-amber-600 shrink-0" />
+                  Conflicts Detected ({validationResult.conflicts_detected}):
+                </div>
+                <ul className="list-disc list-inside text-[11px] text-amber-800 dark:text-amber-300 space-y-0.5 pl-1">
+                  {validationResult.conflict_messages.map((msg, i) => (
+                    <li key={i}>{msg}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Restore Mode Selector */}
+            <div className="space-y-2 pt-1">
+              <Label className="text-xs font-bold">Conflict Resolution Strategy:</Label>
+              <RadioGroup value={mode} onValueChange={(v) => setMode(v as RestoreMode)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="merge" id="r_merge" />
+                  <Label htmlFor="r_merge" className="text-xs cursor-pointer font-medium">
+                    Merge Records (Keep existing data and append non-duplicate records)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="overwrite" id="r_overwrite" />
+                  <Label htmlFor="r_overwrite" className="text-xs cursor-pointer font-medium">
+                    Transactional Overwrite (Replace matched entity records)
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+          </div>
+        )}
+
+        {/* Stage 6 & 7: Pre-Restore Safety Snapshot & Final Confirmation */}
+        {step === "confirm" && (
+          <div className="space-y-4 py-4 text-xs">
+            <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 text-blue-900 dark:text-blue-200 space-y-2">
+              <div className="flex items-center gap-2 font-bold text-sm">
+                <ShieldCheck className="size-5 text-blue-600" />
+                Pre-Restore Safety Snapshot Guaranteed
+              </div>
+              <p className="leading-relaxed">
+                Before executing the transactional restore, a pre-restore safety snapshot will be
+                automatically saved. If any error occurs during import, the transaction will
+                automatically roll back cleanly.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-lg border bg-slate-50 space-y-1 font-mono text-[11px]">
+              <div>
+                Target Resolution Mode: <strong>{mode.toUpperCase()}</strong>
+              </div>
+              <div>
+                Pre-restore Backup Key: <strong>pre_restore_safety_backup_auto</strong>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+          {step === "upload" && (
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+          )}
+
+          {step === "preview" && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setStep("upload")}>
+                Back to Upload
+              </Button>
+              <Button
+                size="sm"
+                className="bg-[#67B239] hover:bg-[#5aa030] text-white gap-1.5"
+                onClick={() => setStep("confirm")}
+              >
+                Proceed to Safety Snapshot <ArrowRight className="size-3.5" />
+              </Button>
+            </>
+          )}
+
+          {step === "confirm" && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setStep("preview")}>
+                Back to Preview
+              </Button>
+              <Button
+                size="sm"
+                className="bg-[#67B239] hover:bg-[#5aa030] text-white gap-1.5"
+                disabled={restoreMutation.isPending}
+                onClick={() => restoreMutation.mutate()}
+              >
+                <CheckCircle2 className="size-4" />
+                {restoreMutation.isPending
+                  ? "Executing Transactional Restore..."
+                  : "Execute Transactional Restore"}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

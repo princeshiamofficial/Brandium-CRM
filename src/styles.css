@@ -1,0 +1,300 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@source "../src";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-heading:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-surface: var(--surface);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-dark-bg: var(--dark-bg);
+  --color-dark-text: var(--dark-text);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.625rem;
+
+  /* Brandium Theme Colors */
+  --primary: #0a2e5c; /* navy - main brand color */
+  --primary-foreground: #ffffff;
+  --secondary: #7ac142; /* green - CTAs, highlights, growth accents */
+  --secondary-foreground: #0a2e5c;
+  --accent: #9ed968; /* lighter green - hover states */
+  --accent-foreground: #0a2e5c;
+
+  --background: #eeeff2;
+  --foreground: #0a2e5c; /* navy text on light backgrounds */
+  --surface: #eeeff2; /* light gray background */
+  --text: #0a2e5c;
+  --text-muted: #5a6b85;
+
+  --card: #ffffff;
+  --card-foreground: #0a2e5c;
+  --popover: #ffffff;
+  --popover-foreground: #0a2e5c;
+
+  --muted: #f5f7fa;
+  --muted-foreground: #5a6b85;
+  --border: #e1e6ed;
+  --input: #e1e6ed;
+  --ring: #7ac142;
+
+  --dark-bg: #0a2e5c; /* for footer/hero sections matching logo */
+  --dark-text: #ffffff;
+
+  --success: #7ac142;
+  --warning: #f5a623;
+  --error: #e23d3d;
+  --destructive: #e23d3d;
+  --destructive-foreground: #ffffff;
+  --info: #3b82f6;
+
+  --chart-1: #0a2e5c;
+  --chart-2: #7ac142;
+  --chart-3: #9ed968;
+  --chart-4: #f5a623;
+  --chart-5: #3b82f6;
+
+  --sidebar: #0b3364;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #7ac142;
+  --sidebar-primary-foreground: #0b3364;
+  --sidebar-accent: rgba(255, 255, 255, 0.12);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.15);
+  --sidebar-ring: #7ac142;
+}
+
+.dark {
+  --background: #0a2e5c;
+  --foreground: #ffffff;
+  --surface: #10386b;
+  --text: #ffffff;
+  --text-muted: #94a3b8;
+
+  --card: #10386b;
+  --card-foreground: #ffffff;
+  --popover: #10386b;
+  --popover-foreground: #ffffff;
+
+  --primary: #7ac142;
+  --primary-foreground: #0a2e5c;
+  --secondary: #9ed968;
+  --secondary-foreground: #0a2e5c;
+  --accent: #1e4b85;
+  --accent-foreground: #ffffff;
+
+  --muted: #10386b;
+  --muted-foreground: #94a3b8;
+  --border: #1e4b85;
+  --input: #1e4b85;
+  --ring: #7ac142;
+
+  --dark-bg: #071f3f;
+  --dark-text: #ffffff;
+
+  --sidebar: #071f3f;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #7ac142;
+  --sidebar-primary-foreground: #0a2e5c;
+  --sidebar-accent: #10386b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #1e4b85;
+  --sidebar-ring: #7ac142;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Surface components (cards, inputs, select triggers, popovers, calendars) default to white background */
+  .bg-card,
+  .bg-popover,
+  [data-slot="card"],
+  [data-slot="calendar"],
+  [data-slot="select-trigger"],
+  [data-slot="popover-content"],
+  .rdp-root,
+  .rdp-months {
+    background-color: #ffffff !important;
+  }
+}
+
+/* Sleek modern custom side scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(10, 46, 92, 0.25);
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #67b239;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #67b239;
+}
+
+/* Serrated Sawtooth / Postage Stamp Edge Cut */
+.sawtooth-cut {
+  position: relative;
+  clip-path: polygon(
+    0% 0%,
+    2.5% 4px,
+    5% 0%,
+    7.5% 4px,
+    10% 0%,
+    12.5% 4px,
+    15% 0%,
+    17.5% 4px,
+    20% 0%,
+    22.5% 4px,
+    25% 0%,
+    27.5% 4px,
+    30% 0%,
+    32.5% 4px,
+    35% 0%,
+    37.5% 4px,
+    40% 0%,
+    42.5% 4px,
+    45% 0%,
+    47.5% 4px,
+    50% 0%,
+    52.5% 4px,
+    55% 0%,
+    57.5% 4px,
+    60% 0%,
+    62.5% 4px,
+    65% 0%,
+    67.5% 4px,
+    70% 0%,
+    72.5% 4px,
+    75% 0%,
+    77.5% 4px,
+    80% 0%,
+    82.5% 4px,
+    85% 0%,
+    87.5% 4px,
+    90% 0%,
+    92.5% 4px,
+    95% 0%,
+    97.5% 4px,
+    100% 0%,
+    100% 100%,
+    97.5% calc(100% - 4px),
+    95% 100%,
+    92.5% calc(100% - 4px),
+    90% 100%,
+    87.5% calc(100% - 4px),
+    85% 100%,
+    82.5% calc(100% - 4px),
+    80% 100%,
+    77.5% calc(100% - 4px),
+    75% 100%,
+    72.5% calc(100% - 4px),
+    70% 100%,
+    67.5% calc(100% - 4px),
+    65% 100%,
+    62.5% calc(100% - 4px),
+    60% 100%,
+    57.5% calc(100% - 4px),
+    55% 100%,
+    52.5% calc(100% - 4px),
+    50% 100%,
+    47.5% calc(100% - 4px),
+    45% 100%,
+    42.5% calc(100% - 4px),
+    40% 100%,
+    37.5% calc(100% - 4px),
+    35% 100%,
+    32.5% calc(100% - 4px),
+    30% 100%,
+    27.5% calc(100% - 4px),
+    25% 100%,
+    22.5% calc(100% - 4px),
+    20% 100%,
+    17.5% calc(100% - 4px),
+    15% 100%,
+    12.5% calc(100% - 4px),
+    10% 100%,
+    7.5% calc(100% - 4px),
+    5% 100%,
+    2.5% calc(100% - 4px),
+    0% 100%
+  );
+}
