@@ -1,13 +1,22 @@
 const mysql = require("mysql2/promise");
 
 async function runMigration() {
+  const host = process.env.MYSQL_HOST || "127.0.0.1";
+  const port = parseInt(process.env.MYSQL_PORT || "3306", 10);
+  const user = process.env.MYSQL_USER || "root";
+  const password = process.env.MYSQL_PASSWORD ?? "";
+  const database = process.env.MYSQL_DATABASE || "brandium_crm";
+
+  console.log(`Connecting to MySQL database '${database}' on ${host}:${port} as '${user}'...`);
+
   const conn = await mysql.createConnection({
-    host: "127.0.0.1",
-    port: 3306,
-    user: "root",
-    password: "",
-    database: "brandium_crm",
+    host,
+    port,
+    user,
+    password,
+    database,
   });
+
 
   const addCol = async (tbl, col, def) => {
     const [cols] = await conn.query("DESCRIBE `" + tbl + "`");
