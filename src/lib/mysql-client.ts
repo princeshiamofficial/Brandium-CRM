@@ -67,15 +67,15 @@ export function getMySQLConfig(): MySQLConfig {
   const rawHost = serverEnv?.["MYSQL_HOST"] || clientEnv?.["VITE_MYSQL_HOST"] || "127.0.0.1";
   const host = rawHost === "localhost" ? "127.0.0.1" : rawHost;
   const port = parseInt(serverEnv?.["MYSQL_PORT"] || clientEnv?.["VITE_MYSQL_PORT"] || "3306", 10);
-  const user = serverEnv?.["MYSQL_USER"] || clientEnv?.["VITE_MYSQL_USER"] || "root";
+  const user = serverEnv?.["MYSQL_USER"] || clientEnv?.["VITE_MYSQL_USER"] || "crm_brandium";
   const password =
-    serverEnv?.["MYSQL_PASSWORD"] !== undefined
+    serverEnv?.["MYSQL_PASSWORD"] !== undefined && serverEnv["MYSQL_PASSWORD"] !== ""
       ? (serverEnv["MYSQL_PASSWORD"] as string)
-      : clientEnv?.["VITE_MYSQL_PASSWORD"] !== undefined
+      : clientEnv?.["VITE_MYSQL_PASSWORD"] !== undefined && clientEnv["VITE_MYSQL_PASSWORD"] !== ""
         ? (clientEnv["VITE_MYSQL_PASSWORD"] as string)
-        : "";
+        : "Brandium456";
   const database =
-    serverEnv?.["MYSQL_DATABASE"] || clientEnv?.["VITE_MYSQL_DATABASE"] || "brandium_crm";
+    serverEnv?.["MYSQL_DATABASE"] || clientEnv?.["VITE_MYSQL_DATABASE"] || "crm_brandium";
   const connectionLimit = parseInt(serverEnv?.["MYSQL_CONNECTION_LIMIT"] || "20", 10);
 
   return {

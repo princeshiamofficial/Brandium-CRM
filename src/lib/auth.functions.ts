@@ -675,10 +675,10 @@ export const authenticateXamppUser = createServerFn({ method: "POST" })
       };
     } catch (err: unknown) {
       const errObj = err as { message?: string };
-      console.error("XAMPP MySQL Auth Error:", errObj?.message || err);
+      console.error("MySQL Auth Error:", errObj?.message || err);
       return {
         success: false,
-        error: `Database connection error: Unable to connect to XAMPP MySQL database (${errObj?.message || "Connection refused"}).`,
+        error: `Database connection error: Unable to connect to MySQL database (${errObj?.message || "Connection refused"}).`,
       };
     }
   });
