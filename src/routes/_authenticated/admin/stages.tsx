@@ -15,8 +15,6 @@ import {
   Trash2,
   Power,
   PowerOff,
-  Lock,
-  Shield,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -65,18 +63,12 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as Icons from "lucide-react";
 
-import { IconPicker } from "@/components/icon-picker";
-
 import {
   stagesWithCountsQuery,
   stageManagementSummaryQuery,
   useCreateStage,
   useUpdateStage,
   useDeleteStage,
-  resolveStageColor,
-  resolveStageIcon,
-  isSystemStage,
-  DEFAULT_STAGE_THEMES,
   type Stage,
 } from "@/lib/stages";
 
@@ -104,8 +96,69 @@ export const Route = createFileRoute("/_authenticated/admin/stages")({
   component: StageManagementPage,
 });
 
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  colorScheme,
+}: {
+  label: string;
+  value: string | number;
+  icon: LucideIcon;
+  colorScheme: "pastelPurple" | "pastelTeal" | "pastelEmerald" | "pastelPeach" | "pastelYellow";
+}) {
+  const styles = {
+    pastelPurple: {
+      cardBg: "bg-[#F1E8FF] border-[#E3D5FF] dark:bg-purple-950/40 dark:border-purple-800/60",
+      iconText: "text-[#8B5CF6] dark:text-purple-400",
+    },
+    pastelTeal: {
+      cardBg: "bg-[#E1F1F0] border-[#C8E7E4] dark:bg-teal-950/40 dark:border-teal-800/60",
+      iconText: "text-[#0D9488] dark:text-teal-400",
+    },
+    pastelEmerald: {
+      cardBg: "bg-[#E3F2E1] border-[#CDE9C9] dark:bg-emerald-950/40 dark:border-emerald-800/60",
+      iconText: "text-[#059669] dark:text-emerald-400",
+    },
+    pastelPeach: {
+      cardBg: "bg-[#FCE8E2] border-[#F8D4C8] dark:bg-rose-950/40 dark:border-rose-800/60",
+      iconText: "text-[#EA580C] dark:text-orange-400",
+    },
+    pastelYellow: {
+      cardBg: "bg-[#FBF3D5] border-[#F5E6B5] dark:bg-amber-950/40 dark:border-amber-800/60",
+      iconText: "text-[#D97706] dark:text-amber-400",
+    },
+  }[colorScheme];
+
+  return (
+    <div
+      className={`group relative overflow-hidden rounded-2xl border p-4 sm:p-4.5 shadow-md shadow-slate-200/60 dark:shadow-none hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${styles.cardBg}`}
+    >
+      <div className="relative z-10 flex items-center gap-3.5">
+        <div className="size-10 sm:size-11 rounded-full bg-white dark:bg-card shadow-sm flex items-center justify-center shrink-0 border border-black/5">
+          <Icon className={`size-5 sm:size-5.5 ${styles.iconText}`} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
+            {label}
+          </p>
+          <p className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white leading-tight mt-0.5 tracking-tight truncate">
+            {value}
+          </p>
+        </div>
+      </div>
+
+      <div className="absolute -right-3 -bottom-3 opacity-[0.07] pointer-events-none transform rotate-12 scale-125 transition-transform group-hover:scale-135">
+        <Icon className={`size-16 ${styles.iconText}`} />
+      </div>
+    </div>
+  );
+}
+
 function StageManagementPage() {
   const navigate = useNavigate();
+  const summary = useQuery(stageManagementSummaryQuery());
   const stages = useQuery(stagesWithCountsQuery());
 
   const createMutation = useCreateStage();
@@ -114,36 +167,24 @@ function StageManagementPage() {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingStage, setEditingStage] = useState<Stage | null>(null);
-  const [search, setSearch] = useState<string>("");
 
-  const rawStagesList = stages.data ?? [];
-  const filteredStages = rawStagesList.filter((s) => {
-    if (!search || !search.trim()) return true;
-    const q = search.toLowerCase().trim();
-    return s.name.toLowerCase().includes(q) || String(s.sort_order).includes(q);
-  });
-
-  const form = useForm<z.infer<typeof stageFormSchema>>({
-    resolver: zodResolver(stageFormSchema) as Resolver<z.infer<typeof stageFormSchema>>,
+  const form = useForm<StageFormValues>({
+    resolver: zodResolver(stageFormSchema) as Resolver<StageFormValues>,
     defaultValues: {
       name: "",
-      stage_group: "prospect",
-      sort_order: (rawStagesList.length ?? 0) + 1,
+      stage_group: "new",
+      sort_order: 0,
       is_follow_up: false,
-      color: "#2563EB",
+      color: "#94a3b8",
       icon: "Circle",
     },
   });
 
-  const onSubmit = (values: z.infer<typeof stageFormSchema>) => {
+  const onSubmit = (values: StageFormValues) => {
     const payload = {
-      name: values.name,
-      stage_group: values.stage_group,
-      sort_order: values.sort_order,
-      is_follow_up: values.is_follow_up,
+      ...values,
       color: values.color ?? null,
       icon: values.icon ?? null,
-      is_active: true,
     };
 
     if (editingStage) {
@@ -168,43 +209,30 @@ function StageManagementPage() {
   };
 
   const handleEdit = (stage: Stage) => {
-    if (isSystemStage(stage)) {
-      toast.error("System stage is protected and cannot be edited.");
-      return;
-    }
     setEditingStage(stage);
     form.reset({
       name: stage.name,
       stage_group: stage.stage_group,
       sort_order: stage.sort_order,
       is_follow_up: stage.is_follow_up,
-      color: resolveStageColor(stage.name, stage.color),
-      icon: resolveStageIcon(stage.name, stage.icon),
+      color: stage.color || "#94a3b8",
+      icon: stage.icon || "Circle",
     });
     setIsDialogOpen(true);
   };
 
   const toggleActive = (stage: Stage) => {
-    if (isSystemStage(stage) && stage.is_active) {
-      toast.error("System stages are required for core CRM workflows and cannot be deactivated.");
-      return;
-    }
     updateMutation.mutate({ id: stage.id, is_active: !stage.is_active });
   };
 
   const handleDelete = (id: string) => {
-    const stage = rawStagesList.find((s) => s.id === id);
-    if (stage && isSystemStage(stage)) {
-      toast.error("System stages cannot be deleted as they are required for CRM workflows.");
-      return;
-    }
     if (window.confirm("Are you sure you want to delete this stage? This cannot be undone.")) {
       deleteMutation.mutate(id);
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Stage Management"
         description="Configure your sales pipeline stages, colors, and tracking rules."
@@ -221,278 +249,244 @@ function StageManagementPage() {
         </Button>
       </PageHeader>
 
-      {/* Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="relative max-w-sm flex-1">
-          <Icons.Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-          <Input
-            placeholder="Search stages by name or order..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 pr-8 bg-white dark:bg-card rounded-xl"
-          />
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Total Prospects"
+          value={summary.data?.total_prospects ?? 0}
+          icon={TrendingUp}
+          colorScheme="pastelPurple"
+        />
+        <StatCard
+          label="Active Stages"
+          value={summary.data?.active_stages ?? 0}
+          icon={Layers}
+          colorScheme="pastelEmerald"
+        />
+        <StatCard
+          label="Follow-up Count"
+          value={summary.data?.follow_up_prospects ?? 0}
+          icon={CalendarClock}
+          colorScheme="pastelPeach"
+        />
+        <StatCard
+          label="Top Stage"
+          value={summary.data?.top_stage ?? "None"}
+          icon={Settings2}
+          colorScheme="pastelYellow"
+        />
       </div>
 
-      {/* Main Stages Table */}
-      <Card className="bg-white dark:bg-card border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden rounded-2xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b bg-slate-50/80 dark:bg-muted/50 font-semibold text-muted-foreground uppercase tracking-wider">
-                <th className="py-3.5 px-4 w-16 text-center">Order</th>
-                <th className="py-3.5 px-4">Stage Name & Color</th>
-                <th className="py-3.5 px-4">Prospects</th>
-                <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {stages.isPending ? (
-                Array.from({ length: 6 }).map((_, idx) => (
-                  <tr key={idx}>
-                    <td colSpan={5} className="py-4 px-4">
-                      <Skeleton className="h-10 w-full rounded-xl" />
-                    </td>
-                  </tr>
-                ))
-              ) : filteredStages.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-muted-foreground">
-                    <Icons.Layers className="size-8 mx-auto text-slate-300 mb-2" />
-                    <p className="font-semibold text-foreground">No stages found</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Try resetting your search filter or create a new stage.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                filteredStages.map((stage) => {
-                  const brandColor = resolveStageColor(stage.name, stage.color);
-                  const iconName = resolveStageIcon(stage.name, stage.icon);
-                  const IconComponent =
-                    (Icons as unknown as Record<string, LucideIcon>)[iconName] ||
-                    (Icons as unknown as Record<string, LucideIcon>)[stage.icon || "Circle"] ||
-                    Icons.Circle;
+      <div className="grid gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {stages.isPending
+          ? Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="animate-pulse rounded-2xl border border-slate-200/80 bg-white p-5 h-48"
+              >
+                <div className="h-10 bg-slate-100 rounded-xl mb-4" />
+                <div className="h-20 bg-slate-50 rounded-xl" />
+              </div>
+            ))
+          : stages.data?.map((stage) => {
+              const IconComponent =
+                (Icons as unknown as Record<string, LucideIcon>)[stage.icon || "Circle"] ||
+                Icons.Circle;
+              const brandColor = stage.color || "#0a2e5c";
 
-                  return (
-                    <tr
-                      key={stage.id}
-                      className={`hover:bg-slate-50/60 dark:hover:bg-muted/30 transition-colors ${
-                        !stage.is_active ? "opacity-60 bg-slate-50/40 dark:bg-muted/10" : ""
-                      }`}
-                    >
-                      {/* Order & Re-order Buttons */}
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="inline-flex items-center gap-1 font-mono font-bold text-slate-700 dark:text-slate-300">
-                          <span className="w-5 text-center">{stage.sort_order}</span>
-                          <div className="flex flex-col">
-                            <button
-                              type="button"
-                              className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer p-0.5"
-                              onClick={() =>
-                                updateMutation.mutate({
-                                  id: stage.id,
-                                  sort_order: Math.max(0, stage.sort_order - 1),
-                                })
-                              }
-                              title="Move Up"
-                            >
-                              <Icons.ChevronUp className="size-3" />
-                            </button>
-                            <button
-                              type="button"
-                              className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer p-0.5"
-                              onClick={() =>
-                                updateMutation.mutate({
-                                  id: stage.id,
-                                  sort_order: stage.sort_order + 1,
-                                })
-                              }
-                              title="Move Down"
-                            >
-                              <Icons.ChevronDown className="size-3" />
-                            </button>
-                          </div>
-                        </div>
-                      </td>
+              return (
+                <div
+                  key={stage.id}
+                  className={`group relative overflow-hidden rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-card p-4.5 shadow-2xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 ${
+                    !stage.is_active ? "opacity-60 bg-slate-50/50 dark:bg-muted/10" : ""
+                  }`}
+                >
+                  {/* Top Brand Color Line */}
+                  <div
+                    className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl"
+                    style={{ backgroundColor: brandColor }}
+                  />
 
-                      {/* Stage Name & Color */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="size-9 rounded-xl flex items-center justify-center shrink-0 text-white shadow-2xs transition-transform hover:scale-105"
-                            style={{ backgroundColor: brandColor }}
-                          >
-                            <IconComponent className="size-4.5 text-white" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm">
-                                {stage.name}
-                              </span>
-                              {isSystemStage(stage) && (
-                                <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-[9px] px-1.5 py-0 gap-1 font-bold border border-slate-200 dark:border-slate-700">
-                                  <Lock className="size-2.5 text-slate-500" />
-                                  System
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span
-                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border"
-                                style={{
-                                  backgroundColor: `${brandColor}15`,
-                                  color: brandColor,
-                                  borderColor: `${brandColor}35`,
-                                }}
-                              >
-                                <span
-                                  className="size-2 rounded-full inline-block shadow-2xs"
-                                  style={{ backgroundColor: brandColor }}
-                                />
-                                {brandColor.toUpperCase()}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
+                  {/* Header */}
+                  <div className="flex items-center justify-between gap-2.5 mb-3 pt-0.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className="size-9 rounded-xl flex items-center justify-center shrink-0 text-white shadow-2xs transition-transform group-hover:scale-105"
+                        style={{ backgroundColor: brandColor }}
+                      >
+                        <IconComponent className="size-4.5 text-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-primary transition-colors">
+                          {stage.name}
+                        </h3>
+                        <span
+                          className="inline-block text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.2 rounded-md mt-0.5"
+                          style={{
+                            backgroundColor: `${brandColor}18`,
+                            color: brandColor,
+                          }}
+                        >
+                          {stage.stage_group.replace("_", " ")}
+                        </span>
+                      </div>
+                    </div>
 
-                      {/* Prospects Count & Link */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs font-bold gap-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                          size="icon"
+                          className="size-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        >
+                          <MoreVertical className="size-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="rounded-xl shadow-xl border-slate-200 dark:border-slate-800"
+                      >
+                        <DropdownMenuLabel className="text-xs font-bold">Options</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => handleEdit(stage)}
+                          className="text-xs font-semibold cursor-pointer rounded-lg"
+                        >
+                          <Pencil className="mr-2 size-3.5 text-blue-500" />
+                          Edit Properties
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           onClick={() =>
-                            navigate({
-                              to: "/prospects",
-                              search: { search: stage.name },
+                            updateMutation.mutate({
+                              id: stage.id,
+                              sort_order: Math.max(0, stage.sort_order - 1),
                             })
                           }
-                          title="View prospects in this stage"
+                          className="text-xs font-semibold cursor-pointer rounded-lg"
                         >
-                          <span className="text-foreground">{stage.prospect_count}</span>
-                          <span className="text-muted-foreground font-normal">
-                            ({stage.prospect_percentage}%)
-                          </span>
-                          <Icons.ChevronRight className="size-3 text-slate-400" />
-                        </Button>
-                      </td>
-
-                      {/* Active / Inactive Status */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => toggleActive(stage)}
-                          className={`cursor-pointer ${isSystemStage(stage) ? "cursor-default" : ""}`}
-                          title={
-                            isSystemStage(stage)
-                              ? "System stages remain active"
-                              : "Click to toggle status"
+                          <ArrowUp className="mr-2 size-3.5 text-emerald-500" />
+                          Move Up
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            updateMutation.mutate({
+                              id: stage.id,
+                              sort_order: stage.sort_order + 1,
+                            })
                           }
+                          className="text-xs font-semibold cursor-pointer rounded-lg"
+                        >
+                          <ArrowDown className="mr-2 size-3.5 text-amber-500" />
+                          Move Down
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => toggleActive(stage)}
+                          className="text-xs font-semibold cursor-pointer rounded-lg"
                         >
                           {stage.is_active ? (
-                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 text-[10px] px-2 py-0.5 font-semibold gap-1">
-                              <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
-                              Active
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="text-slate-400 border-slate-200 text-[10px] px-2 py-0.5 font-semibold gap-1"
-                            >
-                              <span className="size-1.5 rounded-full bg-slate-400 inline-block" />
-                              Inactive
-                            </Badge>
-                          )}
-                        </button>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          {isSystemStage(stage) ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled
-                              className="h-7 px-2 text-xs font-semibold rounded-lg gap-1 opacity-50 cursor-not-allowed bg-slate-50 dark:bg-muted/20 border-slate-200 dark:border-slate-800 text-slate-500"
-                              title="System stage is protected and cannot be edited or deleted"
-                            >
-                              <Lock className="size-3 text-slate-400" />
-                              System Locked
-                            </Button>
+                            <>
+                              <PowerOff className="mr-2 size-3.5 text-rose-500" /> Deactivate
+                            </>
                           ) : (
                             <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 px-2 text-xs font-semibold rounded-lg gap-1 cursor-pointer"
-                                onClick={() => handleEdit(stage)}
-                              >
-                                <Icons.Pencil className="size-3 text-blue-600" />
-                                Edit
-                              </Button>
-
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
-                                  >
-                                    <MoreVertical className="size-3.5" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                  align="end"
-                                  className="rounded-xl shadow-xl border-slate-200 dark:border-slate-800"
-                                >
-                                  <DropdownMenuItem
-                                    onClick={() => handleEdit(stage)}
-                                    className="text-xs font-semibold cursor-pointer rounded-lg"
-                                  >
-                                    <Pencil className="mr-2 size-3.5 text-blue-500" />
-                                    Edit Properties
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => toggleActive(stage)}
-                                    className="text-xs font-semibold cursor-pointer rounded-lg"
-                                  >
-                                    {stage.is_active ? (
-                                      <>
-                                        <PowerOff className="mr-2 size-3.5 text-rose-500" />{" "}
-                                        Deactivate
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Power className="mr-2 size-3.5 text-emerald-500" />{" "}
-                                        Activate
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    className="text-destructive text-xs font-semibold cursor-pointer rounded-lg"
-                                    onClick={() => handleDelete(stage.id)}
-                                  >
-                                    <Trash2 className="mr-2 size-3.5" />
-                                    Delete Stage
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <Power className="mr-2 size-3.5 text-emerald-500" /> Activate
                             </>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                        </DropdownMenuItem>
+                        {!stage.is_system && (
+                          <DropdownMenuItem
+                            className="text-destructive text-xs font-semibold cursor-pointer rounded-lg"
+                            onClick={() => handleDelete(stage.id)}
+                          >
+                            <Trash2 className="mr-2 size-3.5" />
+                            Delete Stage
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  {/* Metrics & Content */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-baseline justify-between">
+                      <div>
+                        <span className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                          {stage.prospect_count}
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-400 ml-1.5">
+                          prospects
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span
+                          className="inline-block text-[11px] font-extrabold px-2 py-0.5 rounded-full"
+                          style={{
+                            backgroundColor: `${brandColor}18`,
+                            color: brandColor,
+                          }}
+                        >
+                          {stage.prospect_percentage}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div
+                      className="h-1.5 w-full rounded-full overflow-hidden"
+                      style={{ backgroundColor: `${brandColor}18` }}
+                    >
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${stage.prospect_percentage}%`,
+                          backgroundColor: brandColor,
+                        }}
+                      />
+                    </div>
+
+                    {/* Badges */}
+                    <div className="flex flex-wrap items-center gap-1 pt-1">
+                      {stage.is_active ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400">
+                          Inactive
+                        </span>
+                      )}
+                      {stage.is_follow_up && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/60">
+                          Follow-up
+                        </span>
+                      )}
+                      {stage.is_system && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 text-blue-600 border border-blue-200/80 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/60">
+                          System Core
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Footer Link */}
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800/60 mt-2">
+                      <button
+                        type="button"
+                        className="w-full text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors flex items-center justify-center gap-1 py-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                        onClick={() =>
+                          navigate({
+                            to: "/prospects",
+                            search: { search: stage.name },
+                          })
+                        }
+                      >
+                        View Prospects
+                        <ChevronRight className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+      </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-md">
@@ -585,17 +579,12 @@ function StageManagementPage() {
                   name="icon"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Stage Icon</FormLabel>
+                      <FormLabel>Icon (Lucide)</FormLabel>
                       <FormControl>
-                        <IconPicker
-                          value={field.value}
-                          onChange={(iconName, defaultColor) => {
-                            field.onChange(iconName);
-                            if (defaultColor) {
-                              form.setValue("color", defaultColor);
-                            }
-                          }}
-                          color={form.watch("color") || undefined}
+                        <Input
+                          placeholder="Circle, Trophy, etc."
+                          {...field}
+                          value={field.value ?? ""}
                         />
                       </FormControl>
                       <FormMessage />

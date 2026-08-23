@@ -30,18 +30,10 @@ import { useAuth } from "@/lib/auth";
 export type AddInvoiceDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  invoiceToEdit?: Invoice | null | undefined;
-  defaultProspectId?: string | undefined;
-  onSuccess?: () => void;
+  invoiceToEdit?: Invoice | null;
 };
 
-export function AddInvoiceDialog({
-  open,
-  onOpenChange,
-  invoiceToEdit,
-  defaultProspectId,
-  onSuccess,
-}: AddInvoiceDialogProps) {
+export function AddInvoiceDialog({ open, onOpenChange, invoiceToEdit }: AddInvoiceDialogProps) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -64,7 +56,7 @@ export function AddInvoiceDialog({
         setDueDate(invoiceToEdit.due_date || new Date().toISOString().split("T")[0]!);
         setNotes(invoiceToEdit.notes || "");
       } else {
-        setProspectId(defaultProspectId || "");
+        setProspectId("");
         setDescription("");
         setTotalAmountStr("");
         setBillDate(new Date().toISOString().split("T")[0]!);
@@ -72,7 +64,7 @@ export function AddInvoiceDialog({
         setNotes("");
       }
     }
-  }, [open, invoiceToEdit, defaultProspectId]);
+  }, [open, invoiceToEdit]);
 
   const { data: prospectOptions = [] } = useQuery({
     ...prospectsOptionsQuery(),
@@ -117,14 +109,7 @@ export function AddInvoiceDialog({
           : `Invoice ${inv.invoice_number} created successfully!`,
       );
       void queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      void queryClient.invalidateQueries({ queryKey: ["opportunities"] });
-      void queryClient.invalidateQueries({ queryKey: ["opportunity-summary"] });
-      void queryClient.invalidateQueries({ queryKey: ["prospects"] });
-      void queryClient.invalidateQueries({ queryKey: ["prospects-stats"] });
-      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      void queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       onOpenChange(false);
-      if (onSuccess) onSuccess();
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to save invoice.");

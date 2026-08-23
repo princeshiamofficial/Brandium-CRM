@@ -32,86 +32,6 @@ export type StageHistoryEntry = {
   changed_by_name: string | null;
 };
 
-export const DEFAULT_STAGE_THEMES: Record<string, { color: string; icon: string }> = {
-  prospect: { color: "#2563EB", icon: "UserPlus" },
-  "follow-up": { color: "#D97706", icon: "CalendarClock" },
-  "opportunity-created": { color: "#8B5CF6", icon: "Sparkles" },
-  "sales-won": { color: "#16A34A", icon: "Trophy" },
-  dnp: { color: "#EA580C", icon: "PhoneMissed" },
-  "switched-off": { color: "#E11D48", icon: "PowerOff" },
-  "invalid-number": { color: "#DC2626", icon: "PhoneOff" },
-  "meeting-scheduled": { color: "#4F46E5", icon: "CalendarCheck" },
-  "quotation-sent": { color: "#0891B2", icon: "FileText" },
-  "denied-payment": { color: "#9333EA", icon: "ShieldAlert" },
-  "not-interested": { color: "#64748B", icon: "UserX" },
-};
-
-export function resolveStageColor(name?: string | null, customColor?: string | null): string {
-  if (customColor && customColor.trim() && customColor !== "#0a2e5c" && customColor !== "#94a3b8") {
-    return customColor;
-  }
-  const norm = (name || "").toLowerCase().replace(/[-_\s()]/g, "");
-  if (norm.includes("prospect") || norm.includes("lead")) return "#2563EB";
-  if (norm.includes("follow")) return "#D97706";
-  if (norm.includes("opportunity")) return "#8B5CF6";
-  if (norm.includes("won") || norm.includes("sale")) return "#16A34A";
-  if (norm.includes("dnp") || norm.includes("didnotpick")) return "#EA580C";
-  if (norm.includes("switchedoff") || norm.includes("switchoff")) return "#E11D48";
-  if (norm.includes("invalid") || norm.includes("wrong")) return "#DC2626";
-  if (norm.includes("meeting")) return "#4F46E5";
-  if (norm.includes("quotation") || norm.includes("quote")) return "#0891B2";
-  if (norm.includes("denied")) return "#9333EA";
-  if (norm.includes("notinterested")) return "#64748B";
-  return customColor || "#2563EB";
-}
-
-export function resolveStageIcon(name?: string | null, customIcon?: string | null): string {
-  if (customIcon && customIcon.trim() && customIcon !== "Circle") {
-    return customIcon;
-  }
-  const norm = (name || "").toLowerCase().replace(/[-_\s()]/g, "");
-  if (norm.includes("prospect") || norm.includes("lead")) return "UserPlus";
-  if (norm.includes("follow")) return "CalendarClock";
-  if (norm.includes("opportunity")) return "Sparkles";
-  if (norm.includes("won") || norm.includes("sale")) return "Trophy";
-  if (norm.includes("dnp") || norm.includes("didnotpick")) return "PhoneMissed";
-  if (norm.includes("switchedoff") || norm.includes("switchoff")) return "PowerOff";
-  if (norm.includes("invalid") || norm.includes("wrong")) return "PhoneOff";
-  if (norm.includes("meeting")) return "CalendarCheck";
-  if (norm.includes("quotation") || norm.includes("quote")) return "FileText";
-  if (norm.includes("denied")) return "ShieldAlert";
-  if (norm.includes("notinterested")) return "UserX";
-  return customIcon || "Circle";
-}
-
-export function isSystemStage(stage: {
-  is_system?: boolean | number | null | undefined;
-  name?: string | null | undefined;
-  id?: string | null | undefined;
-}): boolean {
-  if (stage.is_system) return true;
-  const normName = (stage.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const normId = (stage.id || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-
-  const SYSTEM_KEYS = [
-    "prospect",
-    "followup",
-    "opportunitycreated",
-    "saleswon",
-    "won",
-    "dnp",
-    "dnpdidnotpick",
-    "switchedoff",
-    "invalidnumber",
-    "meetingscheduled",
-    "quotationsent",
-    "deniedpayment",
-    "notinterested",
-  ];
-
-  return SYSTEM_KEYS.includes(normName) || SYSTEM_KEYS.includes(normId);
-}
-
 export const FALLBACK_STAGES: Stage[] = [
   {
     id: "prospect",
@@ -120,8 +40,6 @@ export const FALLBACK_STAGES: Stage[] = [
     sort_order: 1,
     is_follow_up: false,
     is_active: true,
-    color: "#2563EB",
-    icon: "UserPlus",
   },
   {
     id: "follow-up",
@@ -130,8 +48,6 @@ export const FALLBACK_STAGES: Stage[] = [
     sort_order: 2,
     is_follow_up: true,
     is_active: true,
-    color: "#D97706",
-    icon: "CalendarClock",
   },
   {
     id: "opportunity-created",
@@ -140,8 +56,6 @@ export const FALLBACK_STAGES: Stage[] = [
     sort_order: 3,
     is_follow_up: false,
     is_active: true,
-    color: "#8B5CF6",
-    icon: "Sparkles",
   },
   {
     id: "sales-won",
@@ -150,8 +64,6 @@ export const FALLBACK_STAGES: Stage[] = [
     sort_order: 4,
     is_follow_up: false,
     is_active: true,
-    color: "#16A34A",
-    icon: "Trophy",
   },
   {
     id: "dnp",
@@ -160,8 +72,6 @@ export const FALLBACK_STAGES: Stage[] = [
     sort_order: 5,
     is_follow_up: false,
     is_active: true,
-    color: "#EA580C",
-    icon: "PhoneMissed",
   },
   {
     id: "switched-off",
@@ -170,8 +80,6 @@ export const FALLBACK_STAGES: Stage[] = [
     sort_order: 6,
     is_follow_up: false,
     is_active: true,
-    color: "#E11D48",
-    icon: "PowerOff",
   },
   {
     id: "invalid-number",
@@ -180,8 +88,6 @@ export const FALLBACK_STAGES: Stage[] = [
     sort_order: 7,
     is_follow_up: false,
     is_active: true,
-    color: "#DC2626",
-    icon: "PhoneOff",
   },
   {
     id: "meeting-scheduled",
@@ -190,8 +96,6 @@ export const FALLBACK_STAGES: Stage[] = [
     sort_order: 8,
     is_follow_up: true,
     is_active: true,
-    color: "#4F46E5",
-    icon: "CalendarCheck",
   },
   {
     id: "quotation-sent",
@@ -200,8 +104,6 @@ export const FALLBACK_STAGES: Stage[] = [
     sort_order: 9,
     is_follow_up: false,
     is_active: true,
-    color: "#0891B2",
-    icon: "FileText",
   },
 ];
 
@@ -225,13 +127,9 @@ export const stagesQuery = () =>
             sort_order: Number(s["sort_order"] || 0),
             is_follow_up: Boolean(s["is_follow_up"]),
             is_active: Boolean(s["is_active"]),
-            color: resolveStageColor(String(s["name"]), (s["color"] as string) || null),
-            icon: resolveStageIcon(String(s["name"]), (s["icon"] as string) || null),
-            is_system: isSystemStage({
-              is_system: s["is_system"] ? Boolean(s["is_system"]) : false,
-              name: String(s["name"]),
-              id: String(s["id"]),
-            }),
+            color: (s["color"] as string) || null,
+            icon: (s["icon"] as string) || null,
+            is_system: Boolean(s["is_system"]),
           }));
         }
       } catch (err) {
@@ -470,17 +368,11 @@ export function useChangeProspectStage() {
       let realStageId: string = input.stageId;
 
       try {
-        const mysqlStages = await runMySQLQuery<Record<string, unknown>[]>(
-          "SELECT id, name FROM `stages` ORDER BY sort_order ASC;",
-        );
-        if (
-          mysqlStages?.success &&
-          Array.isArray(mysqlStages.data) &&
-          mysqlStages.data.length > 0
-        ) {
+        const { data: allStages } = await supabase.from("stages").select("id, name");
+        if (allStages && allStages.length > 0) {
           const normalize = (str: string) => str.toLowerCase().replace(/[-_]/g, " ").trim();
           const targetNorm = normalize(input.stageName || input.stageId);
-          const match = mysqlStages.data.find(
+          const match = (allStages as Array<Record<string, unknown>>).find(
             (s) =>
               (s["id"] as string) === input.stageId ||
               normalize((s["name"] as string) || "") === targetNorm ||
@@ -491,8 +383,8 @@ export function useChangeProspectStage() {
             resolvedStageName = (match["name"] as string) || resolvedStageName;
           }
         }
-      } catch (err) {
-        console.warn("stage lookup MySQL notice:", err);
+      } catch {
+        // Ignore
       }
 
       // Always update MySQL database `brandium_crm` directly
@@ -560,7 +452,6 @@ export function useChangeProspectStage() {
       queryClient.invalidateQueries({ queryKey: ["prospects"] });
       queryClient.invalidateQueries({ queryKey: ["prospects-stats"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["follow-ups"] });
       queryClient.invalidateQueries({ queryKey: ["stage-history", input.prospectId] });
     },
     onError: (error: unknown) => {
@@ -582,7 +473,7 @@ export const stageManagementSummaryQuery = () =>
              st.is_active,
              COUNT(p.id) AS prospect_count
            FROM \`stages\` st
-           LEFT JOIN \`prospects\` p ON p.stage_id = st.id AND p.is_active = 1
+           LEFT JOIN \`prospects\` p ON (p.stage_id = st.id OR p.stage_name = st.name) AND p.is_active = 1
            GROUP BY st.id;`,
         );
 
@@ -652,7 +543,7 @@ export const stagesWithCountsQuery = () =>
              st.*,
              COUNT(p.id) AS prospect_count
            FROM \`stages\` st
-           LEFT JOIN \`prospects\` p ON p.stage_id = st.id AND p.is_active = 1
+           LEFT JOIN \`prospects\` p ON (p.stage_id = st.id OR p.stage_name = st.name) AND p.is_active = 1
            GROUP BY st.id
            ORDER BY st.sort_order ASC;`,
         );
@@ -673,13 +564,9 @@ export const stagesWithCountsQuery = () =>
               sort_order: Number(s["sort_order"] || 0),
               is_follow_up: Boolean(s["is_follow_up"]),
               is_active: Boolean(s["is_active"]),
-              color: resolveStageColor(String(s["name"]), (s["color"] as string) || null),
-              icon: resolveStageIcon(String(s["name"]), (s["icon"] as string) || null),
-              is_system: isSystemStage({
-                is_system: s["is_system"] ? Boolean(s["is_system"]) : false,
-                name: String(s["name"]),
-                id: String(s["id"]),
-              }),
+              color: (s["color"] as string) || null,
+              icon: (s["icon"] as string) || null,
+              is_system: Boolean(s["is_system"]),
               prospect_count: count,
               prospect_percentage: percentage,
             };
@@ -828,9 +715,6 @@ export function useUpdateStage() {
       queryClient.invalidateQueries({ queryKey: ["stages-with-counts"] });
       queryClient.invalidateQueries({ queryKey: ["stage-management-summary"] });
       queryClient.invalidateQueries({ queryKey: ["prospects"] });
-      queryClient.invalidateQueries({ queryKey: ["prospects-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["follow-ups"] });
     },
     onError: (error: unknown) => {
       toast.error(error instanceof Error ? error.message : "Could not update stage");
@@ -870,9 +754,6 @@ export function useDeleteStage() {
       queryClient.invalidateQueries({ queryKey: ["stages-with-counts"] });
       queryClient.invalidateQueries({ queryKey: ["stage-management-summary"] });
       queryClient.invalidateQueries({ queryKey: ["prospects"] });
-      queryClient.invalidateQueries({ queryKey: ["prospects-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["follow-ups"] });
     },
     onError: (error: unknown) => {
       toast.error(error instanceof Error ? error.message : "Could not delete stage");

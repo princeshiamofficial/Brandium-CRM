@@ -11,8 +11,8 @@ export const changeProspectStage = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z
       .object({
-        prospectId: z.string().min(1),
-        stageId: z.string().min(1),
+        prospectId: z.string().uuid(),
+        stageId: z.string().uuid(),
         note: z.string().trim().max(1000).optional(),
       })
       .parse(input),
@@ -87,7 +87,7 @@ export const updateStage = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z
       .object({
-        id: z.string().min(1),
+        id: z.string().uuid(),
         name: z.string().trim().min(1).max(100).optional(),
         stage_group: z.string().trim().min(1).max(50).optional(),
         sort_order: z.number().int().min(0).optional(),

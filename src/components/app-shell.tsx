@@ -212,11 +212,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <PanelLeft className="size-4" />
           </Button>
-
-          <Link to="/dashboard" className="flex items-center gap-2 md:hidden">
-            <img src="/logo.png" alt="Brandium" className="h-7 w-auto object-contain" />
-          </Link>
-
           <Button
             variant="ghost"
             size="icon"

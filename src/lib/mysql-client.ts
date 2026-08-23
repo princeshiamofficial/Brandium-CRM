@@ -1,36 +1,8 @@
 /**
- * Standalone MySQL Database Engine & Connection Helper.
- * Server code reads secrets from MYSQL_* only; client-visible VITE_* values are limited to non-secret hints.
+ * Standalone MySQL Database Engine & Connection Helper
+ * Bypasses Supabase Cloud completely and enables Direct MySQL integration.
  */
-import type mysql from "mysql2/promise";
 
-import fs from "node:fs";
-import path from "node:path";
-
-function loadEnvFile() {
-  if (typeof process === "undefined" || typeof process.cwd !== "function") return;
-  try {
-    const envPath = path.join(process.cwd(), ".env");
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, "utf8");
-      for (const line of content.split("\n")) {
-        const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith("#") && trimmed.includes("=")) {
-          const idx = trimmed.indexOf("=");
-          const key = trimmed.slice(0, idx).trim();
-          const val = trimmed.slice(idx + 1).trim();
-          if (!process.env[key]) {
-            process.env[key] = val;
-          }
-        }
-      }
-    }
-  } catch {
-    // Ignore runtime error
-  }
-}
-
-loadEnvFile();
 
 export interface MySQLConfig {
   host: string;
@@ -38,94 +10,38 @@ export interface MySQLConfig {
   user: string;
   password?: string;
   database: string;
-  connectionLimit: number;
 }
 
 export function getMySQLConfig(): MySQLConfig {
-  loadEnvFile();
-  const serverEnv =
-    typeof process !== "undefined"
-      ? (process.env as Record<string, string | undefined>)
-      : undefined;
-  const clientEnv =
-    typeof import.meta !== "undefined"
-      ? (import.meta.env as Record<string, string | undefined>)
-      : undefined;
-
-
-  const host = serverEnv?.["MYSQL_HOST"] || clientEnv?.["VITE_MYSQL_HOST"] || "localhost";
-  const port = parseInt(serverEnv?.["MYSQL_PORT"] || clientEnv?.["VITE_MYSQL_PORT"] || "3306", 10);
-  const user = serverEnv?.["MYSQL_USER"] || clientEnv?.["VITE_MYSQL_USER"] || "root";
-  const password = serverEnv?.["MYSQL_PASSWORD"] || "";
+  const host =
+    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_HOST"]) ||
+    (typeof process !== "undefined" && process.env?.["MYSQL_HOST"]) ||
+    "localhost";
+  const port = parseInt(
+    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_PORT"]) ||
+      (typeof process !== "undefined" && process.env?.["MYSQL_PORT"]) ||
+      "3306",
+    10,
+  );
+  const user =
+    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_USER"]) ||
+    (typeof process !== "undefined" && process.env?.["MYSQL_USER"]) ||
+    "root";
+  const password =
+    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_PASSWORD"]) ||
+    (typeof process !== "undefined" && process.env?.["MYSQL_PASSWORD"]) ||
+    "";
   const database =
-    serverEnv?.["MYSQL_DATABASE"] || clientEnv?.["VITE_MYSQL_DATABASE"] || "brandium_crm";
-  const connectionLimit = parseInt(serverEnv?.["MYSQL_CONNECTION_LIMIT"] || "20", 10);
+    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_DATABASE"]) ||
+    (typeof process !== "undefined" && process.env?.["MYSQL_DATABASE"]) ||
+    "brandium_crm";
 
-  return {
-    host,
-    port: Number.isFinite(port) ? port : 3306,
-    user,
-    password,
-    database,
-    connectionLimit: Number.isFinite(connectionLimit) ? connectionLimit : 20,
-  };
+  return { host, port, user, password, database };
 }
 
 export function checkDatabaseConnection(): boolean {
   if (typeof window === "undefined") return false;
   return true;
-}
-
-let globalPool: mysql.Pool | null = null;
-
-export async function getMySQLPool(): Promise<mysql.Pool> {
-  if (globalPool) {
-    return globalPool;
-  }
-
-  const mysqlModule = await import("mysql2/promise");
-  const config = getMySQLConfig();
-
-  globalPool = mysqlModule.default.createPool({
-    host: config.host === "localhost" ? "127.0.0.1" : config.host,
-    port: config.port,
-    user: config.user,
-    password: config.password ?? "",
-    database: config.database,
-    waitForConnections: true,
-    connectionLimit: config.connectionLimit,
-    queueLimit: 0,
-    enableKeepAlive: true,
-    keepAliveInitialDelay: 10000,
-    charset: "utf8mb4",
-  });
-
-  return globalPool;
-}
-
-/**
- * Executes a parameterized SQL query against the singleton MySQL connection pool.
- */
-export async function queryPool<T = Record<string, unknown>[]>(
-  sql: string,
-  params: unknown[] = [],
-): Promise<T> {
-  const pool = await getMySQLPool();
-  const [rows] = await pool.query(sql, params);
-  return rows as T;
-}
-
-export async function executePool(
-  sql: string,
-  params: unknown[] = [],
-): Promise<{ affectedRows: number; insertId?: number | undefined }> {
-  const pool = await getMySQLPool();
-  const [result] = await pool.query(sql, params);
-  const okPacket = result as { affectedRows?: number; insertId?: number };
-  return {
-    affectedRows: okPacket.affectedRows ?? 0,
-    insertId: okPacket.insertId !== undefined ? okPacket.insertId : undefined,
-  };
 }
 
 /**
@@ -150,3 +66,4 @@ export function generateUUID(): string {
     return v.toString(16);
   });
 }
+

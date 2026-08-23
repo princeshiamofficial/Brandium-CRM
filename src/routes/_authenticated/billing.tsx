@@ -134,12 +134,6 @@ function BillingPage() {
     mutationFn: (id: string) => deleteInvoice(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
-      queryClient.invalidateQueries({ queryKey: ["opportunity-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["prospects"] });
-      queryClient.invalidateQueries({ queryKey: ["denied-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["won-sales"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success("Invoice deleted successfully.");
     },
     onError: (err: Error) => {

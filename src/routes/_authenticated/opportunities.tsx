@@ -36,7 +36,7 @@ const getStageBadgeStyle = (status: string) => {
   if (s.includes("won") || s.includes("closed")) {
     return "bg-emerald-100/90 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200/70";
   }
-  if (s.includes("lost") || s.includes("denied")) {
+  if (s.includes("lost")) {
     return "bg-rose-100/90 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-200/70";
   }
   if (s.includes("dnp") || s.includes("pursue")) {
@@ -69,10 +69,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -345,8 +341,20 @@ function OpportunitiesPage() {
 
   return (
     <div className="space-y-6">
+      {/* Top Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <PageHeader
+          title="Opportunities"
+          description="Manage sales pipeline deals, convert won prospects, and track estimated revenue."
+        />
+        <Button onClick={() => setDialogOpen(true)} className="shadow-sm">
+          <Plus className="mr-2 size-4" />
+          Create Opportunity
+        </Button>
+      </div>
+
       {/* Summary Cards */}
-      <div className="grid gap-3.5 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           label="Total Deals"
           value={summary.data?.total ?? 0}
@@ -357,8 +365,8 @@ function OpportunitiesPage() {
           onClick={() => updateFilter("status", undefined)}
         />
         <StatCard
-          label="Pipeline Value"
-          value={`৳${(summary.data?.totalValue ?? 0).toLocaleString()}`}
+          label="Total Pipeline Value"
+          value={`৳ ${(summary.data?.totalValue ?? 0).toLocaleString()}`}
           icon={DollarSign}
           loading={summary.isLoading}
           variant="teal"
@@ -537,19 +545,13 @@ function OpportunitiesPage() {
         </div>
 
         {list.isLoading ? (
-          <div className="grid gap-3.5 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div
-                key={i}
-                className="rounded-2xl border border-slate-200/80 dark:border-border bg-white dark:bg-card p-4 shadow-2xs space-y-3"
-              >
-                <Skeleton className="h-10 w-full rounded-xl" />
-                <Skeleton className="h-6 w-3/4" />
-                <Skeleton className="h-20 w-full rounded-xl" />
-                <Skeleton className="h-9 w-full rounded-xl" />
-              </div>
-            ))}
-          </div>
+          <Card className="bg-white dark:bg-card border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+            <div className="p-4 space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full rounded" />
+              ))}
+            </div>
+          </Card>
         ) : rows.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
@@ -564,195 +566,213 @@ function OpportunitiesPage() {
                     : "Create your first sales opportunity to start tracking pipeline value."}
                 </p>
               </div>
-              {hasActiveFilters && (
+              {hasActiveFilters ? (
                 <Button variant="outline" size="sm" onClick={clearFilters}>
                   Reset Filters
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={() => setDialogOpen(true)}>
+                  <Plus className="mr-2 size-4" />
+                  Create Opportunity
                 </Button>
               )}
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-3.5 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {rows.map((row) => (
-              <div
-                key={row.id}
-                className="group relative rounded-2xl border border-slate-200/80 dark:border-border bg-white dark:bg-card p-4 shadow-2xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between"
-              >
-                {/* Top Section */}
-                <div>
-                  {/* Header: Target Icon, Title, Prospect Name & Dropdown */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      <div className="size-9 rounded-full bg-purple-100/80 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 font-bold flex items-center justify-center shrink-0 border border-purple-200/60 shadow-2xs mt-0.5">
-                        <Target className="size-4.5" />
-                      </div>
-                      <div className="min-w-0">
+          <Card className="bg-white dark:bg-card border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="border-b bg-slate-50/80 dark:bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className="py-3 px-4">Title & Prospect</th>
+                    <th className="py-3 px-4">Estimated Value</th>
+                    <th className="py-3 px-4">Stage / Status</th>
+                    <th className="py-3 px-4">Assigned Agent</th>
+                    <th className="py-3 px-4">Date & Time</th>
+                    <th className="py-3 px-4 min-w-44">Notes</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {rows.map((row) => (
+                    <tr
+                      key={row.id}
+                      className="hover:bg-slate-50/60 dark:hover:bg-muted/30 transition-colors"
+                    >
+                      {/* Title & Prospect */}
+                      <td className="py-3.5 px-4 max-w-64">
                         <button
                           type="button"
                           onClick={() => {
                             setEditingNotesRow(row);
                             setNoteContent(row.notes || "");
                           }}
-                          className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 leading-tight truncate block text-left group-hover:text-[#0A2E5C] dark:group-hover:text-purple-300 transition-colors cursor-pointer"
+                          className="font-semibold text-foreground hover:text-[#67B239] transition-colors truncate block text-left cursor-pointer"
                         >
-                          {row.prospect_business || row.prospect_name || "Untitled Deal"}
+                          {row.prospect_business || row.prospect_name || "Untitled Opportunity"}
                         </button>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold truncate mt-0.5">
-                          {row.prospect_name || "Direct Client"}
+                        <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
+                          <span>{row.prospect_name || "Direct Client"}</span>
+                          {row.prospect_phone && (
+                            <span className="font-mono text-slate-500">· {row.prospect_phone}</span>
+                          )}
                         </p>
-                      </div>
-                    </div>
+                      </td>
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7.5 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-accent shrink-0 -mr-1 transition-colors cursor-pointer"
-                        >
-                          <MoreHorizontal className="size-4" />
-                          <span className="sr-only">Open menu</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        className="w-48 rounded-xl p-1.5 shadow-xl border-slate-200 dark:border-slate-800"
-                      >
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setEditingNotesRow(row);
-                            setNoteContent(row.notes || "");
-                          }}
-                          className="flex items-center gap-2 text-xs font-semibold rounded-md px-2 py-1.5 cursor-pointer"
-                        >
-                          <Pencil className="size-3.5 text-slate-600 dark:text-slate-400" />
-                          <span>Edit Notes</span>
-                        </DropdownMenuItem>
+                      {/* Estimated Value */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs">
+                          ৳{(row.estimated_value || 0).toLocaleString()}
+                        </span>
+                      </td>
 
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger className="flex items-center gap-2 text-xs font-semibold rounded-md px-2 py-1.5 cursor-pointer">
-                            <Layers className="size-3.5 text-blue-600" />
-                            <span>Update Stage</span>
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuPortal>
-                            <DropdownMenuSubContent className="w-48 rounded-xl p-1.5 shadow-xl border-slate-200 dark:border-slate-800">
+                      {/* Stage / Status */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs",
+                            getStageBadgeStyle(row.status),
+                          )}
+                        >
+                          <span className="size-1 rounded-full bg-current shrink-0" />
+                          {row.status}
+                        </span>
+                      </td>
+
+                      {/* Assigned Agent */}
+                      <td className="py-3.5 px-4 whitespace-nowrap text-xs">
+                        <div className="flex items-center gap-1.5 font-medium text-foreground">
+                          <User className="size-3 text-slate-400 shrink-0" />
+                          <span>{row.agent_name || "Unassigned"}</span>
+                        </div>
+                      </td>
+
+                      {/* Date & Time */}
+                      <td className="py-3.5 px-4 whitespace-nowrap text-xs">
+                        <div className="font-medium text-foreground">
+                          {format(new Date(row.created_at), "yyyy-MM-dd")}
+                        </div>
+                        <div className="text-muted-foreground">
+                          {format(new Date(row.created_at), "hh:mm a")}
+                        </div>
+                      </td>
+
+                      {/* Notes */}
+                      <td className="py-3.5 px-4 max-w-56 text-xs">
+                        <div className="flex items-center justify-between gap-1 group">
+                          <div className="sawtooth-cut bg-amber-100/90 dark:bg-amber-950/70 px-2 py-1 text-[10px] text-amber-950 dark:text-amber-100 font-medium line-clamp-1 truncate max-w-44">
+                            {row.notes?.trim() || "No notes"}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingNotesRow(row);
+                              setNoteContent(row.notes || "");
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-all text-slate-400 hover:text-slate-700 cursor-pointer"
+                            title="Edit note"
+                          >
+                            <Pencil className="size-3" />
+                          </button>
+                        </div>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 text-muted-foreground hover:text-foreground cursor-pointer"
+                            title="View Details"
+                            onClick={() => {
+                              setEditingNotesRow(row);
+                              setNoteContent(row.notes || "");
+                            }}
+                          >
+                            <Eye className="size-4" />
+                          </Button>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 text-muted-foreground hover:text-foreground cursor-pointer"
+                              >
+                                <MoreHorizontal className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-48 rounded-xl p-1.5 shadow-xl"
+                            >
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setEditingNotesRow(row);
+                                  setNoteContent(row.notes || "");
+                                }}
+                                className="text-xs font-semibold rounded-md px-2 py-1.5 cursor-pointer"
+                              >
+                                <Eye className="mr-2 size-3.5 text-slate-500" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setEditingNotesRow(row);
+                                  setNoteContent(row.notes || "");
+                                }}
+                                className="text-xs font-semibold rounded-md px-2 py-1.5 cursor-pointer"
+                              >
+                                <FileText className="mr-2 size-3.5 text-slate-500" />
+                                Edit Notes
+                              </DropdownMenuItem>
+
+                              <DropdownMenuSeparator className="my-1" />
+
                               <DropdownMenuLabel className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-2 py-0.5">
-                                Active Stages
+                                Change Status
                               </DropdownMenuLabel>
                               {PIPELINE_STAGES.map((st) => (
                                 <DropdownMenuItem
                                   key={st}
                                   onClick={(e) => handleUpdateStatus(row, st, e)}
-                                  className="text-xs font-semibold rounded-md px-2 py-1.5 cursor-pointer"
+                                  className="text-xs font-semibold rounded-md px-2 py-1 cursor-pointer"
                                 >
                                   <BadgeCheck className="mr-2 size-3.5 text-emerald-600" />
                                   {st}
                                 </DropdownMenuItem>
                               ))}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuLabel className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-2 py-0.5">
-                                Lost / Rejected
-                              </DropdownMenuLabel>
                               {REJECTED_STAGES.map((st) => (
                                 <DropdownMenuItem
                                   key={st}
                                   onClick={(e) => handleUpdateStatus(row, st, e)}
-                                  className="text-xs font-semibold text-rose-600 rounded-md px-2 py-1.5 cursor-pointer"
+                                  className="text-xs font-semibold text-rose-600 rounded-md px-2 py-1 cursor-pointer"
                                 >
                                   <CircleSlash className="mr-2 size-3.5 text-rose-500" />
                                   {st}
                                 </DropdownMenuItem>
                               ))}
-                            </DropdownMenuSubContent>
-                          </DropdownMenuPortal>
-                        </DropdownMenuSub>
 
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setEditingNotesRow(row);
-                            setNoteContent(row.notes || "");
-                          }}
-                          className="flex items-center gap-2 text-xs font-semibold rounded-md px-2 py-1.5 cursor-pointer"
-                        >
-                          <Eye className="size-3.5 text-emerald-600" />
-                          <span>View Details</span>
-                        </DropdownMenuItem>
+                              <DropdownMenuSeparator className="my-1" />
 
-                        <DropdownMenuSeparator />
-
-                        <DropdownMenuItem
-                          onClick={() => handleSoftDelete(row)}
-                          className="flex items-center gap-2 text-xs font-semibold rounded-md px-2 py-1.5 text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40 cursor-pointer"
-                        >
-                          <Trash2 className="size-3.5 text-rose-500" />
-                          <span>Delete</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-
-                  {/* Estimated Value & Stage Status Badges */}
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/80 dark:border-emerald-800/60 rounded-lg px-2.5 py-1 flex items-center gap-1.5">
-                      <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                        Value:
-                      </span>
-                      <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300 text-xs">
-                        ৳{(row.estimated_value || 0).toLocaleString()}
-                      </span>
-                    </div>
-
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full shadow-2xs shrink-0",
-                        getStageBadgeStyle(row.status),
-                      )}
-                    >
-                      <span className="size-1.5 rounded-full bg-current shrink-0" />
-                      {row.status}
-                    </span>
-                  </div>
-
-                  {/* Middle Clean Metadata Box */}
-                  <div className="mt-3 bg-[#F4F6F8] dark:bg-slate-800/50 rounded-xl p-3 text-xs text-slate-700 dark:text-slate-300 font-semibold space-y-1.5 border border-slate-100/80 dark:border-slate-800">
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <User className="size-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate">
-                          Agent:{" "}
-                          <strong className="font-bold text-slate-900 dark:text-slate-100">
-                            {row.agent_name || "Unassigned"}
-                          </strong>
-                        </span>
-                      </div>
-                      {row.prospect_phone && (
-                        <div className="flex items-center gap-1 font-mono text-[11px] text-slate-600 dark:text-slate-300 shrink-0">
-                          <Phone className="size-3 text-slate-400" />
-                          <span>{row.prospect_phone}</span>
+                              <DropdownMenuItem
+                                onClick={(e) => handleSoftDelete(row, e)}
+                                className="text-xs font-semibold text-rose-600 dark:text-rose-400 rounded-md px-2 py-1.5 cursor-pointer focus:bg-rose-50 dark:focus:bg-rose-950/50"
+                              >
+                                <Trash2 className="mr-2 size-3.5 text-rose-600" />
+                                Delete Opportunity
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                      <div className="flex items-center gap-1">
-                        <Clock className="size-3 text-slate-400" />
-                        <span>Created: {format(new Date(row.created_at), "MMM dd, yyyy")}</span>
-                      </div>
-                      <span>{format(new Date(row.created_at), "hh:mm a")}</span>
-                    </div>
-
-                    {row.notes?.trim() && (
-                      <div className="mt-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
-                        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-900/60 rounded-md px-2 py-1 text-[11px] text-amber-900 dark:text-amber-200 font-normal line-clamp-2">
-                          {row.notes.trim()}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
 
         {/* Pagination */}

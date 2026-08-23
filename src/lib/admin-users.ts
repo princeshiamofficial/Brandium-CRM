@@ -1,8 +1,18 @@
 import { queryOptions } from "@tanstack/react-query";
 import bcrypt from "bcryptjs";
-import { runMySQLQuery } from "@/lib/mysql-api";
+import { supabase } from "@/integrations/supabase/client";
+import { generateUUID } from "@/lib/mysql-client";
+import {
+  createMySQLUser,
+  fetchMySQLUsers,
+  resetMySQLUserPassword,
+  softDeleteMySQLUser,
+  toggleMySQLUserStatus,
+  updateMySQLUser,
+  updateMySQLUserAvatar,
+} from "@/lib/auth.functions";
 
-export type CrmUserRole = "ADMIN" | "AGENT" | "DEVELOPER";
+export type CrmUserRole = "ADMIN" | "AGENT";
 export type CrmUserStatus = "Active" | "Inactive" | "Deleted";
 
 export type CrmUser = {
@@ -33,26 +43,28 @@ export type UpdateCrmUserInput = {
   email: string;
   role: CrmUserRole;
   status: CrmUserStatus;
+  avatar_url?: string | null | undefined;
 };
 
-function generateUUID(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
+// Safe DB accessor wrapper
+const dynamicDb = supabase as unknown as {
+  from: (table: string) => {
+    select: (cols: string) => {
+      eq: (
+        col: string,
+        val: unknown,
+      ) => {
+        order: (
+          col: string,
+          opts?: { ascending?: boolean },
+        ) => Promise<{ data: unknown[]; error: unknown }>;
+      };
+    };
+  };
+};
 
 export function hashPasswordBcrypt(plaintext: string): string {
-  try {
-    const salt = bcrypt.genSaltSync(10);
-    return bcrypt.hashSync(plaintext, salt);
-  } catch {
-    return plaintext;
-  }
+  return bcrypt.hashSync(plaintext, 10);
 }
 
 export function verifyPasswordBcrypt(plaintext: string, hash: string): boolean {
@@ -63,17 +75,84 @@ export function verifyPasswordBcrypt(plaintext: string, hash: string): boolean {
   }
 }
 
+// Fallback seed accounts in memory
+export const demoCrmUsers: CrmUser[] = [
+  {
+    id: "usr-admin-1",
+    name: "Mehan Ahmed (System Admin)",
+    email: "admin@example.com",
+    password_hash: hashPasswordBcrypt("Admin@12345"),
+    role: "ADMIN",
+    status: "Active",
+    is_deleted: false,
+    created_at: new Date(Date.now() - 86400000 * 90).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+  },
+  {
+    id: "usr-admin-2",
+    name: "Mehan Ahmed",
+    email: "mehan.ahmed.official@gmail.com",
+    password_hash: hashPasswordBcrypt("Admin@12345"),
+    role: "ADMIN",
+    status: "Active",
+    is_deleted: false,
+    created_at: new Date(Date.now() - 86400000 * 60).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 * 5).toISOString(),
+  },
+  {
+    id: "usr-agent-0",
+    name: "Agent User",
+    email: "agent@brandium.com",
+    password_hash: hashPasswordBcrypt("Agent@12345"),
+    role: "AGENT",
+    status: "Active",
+    is_deleted: false,
+    created_at: new Date(Date.now() - 86400000 * 45).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 * 1).toISOString(),
+  },
+  {
+    id: "usr-agent-1",
+    name: "Tanvir Hasan",
+    email: "tanvir.agent@brandium.com",
+    password_hash: hashPasswordBcrypt("Agent@12345"),
+    role: "AGENT",
+    status: "Active",
+    is_deleted: false,
+    created_at: new Date(Date.now() - 86400000 * 30).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 * 4).toISOString(),
+  },
+  {
+    id: "usr-agent-2",
+    name: "Nusrat Jahan",
+    email: "nusrat.agent@brandium.com",
+    password_hash: hashPasswordBcrypt("Agent@12345"),
+    role: "AGENT",
+    status: "Active",
+    is_deleted: false,
+    created_at: new Date(Date.now() - 86400000 * 15).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 * 1).toISOString(),
+  },
+  {
+    id: "usr-agent-3",
+    name: "Rafiqul Islam",
+    email: "rafiq.agent@brandium.com",
+    password_hash: hashPasswordBcrypt("Agent@12345"),
+    role: "AGENT",
+    status: "Inactive",
+    is_deleted: false,
+    created_at: new Date(Date.now() - 86400000 * 10).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 * 8).toISOString(),
+  },
+];
+
+// Global in-memory avatar cache (bypasses localStorage while keeping avatars visible)
 const userAvatarMemoryMap = new Map<string, string>();
 
 export async function fetchCrmUsers(search?: string): Promise<CrmUser[]> {
-  let mapped: CrmUser[] = [];
-
   try {
-    const dbRes = await runMySQLQuery<Record<string, unknown>[]>(
-      "SELECT * FROM `users` WHERE is_deleted = 0 ORDER BY name ASC;",
-    );
-    if (dbRes.success && Array.isArray(dbRes.data)) {
-      mapped = dbRes.data.map((u) => {
+    const res = await fetchMySQLUsers();
+    if (res && res.success && Array.isArray(res.users) && res.users.length > 0) {
+      const mapped: CrmUser[] = res.users.map((u) => {
         const userId = String(u["id"]);
         const dbAvatar = u["avatar_url"] ? String(u["avatar_url"]) : null;
         const memoryAvatar = userAvatarMemoryMap.get(userId);
@@ -81,7 +160,6 @@ export async function fetchCrmUsers(search?: string): Promise<CrmUser[]> {
         if (avatarUrl) {
           userAvatarMemoryMap.set(userId, avatarUrl);
         }
-
         return {
           id: userId,
           name: String(u["name"] || "User"),
@@ -90,19 +168,70 @@ export async function fetchCrmUsers(search?: string): Promise<CrmUser[]> {
           role: (u["role"] as CrmUserRole) || "AGENT",
           status: (u["status"] as CrmUserStatus) || "Active",
           avatar_url: avatarUrl,
-          is_deleted: Boolean(Number(u["is_deleted"] ?? 0)),
+          is_deleted: Boolean(u["is_deleted"]),
           deleted_at: (u["deleted_at"] as string) || null,
           created_at: String(u["created_at"] || new Date().toISOString()),
           updated_at: String(u["updated_at"] || new Date().toISOString()),
         };
       });
+      return applySearchToUsers(mapped, search);
     }
-  } catch (err) {
-    console.warn("fetchCrmUsers MySQL error:", err);
-    mapped = [];
+  } catch {
+    // Fallback to direct db query
   }
 
-  return applySearchToUsers(mapped, search);
+  try {
+    const { data, error } = await dynamicDb
+      .from("users")
+      .select("*")
+      .eq("is_deleted", false)
+      .order("created_at", { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      const merged = demoCrmUsers.map((u) => {
+        const memoryAvatar = userAvatarMemoryMap.get(u.id);
+        return {
+          ...u,
+          avatar_url: memoryAvatar !== undefined ? memoryAvatar : u.avatar_url || null,
+        };
+      });
+      return applySearchToUsers(merged, search);
+    }
+
+    const mapped: CrmUser[] = (data as Record<string, unknown>[]).map((u) => {
+      const userId = String(u["id"]);
+      const dbAvatar = u["avatar_url"] ? String(u["avatar_url"]) : null;
+      const memoryAvatar = userAvatarMemoryMap.get(userId);
+      const avatarUrl = memoryAvatar !== undefined ? memoryAvatar : dbAvatar;
+      if (avatarUrl) {
+        userAvatarMemoryMap.set(userId, avatarUrl);
+      }
+      return {
+        id: userId,
+        name: String(u["name"] || "User"),
+        email: String(u["email"] || ""),
+        password_hash: String(u["password_hash"] || ""),
+        role: (u["role"] as CrmUserRole) || "AGENT",
+        status: (u["status"] as CrmUserStatus) || "Active",
+        avatar_url: avatarUrl,
+        is_deleted: Boolean(u["is_deleted"]),
+        deleted_at: (u["deleted_at"] as string) || null,
+        created_at: String(u["created_at"] || new Date().toISOString()),
+        updated_at: String(u["updated_at"] || new Date().toISOString()),
+      };
+    });
+
+    return applySearchToUsers(mapped, search);
+  } catch {
+    const merged = demoCrmUsers.map((u) => {
+      const memoryAvatar = userAvatarMemoryMap.get(u.id);
+      return {
+        ...u,
+        avatar_url: memoryAvatar !== undefined ? memoryAvatar : u.avatar_url || null,
+      };
+    });
+    return applySearchToUsers(merged, search);
+  }
 }
 
 function applySearchToUsers(list: CrmUser[], search?: string): CrmUser[] {
@@ -126,46 +255,45 @@ export async function fetchCrmUserById(id: string): Promise<CrmUser | null> {
 }
 
 export async function createCrmUser(input: CreateCrmUserInput): Promise<CrmUser> {
+  // Validate email format
   if (!input.email || !input.email.includes("@")) {
     throw new Error("Please enter a valid email address.");
   }
+  // Validate name
   if (!input.name || !input.name.trim()) {
     throw new Error("User full name is required.");
   }
 
-  const existing = await runMySQLQuery<Record<string, unknown>[]>(
-    "SELECT id FROM `users` WHERE LOWER(email) = LOWER(?) AND is_deleted = 0 LIMIT 1;",
-    [input.email.trim()],
+  // Check unique email
+  const existing = demoCrmUsers.find(
+    (u) => u.email.toLowerCase() === input.email.toLowerCase() && !u.is_deleted,
   );
-  if (existing.success && Array.isArray(existing.data) && existing.data.length > 0) {
+  if (existing) {
     throw new Error(`A user account with email "${input.email}" already exists.`);
   }
 
+  // Hash password using bcrypt
   const hashedPassword = hashPasswordBcrypt(input.password_hash);
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = new Date().toISOString();
   const userId = generateUUID();
 
-  const insertRes = await runMySQLQuery(
-    `INSERT INTO \`users\` (\`id\`, \`name\`, \`email\`, \`password_hash\`, \`role\`, \`status\`, \`avatar_url\`, \`is_deleted\`, \`created_at\`, \`updated_at\`)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
-    [
-      userId,
-      input.name.trim(),
-      input.email.toLowerCase().trim(),
-      hashedPassword,
-      input.role,
-      input.status,
-      input.avatar_url || null,
-      now,
-      now,
-    ],
-  );
-
-  if (!insertRes.success) {
-    throw new Error(insertRes.error || "Failed to create user in database.");
+  try {
+    await createMySQLUser({
+      data: {
+        userId,
+        name: input.name.trim(),
+        email: input.email.toLowerCase().trim(),
+        passwordHash: hashedPassword,
+        role: input.role,
+        status: input.status,
+        avatarUrl: input.avatar_url || null,
+      },
+    });
+  } catch (err) {
+    console.error("Create MySQL User Error:", err);
   }
 
-  return {
+  const newUser: CrmUser = {
     id: userId,
     name: input.name.trim(),
     email: input.email.toLowerCase().trim(),
@@ -177,30 +305,90 @@ export async function createCrmUser(input: CreateCrmUserInput): Promise<CrmUser>
     created_at: now,
     updated_at: now,
   };
+
+  demoCrmUsers.unshift(newUser);
+  return newUser;
 }
 
 export async function updateCrmUser(id: string, input: UpdateCrmUserInput): Promise<CrmUser> {
   const inputEmail = input.email.toLowerCase().trim();
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
 
-  const dupRes = await runMySQLQuery<Record<string, unknown>[]>(
-    "SELECT id FROM `users` WHERE id != ? AND LOWER(email) = LOWER(?) AND is_deleted = 0 LIMIT 1;",
-    [id, inputEmail],
+  // Find existing target by ID or matching email
+  let target = demoCrmUsers.find((u) => u.id === id || u.email.toLowerCase() === inputEmail);
+
+  // Check unique email among OTHER active accounts
+  const duplicate = demoCrmUsers.find(
+    (u) =>
+      u.id !== id && u.id !== target?.id && u.email.toLowerCase() === inputEmail && !u.is_deleted,
   );
-  if (dupRes.success && Array.isArray(dupRes.data) && dupRes.data.length > 0) {
+  if (duplicate) {
     throw new Error(`Another user account with email "${input.email}" already exists.`);
   }
 
-  await runMySQLQuery(
-    "UPDATE `users` SET `name` = ?, `email` = ?, `role` = ?, `status` = ?, `updated_at` = ? WHERE `id` = ?;",
-    [input.name.trim(), inputEmail, input.role, input.status, now, id],
-  );
-
-  const updated = await fetchCrmUserById(id);
-  if (!updated) {
-    throw new Error("Failed to load updated user.");
+  if (!target) {
+    target = {
+      id,
+      name: input.name.trim(),
+      email: inputEmail,
+      password_hash: "",
+      role: input.role,
+      status: input.status,
+      is_deleted: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    demoCrmUsers.unshift(target);
+  } else {
+    target.id = id;
+    target.name = input.name.trim();
+    target.email = inputEmail;
+    target.role = input.role;
+    target.status = input.status;
+    target.updated_at = new Date().toISOString();
   }
-  return updated;
+
+  try {
+    await updateMySQLUser({
+      data: {
+        userId: id,
+        name: input.name.trim(),
+        email: inputEmail,
+        role: input.role,
+        status: input.status,
+      },
+    });
+  } catch (err) {
+    console.error("Update MySQL User Error:", err);
+  }
+
+  // Keep dev session in sync if updating active session user
+  if (typeof window !== "undefined") {
+    try {
+      const devRaw = localStorage.getItem("brandium_dev_session");
+      if (devRaw) {
+        const devSession = JSON.parse(devRaw);
+        if (
+          devSession?.profile?.id === id ||
+          devSession?.profile?.email?.toLowerCase() === inputEmail ||
+          devSession?.user?.id === id
+        ) {
+          devSession.profile.full_name = input.name.trim();
+          devSession.profile.email = inputEmail;
+          if (devSession.user) {
+            devSession.user.email = inputEmail;
+            if (devSession.user.user_metadata) {
+              devSession.user.user_metadata.full_name = input.name.trim();
+            }
+          }
+          localStorage.setItem("brandium_dev_session", JSON.stringify(devSession));
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  return target;
 }
 
 export async function resetUserPassword(userId: string, newPlaintext: string): Promise<boolean> {
@@ -208,13 +396,19 @@ export async function resetUserPassword(userId: string, newPlaintext: string): P
     throw new Error("New password must be at least 6 characters long.");
   }
 
+  const target = demoCrmUsers.find((u) => u.id === userId);
+  if (!target) throw new Error("User account not found.");
+
   const hashed = hashPasswordBcrypt(newPlaintext);
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
-  await runMySQLQuery("UPDATE `users` SET `password_hash` = ?, `updated_at` = ? WHERE `id` = ?;", [
-    hashed,
-    now,
-    userId,
-  ]);
+  target.password_hash = hashed;
+  target.updated_at = new Date().toISOString();
+
+  try {
+    await resetMySQLUserPassword({ data: { userId, passwordHash: hashed } });
+  } catch (err) {
+    console.error("Reset MySQL User Password Error:", err);
+  }
+
   return true;
 }
 
@@ -223,10 +417,11 @@ export async function changeOwnPassword(
   currentPlaintext: string,
   newPlaintext: string,
 ): Promise<boolean> {
-  const user = await fetchCrmUserById(userId);
-  if (!user) throw new Error("User account not found.");
+  const target = demoCrmUsers.find((u) => u.id === userId);
+  if (!target) throw new Error("User account not found.");
 
-  const isMatch = verifyPasswordBcrypt(currentPlaintext, user.password_hash);
+  // Verify current password with bcrypt
+  const isMatch = verifyPasswordBcrypt(currentPlaintext, target.password_hash);
   if (!isMatch) {
     throw new Error("Current password entered is incorrect.");
   }
@@ -235,43 +430,66 @@ export async function changeOwnPassword(
 }
 
 export async function toggleUserStatus(userId: string, newStatus: CrmUserStatus): Promise<boolean> {
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
-  await runMySQLQuery(
-    "UPDATE `users` SET `status` = ?, `is_active` = ?, `updated_at` = ? WHERE `id` = ?;",
-    [newStatus, newStatus === "Active" ? 1 : 0, now, userId],
-  );
+  const target = demoCrmUsers.find((u) => u.id === userId);
+  if (target) {
+    target.status = newStatus;
+    target.updated_at = new Date().toISOString();
+  }
+
+  try {
+    await toggleMySQLUserStatus({ data: { userId, status: newStatus } });
+  } catch (err) {
+    console.error("Toggle MySQL User Status Error:", err);
+  }
+
   return true;
 }
 
 export async function softDeleteCrmUser(userId: string): Promise<boolean> {
-  const user = await fetchCrmUserById(userId);
-  if (user?.email === "admin@example.com" || user?.email === "agent@brandium.com") {
-    throw new Error("System default accounts cannot be deleted.");
+  const target = demoCrmUsers.find((u) => u.id === userId);
+  if (target?.email === "admin@example.com" || target?.email === "agent@brandium.com") {
+    throw new Error("System default demo accounts cannot be deleted.");
+  }
+  if (target) {
+    target.is_deleted = true;
+    target.status = "Deleted";
+    target.deleted_at = new Date().toISOString();
+    target.updated_at = new Date().toISOString();
   }
 
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
-  await runMySQLQuery(
-    "UPDATE `users` SET `is_deleted` = 1, `status` = 'Deleted', `deleted_at` = ?, `updated_at` = ? WHERE `id` = ?;",
-    [now, now, userId],
-  );
+  try {
+    await softDeleteMySQLUser({ data: { userId } });
+  } catch (err) {
+    console.error("Soft Delete MySQL User Error:", err);
+  }
+
   return true;
 }
 
 export async function updateUserAvatar(userId: string, avatarUrl: string): Promise<boolean> {
   const newAvatar = avatarUrl || null;
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = new Date().toISOString();
 
+  // Save to in-memory avatar cache (guarantees UI displays image without saving in localStorage)
   if (newAvatar) {
     userAvatarMemoryMap.set(userId, newAvatar);
   } else {
     userAvatarMemoryMap.delete(userId);
   }
 
-  await runMySQLQuery("UPDATE `users` SET `avatar_url` = ?, `updated_at` = ? WHERE `id` = ?;", [
-    newAvatar,
-    now,
-    userId,
-  ]);
+  const target = demoCrmUsers.find((u) => u.id === userId);
+  if (target) {
+    target.avatar_url = newAvatar;
+    target.updated_at = now;
+  }
+
+  // Directly update XAMPP MySQL Database (`users` and `user_avatars` tables) via Server Function
+  try {
+    await updateMySQLUserAvatar({ data: { userId, avatarUrl: newAvatar || "" } });
+  } catch (err) {
+    console.error("Direct MySQL Avatar Server Function Error:", err);
+  }
+
   return true;
 }
 

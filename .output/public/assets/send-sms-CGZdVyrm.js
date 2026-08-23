@@ -1,1 +1,0 @@
-import{t as e}from"./jsx-runtime-Cx0BB4qO.js";import{n as t}from"./placeholder-page-DgzYjolI.js";var n=e(),r=()=>(0,n.jsx)(t,{title:`Send SMS`,description:`Compose and send SMS messages to prospects and clients.`});export{r as component};
