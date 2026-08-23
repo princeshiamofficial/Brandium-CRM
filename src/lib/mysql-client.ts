@@ -3,7 +3,6 @@
  * Bypasses Supabase Cloud completely and enables Direct MySQL integration.
  */
 
-
 export interface MySQLConfig {
   host: string;
   port: number;
@@ -13,10 +12,11 @@ export interface MySQLConfig {
 }
 
 export function getMySQLConfig(): MySQLConfig {
-  const host =
+  const rawHost =
     (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_HOST"]) ||
     (typeof process !== "undefined" && process.env?.["MYSQL_HOST"]) ||
-    "localhost";
+    "127.0.0.1";
+  const host = rawHost === "localhost" ? "127.0.0.1" : rawHost;
   const port = parseInt(
     (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_PORT"]) ||
       (typeof process !== "undefined" && process.env?.["MYSQL_PORT"]) ||
@@ -66,4 +66,3 @@ export function generateUUID(): string {
     return v.toString(16);
   });
 }
-

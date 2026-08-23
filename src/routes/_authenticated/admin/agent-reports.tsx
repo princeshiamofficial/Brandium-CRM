@@ -220,7 +220,7 @@ function AdminAgentReportsPage() {
                           <div className="relative shrink-0">
                             <Avatar className="size-9 border border-slate-200 dark:border-slate-800 shadow-2xs">
                               {ag.avatar_url && <AvatarImage src={ag.avatar_url} alt={ag.name} />}
-                              <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold text-xs">
+                              <AvatarFallback className="bg-linear-to-br from-indigo-500 to-purple-600 text-white font-bold text-xs">
                                 {ag.name
                                   .split(" ")
                                   .map((n) => n[0])

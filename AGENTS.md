@@ -117,6 +117,8 @@ Welcome to the **Brandium CRM** repository.
     standard parenthetical syntax `max-h-(--name)`.
   - Replace explicit data attribute brackets like `data-[disabled]:...` with
     concise pseudo-variant syntax like `data-disabled:...`.
+  - Replace legacy gradient syntax like `bg-gradient-to-*` with Tailwind CSS
+    v4 standard `bg-linear-to-*`.
 
 - **Dialog & Modal Sub-component Import Completeness**:
   - Whenever rendering nested modal components (such as `DialogHeader`,
