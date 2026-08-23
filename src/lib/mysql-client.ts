@@ -14,6 +14,38 @@ export interface MySQLConfig {
 }
 
 export function getMySQLConfig(): MySQLConfig {
+  if (typeof process !== "undefined" && process.versions?.node && !process.env?.["MYSQL_USER"]) {
+    try {
+      const fs = require("fs");
+      const path = require("path");
+      const envPath = path.resolve(process.cwd(), ".env");
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, "utf-8");
+        content.split("\n").forEach((line: string) => {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith("#")) {
+            const eqIdx = trimmed.indexOf("=");
+            if (eqIdx > 0) {
+              const key = trimmed.slice(0, eqIdx).trim();
+              let val = trimmed.slice(eqIdx + 1).trim();
+              if (
+                (val.startsWith('"') && val.endsWith('"')) ||
+                (val.startsWith("'") && val.endsWith("'"))
+              ) {
+                val = val.slice(1, -1);
+              }
+              if (!process.env[key]) {
+                process.env[key] = val;
+              }
+            }
+          }
+        });
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
   const serverEnv =
     typeof process !== "undefined"
       ? (process.env as Record<string, string | undefined>)
@@ -23,12 +55,16 @@ export function getMySQLConfig(): MySQLConfig {
       ? (import.meta.env as Record<string, string | undefined>)
       : undefined;
 
-  const host = serverEnv?.["MYSQL_HOST"] || clientEnv?.["VITE_MYSQL_HOST"] || "localhost";
+  const rawHost = serverEnv?.["MYSQL_HOST"] || clientEnv?.["VITE_MYSQL_HOST"] || "127.0.0.1";
+  const host = rawHost === "localhost" ? "127.0.0.1" : rawHost;
   const port = parseInt(serverEnv?.["MYSQL_PORT"] || clientEnv?.["VITE_MYSQL_PORT"] || "3306", 10);
-  const user = serverEnv?.["MYSQL_USER"] || clientEnv?.["VITE_MYSQL_USER"] || "root";
-  const password = serverEnv?.["MYSQL_PASSWORD"] || "";
+  const user = serverEnv?.["MYSQL_USER"] || clientEnv?.["VITE_MYSQL_USER"] || "crm_brandium";
+  const password =
+    serverEnv?.["MYSQL_PASSWORD"] !== undefined && serverEnv?.["MYSQL_PASSWORD"] !== ""
+      ? (serverEnv["MYSQL_PASSWORD"] as string)
+      : clientEnv?.["VITE_MYSQL_PASSWORD"] || "Brandium456";
   const database =
-    serverEnv?.["MYSQL_DATABASE"] || clientEnv?.["VITE_MYSQL_DATABASE"] || "brandium_crm";
+    serverEnv?.["MYSQL_DATABASE"] || clientEnv?.["VITE_MYSQL_DATABASE"] || "crm_brandium";
   const connectionLimit = parseInt(serverEnv?.["MYSQL_CONNECTION_LIMIT"] || "20", 10);
 
   return {
