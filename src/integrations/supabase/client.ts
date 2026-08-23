@@ -200,10 +200,10 @@ export class FluentDatabaseQueryBuilder<
           const keys = Object.keys(patch);
           const values = Object.values(patch);
           const setClause = keys.map((k) => `\`${k}\` = ?`).join(", ");
-          await runMySQLQuery(
-            `UPDATE \`${this.tableName}\` SET ${setClause} WHERE \`id\` = ?;`,
-            [...values, id],
-          );
+          await runMySQLQuery(`UPDATE \`${this.tableName}\` SET ${setClause} WHERE \`id\` = ?;`, [
+            ...values,
+            id,
+          ]);
         }
       }
     } else if (this.pendingDelete) {
@@ -320,7 +320,9 @@ export const supabase = {
         const errObj = err as { message?: string };
         return {
           data: { user: null, session: null },
-          error: { message: errObj?.message || "Authentication error connecting to MySQL database." },
+          error: {
+            message: errObj?.message || "Authentication error connecting to MySQL database.",
+          },
         };
       }
 

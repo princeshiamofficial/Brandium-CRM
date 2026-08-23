@@ -42,6 +42,8 @@ export type Prospect = {
   service_name?: string | undefined;
   stage_name?: string | undefined;
   stage_group?: string | undefined;
+  stage_color?: string | null | undefined;
+  stage_icon?: string | null | undefined;
   assigned_agent_name?: string | undefined;
   creator_name?: string | undefined;
 };
@@ -120,16 +122,18 @@ export const prospectsQuery = (filters: ProspectFilters, _userId: string, _isAdm
           `SELECT 
             p.*,
             s.name AS service_name,
-            st.name AS stage_name,
+            COALESCE(st.name, p.stage_id, 'Prospect') AS stage_name,
             st.stage_group AS stage_group,
+            st.color AS stage_color,
+            st.icon AS stage_icon,
             u_assign.name AS assigned_agent_name,
             u_create.name AS creator_name
           FROM \`prospects\` p
           LEFT JOIN \`services\` s ON p.service_id = s.id
-          LEFT JOIN \`stages\` st ON p.stage_id = st.id
+          LEFT JOIN \`stages\` st ON (p.stage_id = st.id OR p.stage_id = REPLACE(st.id, '-', '_') OR p.stage_id = st.name)
           LEFT JOIN \`users\` u_assign ON p.assigned_to = u_assign.id
           LEFT JOIN \`users\` u_create ON p.created_by = u_create.id
-          WHERE p.is_active = 1
+          WHERE (p.is_active = 1 OR p.is_active IS NULL)
           ORDER BY p.created_at DESC;`,
         );
 
@@ -156,6 +160,8 @@ export const prospectsQuery = (filters: ProspectFilters, _userId: string, _isAdm
               service_name: (p["service_name"] as string) || undefined,
               stage_name: String(p["stage_name"] || formatStageSlugOrName(stId) || "Prospect"),
               stage_group: (p["stage_group"] as string) || "new",
+              stage_color: (p["stage_color"] as string) || null,
+              stage_icon: (p["stage_icon"] as string) || null,
               assigned_agent_name: (p["assigned_agent_name"] as string) || undefined,
               creator_name: (p["creator_name"] as string) || undefined,
             } as Prospect;
@@ -192,6 +198,8 @@ export const prospectsQuery = (filters: ProspectFilters, _userId: string, _isAdm
                 service_name: (p["service_name"] as string) || undefined,
                 stage_name: String(p["stage_name"] || formatStageSlugOrName(stId) || "Prospect"),
                 stage_group: (p["stage_group"] as string) || "new",
+                stage_color: (p["stage_color"] as string) || null,
+                stage_icon: (p["stage_icon"] as string) || null,
                 assigned_agent_name: (p["assigned_agent_name"] as string) || undefined,
                 creator_name: (p["creator_name"] as string) || undefined,
               } as Prospect;
@@ -205,13 +213,21 @@ export const prospectsQuery = (filters: ProspectFilters, _userId: string, _isAdm
       // Apply in-memory filtering
       let rows = fetchedRows;
       if (filters.search) {
-        const q = filters.search.toLowerCase();
+        const q = filters.search.toLowerCase().trim();
         rows = rows.filter(
           (p) =>
             p.contact_name.toLowerCase().includes(q) ||
             (p.business_name && p.business_name.toLowerCase().includes(q)) ||
             (p.phone && p.phone.includes(q)) ||
-            (p.email && p.email.toLowerCase().includes(q)),
+            (p.alternative_phone && p.alternative_phone.includes(q)) ||
+            (p.email && p.email.toLowerCase().includes(q)) ||
+            (p.designation && p.designation.toLowerCase().includes(q)) ||
+            (p.address && p.address.toLowerCase().includes(q)) ||
+            (p.service_name && p.service_name.toLowerCase().includes(q)) ||
+            (p.stage_name && p.stage_name.toLowerCase().includes(q)) ||
+            (p.notes && p.notes.toLowerCase().includes(q)) ||
+            (p.assigned_agent_name && p.assigned_agent_name.toLowerCase().includes(q)) ||
+            (p.creator_name && p.creator_name.toLowerCase().includes(q)),
         );
       }
       if (filters.stage && filters.stage !== "all") {
@@ -260,7 +276,14 @@ export const prospectsStatsQuery = (_userId: string, _isAdmin: boolean) =>
       let allProspects: Record<string, unknown>[] = [];
       try {
         const res = await runMySQLQuery<Record<string, unknown>[]>(
-          "SELECT * FROM `prospects` WHERE `is_active` = 1 ORDER BY `created_at` DESC;",
+          `SELECT 
+            p.id,
+            p.stage_id,
+            COALESCE(st.name, p.stage_id, 'Prospect') AS stage_name
+          FROM \`prospects\` p
+          LEFT JOIN \`stages\` st ON (p.stage_id = st.id OR p.stage_id = REPLACE(st.id, '-', '_') OR p.stage_id = st.name)
+          WHERE (p.is_active = 1 OR p.is_active IS NULL) 
+          ORDER BY p.created_at DESC;`,
         );
         if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
           allProspects = res.data;
@@ -292,7 +315,9 @@ export const prospectsStatsQuery = (_userId: string, _isAdmin: boolean) =>
       const stageCounts: Record<string, number> = {};
 
       for (const p of allProspects) {
-        const rawStage = String((p["stage_name"] as string) || "Prospect");
+        const rawStage = String(
+          (p["stage_name"] as string) || (p["stage_id"] as string) || "Prospect",
+        );
         const stageName = rawStage.toLowerCase();
         const isWon = stageName.includes("won") || stageName.includes("sales won");
         const isFollowUp = stageName.includes("follow");
@@ -342,12 +367,61 @@ export type CreateProspectInput = {
   notes?: string | null | undefined;
 };
 
+export function formatProspectId(id?: string | null): string {
+  if (!id) return "0001";
+  const trimmed = id.trim();
+  // If already numeric like "0001", "12", "5"
+  if (/^\d+$/.test(trimmed)) {
+    return trimmed.padStart(4, "0");
+  }
+  // If format is like "prospect-1786569978392"
+  const match = trimmed.match(/^prospect-(\d+)$/i);
+  if (match && match[1]) {
+    const last4 = match[1].slice(-4);
+    return last4.padStart(4, "0");
+  }
+  return trimmed;
+}
+
+export async function generateNextProspectId(): Promise<string> {
+  try {
+    const res = await runMySQLQuery<Record<string, unknown>[]>(
+      "SELECT `id` FROM `prospects` ORDER BY `created_at` DESC;",
+    );
+    if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      let maxNum = 0;
+      for (const row of res.data) {
+        const idStr = String(row["id"] || "");
+        // Match pure numeric or 0001 format
+        const numMatch = idStr.match(/^0*(\d+)$/);
+        if (numMatch && numMatch[1]) {
+          const n = parseInt(numMatch[1], 10);
+          if (n > maxNum && n < 1000000) {
+            maxNum = n;
+          }
+        }
+      }
+
+      if (maxNum > 0) {
+        return String(maxNum + 1).padStart(4, "0");
+      }
+
+      // If existing IDs are all timestamps, compute count + 1
+      const count = res.data.length;
+      return String(count + 1).padStart(4, "0");
+    }
+    return "0001";
+  } catch {
+    return "0001";
+  }
+}
+
 export async function createProspect(input: CreateProspectInput): Promise<Prospect> {
-  const tempId = `prospect-${Date.now()}`;
+  const nextId = await generateNextProspectId();
   const now = new Date().toISOString().slice(0, 19).replace("T", " ");
 
   const newProspect: Prospect = {
-    id: tempId,
+    id: nextId,
     contact_name: input.contact_name,
     business_name: input.business_name || null,
     designation: input.designation || null,
@@ -393,7 +467,7 @@ export async function createProspect(input: CreateProspectInput): Promise<Prospe
   `;
 
   const insertParams = [
-    tempId,
+    nextId,
     input.contact_name,
     input.business_name || null,
     input.designation || null,

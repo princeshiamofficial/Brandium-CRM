@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { runMySQLQuery } from "@/lib/mysql-api";
 
 export type ReportsFilters = {
   from_date?: string | undefined;
@@ -45,29 +45,48 @@ const CHART_COLORS = [
 
 export async function fetchReportsData(filters: ReportsFilters = {}): Promise<ReportsData> {
   try {
-    // 1. Query prospects directly from Supabase
-    let prospectQuery = supabase
-      .from("prospects")
-      .select("id, stage_name, stage_id, assigned_to, created_at");
+    const prospectsRes = await runMySQLQuery<Record<string, unknown>[]>(
+      `SELECT 
+        p.id,
+        p.assigned_to,
+        p.created_at,
+        COALESCE(s.name, 'Prospect') AS stage_name
+      FROM \`prospects\` p
+      LEFT JOIN \`stages\` s ON p.stage_id = s.id
+      WHERE p.is_active = 1;`,
+    );
+
+    const invoicesRes = await runMySQLQuery<Record<string, unknown>[]>(
+      `SELECT 
+        i.id,
+        i.total_amount,
+        i.paid_amount,
+        i.due_amount,
+        i.created_by,
+        i.created_at
+      FROM \`invoices\` i
+      WHERE i.status != 'Cancelled';`,
+    );
+
+    let prospectsList = Array.isArray(prospectsRes.data) ? prospectsRes.data : [];
+    let invoicesList = Array.isArray(invoicesRes.data) ? invoicesRes.data : [];
 
     if (filters.from_date) {
-      prospectQuery = prospectQuery.gte("created_at", filters.from_date);
+      prospectsList = prospectsList.filter((p) => String(p["created_at"]) >= filters.from_date!);
+      invoicesList = invoicesList.filter((i) => String(i["created_at"]) >= filters.from_date!);
     }
     if (filters.to_date) {
-      prospectQuery = prospectQuery.lte("created_at", `${filters.to_date}T23:59:59`);
+      prospectsList = prospectsList.filter(
+        (p) => String(p["created_at"]) <= `${filters.to_date} 23:59:59`,
+      );
+      invoicesList = invoicesList.filter(
+        (i) => String(i["created_at"]) <= `${filters.to_date} 23:59:59`,
+      );
     }
     if (filters.agent_id && filters.agent_id !== "all") {
-      prospectQuery = prospectQuery.eq("assigned_to", filters.agent_id);
+      prospectsList = prospectsList.filter((p) => p["assigned_to"] === filters.agent_id);
+      invoicesList = invoicesList.filter((i) => i["created_by"] === filters.agent_id);
     }
-
-    const { data: prospectsData } = await prospectQuery;
-    const prospectsList = (prospectsData ?? []) as {
-      id: string;
-      stage_name?: string | null;
-      stage_id?: string | null;
-      assigned_to?: string | null;
-      created_at: string;
-    }[];
 
     const totalProspects = prospectsList.length;
     let salesWon = 0;
@@ -75,55 +94,34 @@ export async function fetchReportsData(filters: ReportsFilters = {}): Promise<Re
     const stageMap = new Map<string, number>();
 
     for (const p of prospectsList) {
-      const sName = (p.stage_name || "Prospect").trim();
+      const sName = String(p["stage_name"] || "Prospect").trim();
       const lower = sName.toLowerCase();
 
-      if (lower.includes("won") || lower.includes("sales won")) {
+      if (lower.includes("won")) {
         salesWon++;
       }
       if (lower.includes("follow")) {
         followup++;
       }
 
-      const key = sName === "New Lead" || sName === "new_lead" ? "Prospect" : sName;
-      stageMap.set(key, (stageMap.get(key) || 0) + 1);
+      stageMap.set(sName, (stageMap.get(sName) || 0) + 1);
     }
-
-    // 2. Query invoices directly from Supabase for financial metrics
-    let invoiceQuery = supabase
-      .from("invoices")
-      .select("id, total_amount, paid_amount, due_amount, status, created_at, created_by");
-
-    if (filters.from_date) {
-      invoiceQuery = invoiceQuery.gte("created_at", filters.from_date);
-    }
-    if (filters.to_date) {
-      invoiceQuery = invoiceQuery.lte("created_at", `${filters.to_date}T23:59:59`);
-    }
-    if (filters.agent_id && filters.agent_id !== "all") {
-      invoiceQuery = invoiceQuery.eq("created_by", filters.agent_id);
-    }
-
-    const { data: invoicesData } = await invoiceQuery;
 
     let totalBilled = 0;
     let totalPaid = 0;
     let totalOutstanding = 0;
 
-    if (invoicesData && invoicesData.length > 0) {
-      for (const inv of invoicesData as Record<string, unknown>[]) {
-        const tot = Number(inv["total_amount"] || 0);
-        const pd = Number(inv["paid_amount"] || 0);
-        const due = Number(inv["due_amount"] || Math.max(0, tot - pd));
-        totalBilled += tot;
-        totalPaid += pd;
-        totalOutstanding += Math.max(0, due);
-      }
+    for (const inv of invoicesList) {
+      const tot = Number(inv["total_amount"] || 0);
+      const pd = Number(inv["paid_amount"] || 0);
+      const due = Number(inv["due_amount"] ?? Math.max(0, tot - pd));
+      totalBilled += tot;
+      totalPaid += pd;
+      totalOutstanding += Math.max(0, due);
     }
 
     const activeClients = Math.max(0, totalProspects - salesWon);
 
-    // Build stage distribution array
     const stageDistribution: StageChartItem[] = Array.from(stageMap.entries()).map(
       ([stage, count], idx) => ({
         stage,
@@ -150,7 +148,8 @@ export async function fetchReportsData(filters: ReportsFilters = {}): Promise<Re
       stage_distribution: stageDistribution,
       stage_counts: stageDistribution,
     };
-  } catch {
+  } catch (err) {
+    console.warn("fetchReportsData error:", err);
     return {
       kpis: {
         total_prospects: 0,

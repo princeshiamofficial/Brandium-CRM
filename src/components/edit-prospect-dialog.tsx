@@ -13,6 +13,7 @@ import {
   Edit3,
   Loader2,
   Save,
+  Palette,
 } from "lucide-react";
 
 import {
@@ -59,9 +60,11 @@ export function EditProspectDialog({
   const [businessName, setBusinessName] = useState("");
   const [designation, setDesignation] = useState("");
   const [phone, setPhone] = useState("");
+  const [altPhone, setAltPhone] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [serviceId, setServiceId] = useState<string>("none");
+  const [artist, setArtist] = useState<string>("none");
   const [assignedTo, setAssignedTo] = useState<string>("none");
   const [notes, setNotes] = useState("");
 
@@ -79,7 +82,7 @@ export function EditProspectDialog({
     queryFn: async (): Promise<Prospect | null> => {
       if (!prospectId) return null;
 
-      // 1. Try MySQL first
+      // Try MySQL first
       const res = await runMySQLQuery<Record<string, unknown>[]>(
         "SELECT * FROM `prospects` WHERE `id` = ? LIMIT 1",
         [prospectId],
@@ -117,11 +120,24 @@ export function EditProspectDialog({
       setBusinessName(p.business_name || "");
       setDesignation(p.designation || "");
       setPhone(p.phone || "");
+      setAltPhone(p.alternative_phone || "");
       setEmail(p.email || "");
       setAddress(p.address || "");
       setServiceId(p.service_id || "none");
       setAssignedTo(p.assigned_to || "none");
-      setNotes((p.notes || "").trim());
+
+      // Extract artist tag from notes if present
+      let rawNotes = p.notes || "";
+      const artistMatch = rawNotes.match(/\[Artist:\s*([^\]]+)\]/i);
+      if (artistMatch && artistMatch[1]) {
+        setArtist(artistMatch[1].trim());
+        rawNotes = rawNotes.replace(/\[Artist:\s*([^\]]+)\]/gi, "").trim();
+      } else {
+        setArtist("none");
+      }
+      // Also strip agent tag from displayed notes
+      rawNotes = rawNotes.replace(/\[Agent:\s*([^\]]+)\]/gi, "").trim();
+      setNotes(rawNotes);
     }
   }, [prospectQuery.data]);
 
@@ -130,13 +146,22 @@ export function EditProspectDialog({
       if (!prospectId) throw new Error("No prospect selected.");
       if (!contactName.trim()) throw new Error("Contact Name is required.");
 
-      const finalNotes = notes.trim() || null;
+      const selectedAgent = agents.find((ag) => ag.id === assignedTo);
+      const agentTag = selectedAgent ? `[Agent: ${selectedAgent.name}]` : "";
+
+      const notesParts: string[] = [];
+      if (artist !== "none") notesParts.push(`[Artist: ${artist}]`);
+      if (agentTag) notesParts.push(agentTag);
+      if (notes.trim()) notesParts.push(notes.trim());
+
+      const finalNotes = notesParts.length > 0 ? notesParts.join(" ") : null;
 
       const updateData = {
         contact_name: contactName.trim(),
         business_name: businessName.trim() || null,
         designation: designation.trim() || null,
         phone: phone.trim() || null,
+        alternative_phone: altPhone.trim() || null,
         email: email.trim() || null,
         address: address.trim() || null,
         service_id: serviceId !== "none" ? serviceId : null,
@@ -152,6 +177,7 @@ export function EditProspectDialog({
           \`business_name\` = ?,
           \`designation\` = ?,
           \`phone\` = ?,
+          \`alternative_phone\` = ?,
           \`email\` = ?,
           \`address\` = ?,
           \`service_id\` = ?,
@@ -164,6 +190,7 @@ export function EditProspectDialog({
           updateData.business_name,
           updateData.designation,
           updateData.phone,
+          updateData.alternative_phone,
           updateData.email,
           updateData.address,
           updateData.service_id,
@@ -181,7 +208,9 @@ export function EditProspectDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["prospects"] });
       queryClient.invalidateQueries({ queryKey: ["prospects-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["prospect", prospectId] });
+      queryClient.invalidateQueries({ queryKey: ["prospect-edit-dialog", prospectId] });
       toast.success("Prospect updated successfully!");
       onOpenChange(false);
       if (onSuccess) onSuccess();
@@ -203,7 +232,7 @@ export function EditProspectDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-6 sm:p-7 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xl bg-white dark:bg-card">
-        {/* Header with Edit Icon */}
+        {/* Header with Brand Icon */}
         <div className="flex items-start gap-3.5">
           <div className="size-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-[#67B239] font-bold flex items-center justify-center shrink-0 border border-emerald-200/60 dark:border-emerald-800/60 shadow-2xs">
             <Edit3 className="size-5" />
@@ -319,7 +348,7 @@ export function EditProspectDialog({
             </div>
 
             {/* Section 3: CRM Assignment */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Service Interested */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
@@ -335,6 +364,27 @@ export function EditProspectDialog({
                     {services.map((srv) => (
                       <SelectItem key={srv.id} value={srv.id}>
                         {srv.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Select Artist */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Palette className="size-3.5 text-[#67B239]" />
+                  Select Artist
+                </Label>
+                <Select value={artist} onValueChange={setArtist}>
+                  <SelectTrigger className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all">
+                    <SelectValue placeholder="Select Artist" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800">
+                    <SelectItem value="none">No Artist Selected</SelectItem>
+                    {agents.map((ag) => (
+                      <SelectItem key={ag.id} value={ag.name}>
+                        {ag.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

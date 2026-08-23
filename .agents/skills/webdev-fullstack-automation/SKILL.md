@@ -66,6 +66,7 @@ Whenever adding or modifying features across the application:
 ## 5. Verification & Completion Gate
 
 Before completing any development task:
+
 - ✅ Code builds without TypeScript errors (`npx tsc --noEmit`).
 - ✅ Database queries and state updaters work seamlessly without runtime errors.
 - ✅ Local server runs and serves pages correctly.

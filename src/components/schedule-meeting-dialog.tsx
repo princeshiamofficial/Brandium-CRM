@@ -32,7 +32,7 @@ import { useAuth } from "@/lib/auth";
 export type ScheduleMeetingDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultProspectId?: string;
+  defaultProspectId?: string | undefined;
   onSuccess?: () => void;
 };
 
@@ -114,6 +114,8 @@ export function ScheduleMeetingDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["prospects"] });
+      queryClient.invalidateQueries({ queryKey: ["prospects-stats"] });
       toast.success("Meeting scheduled successfully!");
       onOpenChange(false);
       if (onSuccess) onSuccess();

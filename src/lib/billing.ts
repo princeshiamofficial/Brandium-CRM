@@ -1,5 +1,5 @@
-import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { queryOptions } from "@tanstack/react-query";
+import { runMySQLQuery } from "@/lib/mysql-api";
 
 export type InvoiceStatus = "Pending" | "Partially Paid" | "Paid" | "Cancelled";
 export type PaymentMethod = "Bank Transfer" | "bKash" | "Nagad" | "Cash" | "Card";
@@ -64,161 +64,17 @@ export type InvoiceFilters = {
   to_date?: string | undefined;
 };
 
-// Safe DB accessor wrapper
-const dynamicDb = supabase as unknown as {
-  from: (table: string) => {
-    select: (cols: string) => {
-      eq: (
-        col: string,
-        val: string,
-      ) => {
-        order: (
-          col: string,
-          opts?: { ascending?: boolean },
-        ) => Promise<{ data: unknown[]; error: unknown }>;
-        single: () => Promise<{ data: unknown; error: unknown }>;
-      };
-      order: (
-        col: string,
-        opts?: { ascending?: boolean },
-      ) => Promise<{ data: unknown[]; error: unknown }>;
-    };
-    insert: (values: unknown) => {
-      select: (cols: string) => {
-        single: () => Promise<{ data: unknown; error: unknown }>;
-      };
-    };
-    update: (values: unknown) => {
-      eq: (col: string, val: string) => Promise<{ data: unknown; error: unknown }>;
-    };
-    delete: () => {
-      eq: (col: string, val: string) => Promise<{ data: unknown; error: unknown }>;
-    };
-  };
-  rpc: (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
-};
+function generateUUID(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
-// Rich Demo Invoices & Separate Payment History (Relationally connected)
-const demoInvoices: Invoice[] = [
-  {
-    id: "inv-801",
-    invoice_number: "INV-2026-801",
-    prospect_id: "prospect-1",
-    prospect_name: "Mehan Ahmed",
-    business_name: "AurevixSoft",
-    client_email: "mehan.ahmed@aurevixsoft.com",
-    client_phone: "+8801711002233",
-    description: "Annual Enterprise Telesales CRM License & Dedicated Onboarding",
-    total_amount: 125000,
-    paid_amount: 125000,
-    due_amount: 0,
-    bill_date: new Date(Date.now() - 86400000 * 10).toISOString().split("T")[0]!,
-    due_date: new Date(Date.now() + 86400000 * 5).toISOString().split("T")[0]!,
-    status: "Paid",
-    notes: "Full payment cleared via Bank Wire Transfer.",
-    created_by: "usr-1",
-    created_by_name: "Mehan Ahmed",
-    created_at: new Date(Date.now() - 86400000 * 10).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    id: "inv-802",
-    invoice_number: "INV-2026-802",
-    prospect_id: "prospect-2",
-    prospect_name: "Nusrat Jahan",
-    business_name: "GreenTech BD",
-    client_email: "nusrat@greentechbd.org",
-    client_phone: "+8801822334455",
-    description: "Multi-branch POS & WhatsApp Telesales Integration Package",
-    total_amount: 88000,
-    paid_amount: 44000,
-    due_amount: 44000,
-    bill_date: new Date(Date.now() - 86400000 * 14).toISOString().split("T")[0]!,
-    due_date: new Date(Date.now() + 86400000 * 10).toISOString().split("T")[0]!,
-    status: "Partially Paid",
-    notes: "50% advance received. Remaining 50% due post milestone verification.",
-    created_by: "usr-1",
-    created_by_name: "Mehan Ahmed",
-    created_at: new Date(Date.now() - 86400000 * 14).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 4).toISOString(),
-  },
-  {
-    id: "inv-803",
-    invoice_number: "INV-2026-803",
-    prospect_id: "prospect-3",
-    prospect_name: "Mahmud Hasan",
-    business_name: "Star Logistics",
-    client_email: "mahmud@starlogistics.com",
-    client_phone: "+8801933445566",
-    description: "Custom Fleet Logistics Tele-routing & Call Center Auto-dialer License",
-    total_amount: 145000,
-    paid_amount: 0,
-    due_amount: 145000,
-    bill_date: new Date(Date.now() - 86400000 * 5).toISOString().split("T")[0]!,
-    due_date: new Date(Date.now() + 86400000 * 15).toISOString().split("T")[0]!,
-    status: "Pending",
-    notes: "Invoice sent to procurement department. Pending PO release.",
-    created_by: "usr-3",
-    created_by_name: "Farhana Islam",
-    created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-  {
-    id: "inv-804",
-    invoice_number: "INV-2026-804",
-    prospect_id: "prospect-4",
-    prospect_name: "Sultana Razia",
-    business_name: "Dhaka Fashion Wear",
-    client_email: "sultana@dhakafashion.com.bd",
-    client_phone: "+8801644556677",
-    description: "E-Commerce Retainer & Customer Support Call Automation",
-    total_amount: 62000,
-    paid_amount: 0,
-    due_amount: 0,
-    bill_date: new Date(Date.now() - 86400000 * 20).toISOString().split("T")[0]!,
-    due_date: new Date(Date.now() - 86400000 * 5).toISOString().split("T")[0]!,
-    status: "Cancelled",
-    notes: "Cancelled by client due to internal restructuring.",
-    created_by: "usr-2",
-    created_by_name: "Sabbir Hossain",
-    created_at: new Date(Date.now() - 86400000 * 20).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 8).toISOString(),
-  },
-];
-
-const demoInvoicePayments: InvoicePayment[] = [
-  {
-    id: "pay-101",
-    invoice_id: "inv-801",
-    amount: 125000,
-    payment_method: "Bank Transfer",
-    transaction_reference: "TRX-EBL-992011",
-    payment_date: new Date(Date.now() - 86400000 * 2).toISOString(),
-    notes: "Full payment credited via Eastern Bank wire.",
-    recorded_by: "usr-1",
-    recorded_by_name: "Mehan Ahmed",
-    is_valid: true,
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    id: "pay-102",
-    invoice_id: "inv-802",
-    amount: 44000,
-    payment_method: "bKash",
-    transaction_reference: "BKSH-9928172X",
-    payment_date: new Date(Date.now() - 86400000 * 4).toISOString(),
-    notes: "50% upfront retainer paid via bKash Merchant.",
-    recorded_by: "usr-1",
-    recorded_by_name: "Mehan Ahmed",
-    is_valid: true,
-    created_at: new Date(Date.now() - 86400000 * 4).toISOString(),
-  },
-];
-
-/**
- * Calculates correct financial status and due amount server-side logic:
- * Calculation: Due = Total Amount - Sum(valid payments)
- */
 export function calculateInvoiceFinancials(
   totalAmount: number,
   payments: InvoicePayment[],
@@ -243,40 +99,41 @@ export function calculateInvoiceFinancials(
 
 export async function fetchInvoices(filters: InvoiceFilters = {}): Promise<Invoice[]> {
   try {
-    const { data, error } = await dynamicDb
-      .from("invoices")
-      .select(
-        `
-        *,
-        prospects(contact_name, business_name, email, phone)
-      `,
-      )
-      .order("created_at", { ascending: false });
+    const res = await runMySQLQuery<Record<string, unknown>[]>(
+      `SELECT 
+        i.*,
+        p.contact_name AS prospect_name,
+        p.business_name,
+        p.email AS client_email,
+        p.phone AS client_phone,
+        u.name AS created_by_name
+      FROM \`invoices\` i
+      LEFT JOIN \`prospects\` p ON i.prospect_id = p.id
+      LEFT JOIN \`users\` u ON i.created_by = u.id
+      ORDER BY i.created_at DESC;`,
+    );
 
-    if (error || !data || data.length === 0) {
-      return applyInvoiceFilters(demoInvoices, filters);
+    if (!res.success || !Array.isArray(res.data)) {
+      return [];
     }
 
-    const mapped: Invoice[] = (data as Record<string, unknown>[]).map((item) => {
-      const prospectObj = item["prospects"] as {
-        contact_name?: string;
-        business_name?: string;
-        email?: string;
-        phone?: string;
-      } | null;
+    const mapped: Invoice[] = res.data.map((item) => {
+      const totalAmount = Number(item["total_amount"] || 0);
+      const paidAmount = Number(item["paid_amount"] || 0);
+      const dueAmount = Number(item["due_amount"] ?? Math.max(0, totalAmount - paidAmount));
 
       return {
         id: String(item["id"]),
         invoice_number: String(item["invoice_number"] || `INV-2026-${item["id"]}`),
-        prospect_id: String(item["prospect_id"]),
-        prospect_name: prospectObj?.contact_name || String(item["prospect_name"] || "Client"),
-        business_name: prospectObj?.business_name || (item["business_name"] as string) || undefined,
-        client_email: prospectObj?.email || (item["client_email"] as string) || undefined,
-        client_phone: prospectObj?.phone || (item["client_phone"] as string) || undefined,
+        prospect_id: String(item["prospect_id"] || ""),
+        prospect_name: String(item["prospect_name"] || "Client"),
+        business_name: (item["business_name"] as string) || undefined,
+        client_email: (item["client_email"] as string) || undefined,
+        client_phone: (item["client_phone"] as string) || undefined,
         description: String(item["description"] || "Software Services"),
-        total_amount: Number(item["total_amount"] || 0),
-        paid_amount: Number(item["paid_amount"] || 0),
-        due_amount: Number(item["due_amount"] || 0),
+        total_amount: totalAmount,
+        paid_amount: paidAmount,
+        due_amount: dueAmount,
         bill_date: String(item["bill_date"] || new Date().toISOString().split("T")[0]),
         due_date: String(item["due_date"] || new Date().toISOString().split("T")[0]),
         status: (item["status"] as InvoiceStatus) || "Pending",
@@ -289,8 +146,9 @@ export async function fetchInvoices(filters: InvoiceFilters = {}): Promise<Invoi
     });
 
     return applyInvoiceFilters(mapped, filters);
-  } catch {
-    return applyInvoiceFilters(demoInvoices, filters);
+  } catch (err) {
+    console.warn("fetchInvoices MySQL error:", err);
+    return [];
   }
 }
 
@@ -335,17 +193,22 @@ export async function fetchInvoiceById(id: string): Promise<Invoice | null> {
 
 export async function fetchInvoicePayments(invoiceId: string): Promise<InvoicePayment[]> {
   try {
-    const { data, error } = await dynamicDb
-      .from("invoice_payments")
-      .select("*")
-      .eq("invoice_id", invoiceId)
-      .order("payment_date", { ascending: false });
+    const res = await runMySQLQuery<Record<string, unknown>[]>(
+      `SELECT 
+        p.*,
+        u.name AS recorded_by_name
+      FROM \`payments\` p
+      LEFT JOIN \`users\` u ON p.recorded_by = u.id
+      WHERE p.invoice_id = ?
+      ORDER BY p.payment_date DESC;`,
+      [invoiceId],
+    );
 
-    if (error || !data || data.length === 0) {
-      return demoInvoicePayments.filter((p) => p.invoice_id === invoiceId);
+    if (!res.success || !Array.isArray(res.data)) {
+      return [];
     }
 
-    return (data as Record<string, unknown>[]).map((p) => ({
+    return res.data.map((p) => ({
       id: String(p["id"]),
       invoice_id: String(p["invoice_id"]),
       amount: Number(p["amount"] || 0),
@@ -355,11 +218,12 @@ export async function fetchInvoicePayments(invoiceId: string): Promise<InvoicePa
       notes: (p["notes"] as string) || null,
       recorded_by: (p["recorded_by"] as string) || null,
       recorded_by_name: String(p["recorded_by_name"] || "Agent"),
-      is_valid: Boolean(p["is_valid"] ?? true),
+      is_valid: Boolean(Number(p["is_valid"] ?? 1)),
       created_at: String(p["created_at"] || new Date().toISOString()),
     }));
-  } catch {
-    return demoInvoicePayments.filter((p) => p.invoice_id === invoiceId);
+  } catch (err) {
+    console.warn("fetchInvoicePayments MySQL error:", err);
+    return [];
   }
 }
 
@@ -367,41 +231,130 @@ export async function createInvoice(
   input: CreateInvoiceInput,
   user?: { id?: string; email?: string } | null,
 ): Promise<Invoice> {
-  const now = new Date().toISOString();
+  const invId = generateUUID();
   const invNum = `INV-2026-${Math.floor(100 + Math.random() * 900)}`;
+  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
 
-  // Find prospect details
-  let prospectName = "Client";
-  let businessName: string | undefined;
-  let clientEmail: string | undefined;
-  let clientPhone: string | undefined;
+  const res = await runMySQLQuery(
+    `INSERT INTO \`invoices\` (
+      \`id\`, \`invoice_number\`, \`prospect_id\`, \`description\`, \`total_amount\`,
+      \`paid_amount\`, \`due_amount\`, \`bill_date\`, \`due_date\`, \`status\`,
+      \`notes\`, \`created_by\`, \`created_at\`, \`updated_at\`
+    ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, 'Pending', ?, ?, ?, ?);`,
+    [
+      invId,
+      invNum,
+      input.prospect_id,
+      input.description,
+      input.total_amount,
+      input.total_amount,
+      input.bill_date,
+      input.due_date,
+      input.notes || null,
+      user?.id || null,
+      now,
+      now,
+    ],
+  );
 
-  try {
-    const { data } = await supabase
-      .from("prospects")
-      .select("contact_name, business_name, email, phone")
-      .eq("id", input.prospect_id)
-      .single();
-
-    if (data) {
-      const prospectData = data as Record<string, unknown>;
-      prospectName = (prospectData["contact_name"] as string) || "Client";
-      businessName = (prospectData["business_name"] as string) || undefined;
-      clientEmail = (prospectData["email"] as string) || undefined;
-      clientPhone = (prospectData["phone"] as string) || undefined;
-    }
-  } catch {
-    // Demo fallback prospect
+  if (!res.success) {
+    throw new Error(res.error || "Failed to create invoice in database.");
   }
 
-  const newInv: Invoice = {
-    id: `inv-${Date.now()}`,
+  // Synchronize with Opportunities, Prospect stage, and Stage History
+  try {
+    const oppCheck = await runMySQLQuery<Record<string, unknown>[]>(
+      "SELECT id FROM `opportunities` WHERE `prospect_id` = ? AND `is_active` = 1 LIMIT 1;",
+      [input.prospect_id],
+    );
+
+    if (oppCheck.success && Array.isArray(oppCheck.data) && oppCheck.data.length > 0) {
+      const existingOppId = oppCheck.data[0]?.["id"] as string;
+      await runMySQLQuery(
+        "UPDATE `opportunities` SET `estimated_value` = ?, `notes` = COALESCE(?, `notes`), `updated_at` = ? WHERE `id` = ?;",
+        [input.total_amount, input.description || null, now, existingOppId],
+      );
+    } else {
+      const newOppId = generateUUID();
+      // Fetch prospect's assigned agent
+      const pRes = await runMySQLQuery<Record<string, unknown>[]>(
+        "SELECT assigned_to FROM `prospects` WHERE `id` = ? LIMIT 1;",
+        [input.prospect_id],
+      );
+      const assignedTo = (pRes.data?.[0]?.["assigned_to"] as string) || user?.id || null;
+
+      await runMySQLQuery(
+        `INSERT INTO \`opportunities\` (
+            \`id\`, \`prospect_id\`, \`estimated_value\`, \`assigned_to\`, \`created_by\`,
+            \`status\`, \`notes\`, \`is_active\`, \`created_at\`, \`updated_at\`
+          ) VALUES (?, ?, ?, ?, ?, 'Opportunity Created', ?, 1, ?, ?);`,
+        [
+          newOppId,
+          input.prospect_id,
+          input.total_amount,
+          assignedTo,
+          user?.id || null,
+          input.description || null,
+          now,
+          now,
+        ],
+      );
+    }
+
+    // Resolve the "Opportunity Created" stage ID from MySQL
+    const stageRes = await runMySQLQuery<Record<string, unknown>[]>(
+      "SELECT `id` FROM `stages` WHERE LOWER(TRIM(`name`)) LIKE '%opportunity%' LIMIT 1;",
+    );
+    const oppStageId =
+      stageRes?.success && stageRes.data?.[0]
+        ? String(stageRes.data[0]["id"])
+        : "opportunity-created";
+
+    // Get the prospect's current stage for history
+    let fromStageId: string | null = null;
+    try {
+      const currRes = await runMySQLQuery<Record<string, unknown>[]>(
+        "SELECT `stage_id` FROM `prospects` WHERE `id` = ? LIMIT 1;",
+        [input.prospect_id],
+      );
+      if (currRes?.success && currRes.data?.[0]) {
+        fromStageId = String(currRes.data[0]["stage_id"] || "") || null;
+      }
+    } catch {
+      // ignore
+    }
+
+    // Update prospect stage to Opportunity Created
+    await runMySQLQuery("UPDATE `prospects` SET `stage_id` = ?, `updated_at` = ? WHERE `id` = ?;", [
+      oppStageId,
+      now,
+      input.prospect_id,
+    ]);
+
+    // Write stage history record
+    const historyId = generateUUID();
+    await runMySQLQuery(
+      `INSERT INTO \`prospect_stage_history\`
+           (\`id\`, \`prospect_id\`, \`from_stage_id\`, \`to_stage_id\`, \`note\`, \`changed_at\`)
+         VALUES (?, ?, ?, ?, ?, ?);`,
+      [
+        historyId,
+        input.prospect_id,
+        fromStageId,
+        oppStageId,
+        `Invoice ${invNum} generated for ${input.description} (৳${input.total_amount})`,
+        now,
+      ],
+    );
+  } catch (err) {
+    console.warn("Error synchronizing invoice to opportunities and stages:", err);
+  }
+
+  return {
+    id: invId,
     invoice_number: invNum,
     prospect_id: input.prospect_id,
-    prospect_name: prospectName,
-    business_name: businessName,
-    client_email: clientEmail,
-    client_phone: clientPhone,
+    prospect_name: "Client",
     description: input.description,
     total_amount: input.total_amount,
     paid_amount: 0,
@@ -411,41 +364,12 @@ export async function createInvoice(
     status: "Pending",
     notes: input.notes || null,
     created_by: user?.id || null,
-    created_by_name: user?.email || "Current User",
+    created_by_name: user?.email || "Agent",
     created_at: now,
     updated_at: now,
   };
-
-  demoInvoices.unshift(newInv);
-
-  try {
-    await dynamicDb.from("invoices").insert({
-      invoice_number: invNum,
-      prospect_id: input.prospect_id,
-      prospect_name: prospectName,
-      description: input.description,
-      total_amount: input.total_amount,
-      paid_amount: 0,
-      due_amount: input.total_amount,
-      bill_date: input.bill_date,
-      due_date: input.due_date,
-      status: "Pending",
-      notes: input.notes || null,
-      created_by: user?.id || null,
-      created_by_name: user?.email || "Current User",
-    });
-  } catch {
-    // Demo in-memory insert fallback
-  }
-
-  return newInv;
 }
 
-/**
- * Server-Side Financial Logic for Recording Payments
- * Uses database RPC transaction when connected, with strictly accurate fallback calculation:
- * Calculation: Due = Total Amount - Sum(valid payments)
- */
 export async function recordInvoicePayment(
   input: RecordPaymentInput,
   user?: { id?: string; email?: string } | null,
@@ -454,102 +378,103 @@ export async function recordInvoicePayment(
     throw new Error("Payment amount must be greater than 0");
   }
 
-  const now = new Date().toISOString();
-  const payId = `pay-${Date.now()}`;
+  const payId = generateUUID();
+  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
 
-  const newPayment: InvoicePayment = {
-    id: payId,
-    invoice_id: input.invoice_id,
-    amount: input.amount,
-    payment_method: input.payment_method,
-    transaction_reference: input.transaction_reference || null,
-    payment_date: now,
-    notes: input.notes || null,
-    recorded_by: user?.id || null,
-    recorded_by_name: user?.email || "Agent",
-    is_valid: true,
-    created_at: now,
+  const payRes = await runMySQLQuery(
+    `INSERT INTO \`payments\` (
+      \`id\`, \`invoice_id\`, \`amount\`, \`payment_method\`,
+      \`transaction_reference\`, \`notes\`, \`recorded_by\`, \`payment_date\`, \`created_at\`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    [
+      payId,
+      input.invoice_id,
+      input.amount,
+      input.payment_method,
+      input.transaction_reference || null,
+      input.notes || null,
+      user?.id || null,
+      now,
+      now,
+    ],
+  );
+
+  if (!payRes.success) {
+    throw new Error(payRes.error || "Failed to record payment in database.");
+  }
+
+  // Update invoice paid_amount, due_amount, status
+  const invRes = await runMySQLQuery<Record<string, unknown>[]>(
+    "SELECT total_amount FROM `invoices` WHERE `id` = ? LIMIT 1;",
+    [input.invoice_id],
+  );
+  const totalAmount = Number(invRes?.data?.[0]?.["total_amount"] || 0);
+
+  const sumRes = await runMySQLQuery<Record<string, unknown>[]>(
+    "SELECT COALESCE(SUM(amount), 0) AS total_paid FROM `payments` WHERE `invoice_id` = ? AND `is_valid` = 1;",
+    [input.invoice_id],
+  );
+  const totalPaid = Number(sumRes?.data?.[0]?.["total_paid"] || input.amount);
+  const dueAmount = Math.max(0, totalAmount - totalPaid);
+  const newStatus: InvoiceStatus =
+    dueAmount === 0 ? "Paid" : totalPaid > 0 ? "Partially Paid" : "Pending";
+
+  await runMySQLQuery(
+    "UPDATE `invoices` SET `paid_amount` = ?, `due_amount` = ?, `status` = ?, `updated_at` = ? WHERE `id` = ?;",
+    [totalPaid, dueAmount, newStatus, now, input.invoice_id],
+  );
+
+  return {
+    success: true,
+    dueAmount,
+    status: newStatus,
   };
-
-  // Add payment to stored payment history array
-  demoInvoicePayments.unshift(newPayment);
-
-  // Try PL/pgSQL Atomic Transaction RPC call
-  try {
-    const { data, error } = await dynamicDb.rpc("record_invoice_payment", {
-      p_invoice_id: input.invoice_id,
-      p_amount: input.amount,
-      p_payment_method: input.payment_method,
-      p_transaction_reference: input.transaction_reference || null,
-      p_notes: input.notes || null,
-      p_recorded_by: user?.id || null,
-      p_recorded_by_name: user?.email || "Agent",
-    });
-
-    if (!error && data) {
-      const resObj = data as { due_amount: number; status: InvoiceStatus };
-      return {
-        success: true,
-        dueAmount: Number(resObj.due_amount || 0),
-        status: resObj.status,
-      };
-    }
-  } catch {
-    // Fallback logic
-  }
-
-  // Recalculate invoice status strictly via financial logic
-  const targetInvIndex = demoInvoices.findIndex((i) => i.id === input.invoice_id);
-  if (targetInvIndex !== -1) {
-    const targetInv = demoInvoices[targetInvIndex]!;
-    const invPayments = demoInvoicePayments.filter((p) => p.invoice_id === input.invoice_id);
-    const fin = calculateInvoiceFinancials(targetInv.total_amount, invPayments);
-
-    demoInvoices[targetInvIndex] = {
-      ...targetInv,
-      paid_amount: fin.paidAmount,
-      due_amount: fin.dueAmount,
-      status: fin.status,
-      updated_at: now,
-    };
-
-    return {
-      success: true,
-      dueAmount: fin.dueAmount,
-      status: fin.status,
-    };
-  }
-
-  return { success: true, dueAmount: 0, status: "Paid" };
 }
 
 export async function cancelInvoice(id: string): Promise<void> {
-  const index = demoInvoices.findIndex((i) => i.id === id);
-  if (index !== -1) {
-    demoInvoices[index] = {
-      ...demoInvoices[index]!,
-      status: "Cancelled",
-      updated_at: new Date().toISOString(),
-    };
-  }
-
-  try {
-    await dynamicDb.from("invoices").update({ status: "Cancelled" }).eq("id", id);
-  } catch {
-    // Ignore fallback error
-  }
+  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  await runMySQLQuery(
+    "UPDATE `invoices` SET `status` = 'Cancelled', `updated_at` = ? WHERE `id` = ?;",
+    [now, id],
+  );
 }
 
 export async function deleteInvoice(id: string): Promise<void> {
-  const index = demoInvoices.findIndex((i) => i.id === id);
-  if (index !== -1) {
-    demoInvoices.splice(index, 1);
+  // 1. Get prospect_id of the invoice before deleting
+  let prospectId: string | null = null;
+  try {
+    const invRes = await runMySQLQuery<Record<string, unknown>[]>(
+      "SELECT prospect_id FROM `invoices` WHERE `id` = ? LIMIT 1;",
+      [id],
+    );
+    if (invRes.success && invRes.data?.[0]) {
+      prospectId = (invRes.data[0]["prospect_id"] as string) || null;
+    }
+  } catch {
+    // ignore
   }
 
-  try {
-    await dynamicDb.from("invoices").delete().eq("id", id);
-  } catch {
-    // Ignore fallback error
+  // 2. Delete payments and invoice
+  await runMySQLQuery("DELETE FROM `payments` WHERE `invoice_id` = ?;", [id]);
+  await runMySQLQuery("DELETE FROM `invoices` WHERE `id` = ?;", [id]);
+
+  // 3. Clean up associated opportunity if no other invoices exist for this prospect
+  if (prospectId) {
+    try {
+      const otherInvs = await runMySQLQuery<Record<string, unknown>[]>(
+        "SELECT id FROM `invoices` WHERE `prospect_id` = ? LIMIT 1;",
+        [prospectId],
+      );
+      if (!otherInvs.data || otherInvs.data.length === 0) {
+        await runMySQLQuery("DELETE FROM `opportunities` WHERE `prospect_id` = ?;", [prospectId]);
+        await runMySQLQuery(
+          "UPDATE `prospects` SET `stage_id` = 'prospect', `updated_at` = NOW() WHERE `id` = ? AND `stage_id` = 'opportunity-created';",
+          [prospectId],
+        );
+      }
+    } catch (err) {
+      console.warn("Error cleaning up opportunity on invoice delete:", err);
+    }
   }
 }
 
@@ -557,37 +482,38 @@ export async function updateInvoice(
   id: string,
   updates: Partial<CreateInvoiceInput>,
 ): Promise<Invoice> {
-  const index = demoInvoices.findIndex((i) => i.id === id);
-  if (index === -1) throw new Error("Invoice not found");
+  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const sets: string[] = ["`updated_at` = ?"];
+  const params: (string | number | null)[] = [now];
 
-  const existing = demoInvoices[index]!;
-  const newTotal =
-    updates.total_amount !== undefined ? updates.total_amount : existing.total_amount;
-  const invPayments = demoInvoicePayments.filter((p) => p.invoice_id === id);
-  const fin = calculateInvoiceFinancials(newTotal, invPayments);
-
-  const updatedInv: Invoice = {
-    ...existing,
-    description: updates.description !== undefined ? updates.description : existing.description,
-    total_amount: newTotal,
-    paid_amount: fin.paidAmount,
-    due_amount: fin.dueAmount,
-    status: existing.status === "Cancelled" ? "Cancelled" : fin.status,
-    bill_date: updates.bill_date !== undefined ? updates.bill_date : existing.bill_date,
-    due_date: updates.due_date !== undefined ? updates.due_date : existing.due_date,
-    notes: updates.notes !== undefined ? updates.notes : existing.notes,
-    updated_at: new Date().toISOString(),
-  };
-
-  demoInvoices[index] = updatedInv;
-
-  try {
-    await dynamicDb.from("invoices").update(updatedInv).eq("id", id);
-  } catch {
-    // Ignore fallback error
+  if (updates.description !== undefined) {
+    sets.push("`description` = ?");
+    params.push(updates.description);
+  }
+  if (updates.total_amount !== undefined) {
+    sets.push("`total_amount` = ?");
+    params.push(updates.total_amount);
+  }
+  if (updates.bill_date !== undefined) {
+    sets.push("`bill_date` = ?");
+    params.push(updates.bill_date);
+  }
+  if (updates.due_date !== undefined) {
+    sets.push("`due_date` = ?");
+    params.push(updates.due_date);
+  }
+  if (updates.notes !== undefined) {
+    sets.push("`notes` = ?");
+    params.push(updates.notes);
   }
 
-  return updatedInv;
+  params.push(id);
+  const sql = `UPDATE \`invoices\` SET ${sets.join(", ")} WHERE \`id\` = ?;`;
+  await runMySQLQuery(sql, params);
+
+  const inv = await fetchInvoiceById(id);
+  if (!inv) throw new Error("Failed to find updated invoice");
+  return inv;
 }
 
 export const invoicesQueryOptions = (filters: InvoiceFilters = {}) =>

@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import * as Icons from "lucide-react";
 import {
   Plus,
   Search,
@@ -24,8 +25,10 @@ import {
   Trophy,
   CalendarClock,
   Repeat,
+  TrendingUp,
   Zap,
   CalendarIcon,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
@@ -61,6 +64,7 @@ import {
   deleteProspect,
   getProspectArtistName,
   getProspectAgentName,
+  formatProspectId,
   type Prospect,
 } from "@/lib/prospects";
 import {
@@ -69,8 +73,14 @@ import {
   stageBadgeClass,
   FALLBACK_STAGES,
   formatStageSlugOrName,
+  resolveStageColor,
+  resolveStageIcon,
 } from "@/lib/stages";
 import { ChangeStageDialog, type ChangeStageTarget } from "@/components/change-stage-dialog";
+import { ScheduleMeetingDialog } from "@/components/schedule-meeting-dialog";
+import { FollowUpDialog } from "@/components/follow-up-dialog";
+import { RecordDeniedPaymentDialog } from "@/components/record-denied-payment-dialog";
+import { AddInvoiceDialog } from "@/components/add-invoice-dialog";
 import { AddProspectDialog } from "@/components/add-prospect-dialog";
 import { EditProspectDialog } from "@/components/edit-prospect-dialog";
 import { ViewStageDialog } from "@/components/view-stage-dialog";
@@ -97,11 +107,13 @@ function StatCard({
   value,
   icon: Icon,
   colorScheme,
+  onClick,
 }: {
   label: string;
   value: string | number;
   icon: LucideIcon;
   colorScheme: "pastelPurple" | "pastelTeal" | "pastelEmerald" | "pastelPeach" | "pastelYellow";
+  onClick?: (() => void) | undefined;
 }) {
   const styles = {
     pastelPurple: {
@@ -128,7 +140,10 @@ function StatCard({
 
   return (
     <div
-      className={`group relative overflow-hidden rounded-2xl p-4 sm:p-4.5 shadow-md hover:shadow-lg transition-all duration-200 select-none ${styles.cardBg}`}
+      onClick={onClick}
+      className={`group relative overflow-hidden rounded-2xl p-4 sm:p-4.5 shadow-md hover:shadow-lg transition-all duration-200 select-none ${styles.cardBg} ${
+        onClick ? "cursor-pointer hover:scale-[1.02]" : ""
+      }`}
     >
       <div className="relative z-10 flex items-center gap-3.5">
         {/* Left Circular White Badge */}
@@ -178,6 +193,23 @@ function ProspectsPage() {
   const [viewStageOpen, setViewStageOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [scheduleMeetingOpen, setScheduleMeetingOpen] = useState(false);
+  const [scheduleMeetingProspectId, setScheduleMeetingProspectId] = useState<string | undefined>(
+    undefined,
+  );
+  const [deniedPaymentOpen, setDeniedPaymentOpen] = useState(false);
+  const [deniedPaymentProspectId, setDeniedPaymentProspectId] = useState<string | undefined>(
+    undefined,
+  );
+  const [addInvoiceOpen, setAddInvoiceOpen] = useState(false);
+  const [addInvoiceProspectId, setAddInvoiceProspectId] = useState<string | undefined>(undefined);
+  const [scheduleFollowUpOpen, setScheduleFollowUpOpen] = useState(false);
+  const [scheduleFollowUpProspectId, setScheduleFollowUpProspectId] = useState<string | undefined>(
+    undefined,
+  );
+  const [scheduleFollowUpProspectLabel, setScheduleFollowUpProspectLabel] = useState<
+    string | undefined
+  >(undefined);
 
   const queryClient = useQueryClient();
 
@@ -292,36 +324,46 @@ function ProspectsPage() {
         </Button>
       </PageHeader>
 
-      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total Prospects"
           value={stats.data?.totalProspects ?? 0}
           icon={Users2}
           colorScheme="pastelPurple"
-        />
-        <StatCard
-          label="Active Prospects"
-          value={stats.data?.activeProspects ?? 0}
-          icon={ListChecks}
-          colorScheme="pastelTeal"
-        />
-        <StatCard
-          label="Won Sales"
-          value={stats.data?.salesWon ?? 0}
-          icon={Trophy}
-          colorScheme="pastelEmerald"
-        />
-        <StatCard
-          label="Pending Tasks"
-          value={stats.data?.pendingTasks ?? 0}
-          icon={CalendarClock}
-          colorScheme="pastelPeach"
+          onClick={() => {
+            updateFilter("stage", undefined);
+            setSearchTerm("");
+          }}
         />
         <StatCard
           label={`${currentStageName} Stage`}
           value={currentStageCount}
           icon={Repeat}
           colorScheme="pastelYellow"
+          onClick={() => {
+            const fStage = displayStages.find((s) => s.name.toLowerCase().includes("follow"));
+            updateFilter("stage", fStage?.id || "follow-up");
+            setSearchTerm("");
+          }}
+        />
+        <StatCard
+          label="Won Sales"
+          value={stats.data?.salesWon ?? 0}
+          icon={Trophy}
+          colorScheme="pastelEmerald"
+          onClick={() => {
+            const wStage = displayStages.find(
+              (s) => s.name.toLowerCase().includes("won") || s.name.toLowerCase().includes("sales"),
+            );
+            updateFilter("stage", wStage?.id || "sales_won");
+            setSearchTerm("");
+          }}
+        />
+        <StatCard
+          label="Success Rate"
+          value={stats.data?.successRate ?? "0.0%"}
+          icon={TrendingUp}
+          colorScheme="pastelTeal"
         />
       </div>
 
@@ -458,7 +500,7 @@ function ProspectsPage() {
 
       {/* 5-Column Prospect Cards Grid matching Reference Image */}
       {prospects.isPending ? (
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
@@ -477,82 +519,153 @@ function ProspectsPage() {
           <p className="text-sm font-medium">No prospects found matching your filters.</p>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
-          {(prospects.data?.data ?? []).map((p) => (
-            <div
-              key={p.id}
-              className="group relative rounded-2xl border border-slate-200/80 dark:border-border bg-white dark:bg-card p-4 shadow-2xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between"
-            >
-              {/* Top Prospect Info */}
-              <div>
-                {/* Header: Avatar, Name, Designation & Edit Icon */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    <div className="size-9 rounded-full bg-orange-100/80 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-bold flex items-center justify-center shrink-0 border border-orange-200/60 shadow-2xs mt-0.5">
-                      <User className="size-4.5" />
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {(prospects.data?.data ?? []).map((p) => {
+            const stageName =
+              p.stage_name ||
+              ((p as Record<string, unknown>)["stage_name"] as string) ||
+              (p.stage_id ? formatStageSlugOrName(p.stage_id) : "Prospect");
+            const pRecord = p as unknown as Record<string, unknown>;
+            const stageColor = resolveStageColor(
+              stageName,
+              (pRecord["stage_color"] as string) || null,
+            );
+            const iconName = resolveStageIcon(stageName, (pRecord["stage_icon"] as string) || null);
+            const IconComponent =
+              (Icons as unknown as Record<string, LucideIcon>)[iconName] || Icons.Circle;
+
+            return (
+              <div
+                key={p.id}
+                onClick={() => {
+                  setViewStageProspect(p as unknown as Prospect);
+                  setViewStageOpen(true);
+                }}
+                className="group relative rounded-2xl border border-slate-200/80 dark:border-border bg-white dark:bg-card p-4 shadow-2xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between cursor-pointer select-none"
+              >
+                {/* Top Prospect Info */}
+                <div>
+                  {/* Header: Avatar, Name, Designation & Edit Icon */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <div className="size-9 rounded-full bg-orange-100/80 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-bold flex items-center justify-center shrink-0 border border-orange-200/60 shadow-2xs mt-0.5">
+                        <User className="size-4.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 leading-tight truncate group-hover:text-[#0A2E5C] transition-colors">
+                          {p.contact_name}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold truncate mt-0.5">
+                          {p.designation || p.business_name || "Prospect Lead"}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 leading-tight truncate group-hover:text-[#0A2E5C] transition-colors">
-                        {p.contact_name}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold truncate mt-0.5">
-                        {p.designation || p.business_name || "Prospect Lead"}
-                      </p>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7.5 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-accent shrink-0 -mr-1 transition-colors cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="size-4" />
+                          <span className="sr-only">Open menu</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-40 rounded-xl shadow-lg border-slate-200 dark:border-slate-800"
+                      >
+                        <DropdownMenuItem
+                          className="flex items-center gap-2 cursor-pointer font-semibold text-xs py-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditProspectId(p.id);
+                            setEditProspectOpen(true);
+                          }}
+                        >
+                          <Pencil className="size-3.5 text-slate-600 dark:text-slate-400" />
+                          <span>Edit</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center gap-2 cursor-pointer font-semibold text-xs py-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewStageProspect(p);
+                            setViewStageOpen(true);
+                          }}
+                        >
+                          <Eye className="size-3.5 text-emerald-600" />
+                          <span>View Stage</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center gap-2 cursor-pointer font-semibold text-xs py-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStageTarget({
+                              id: p.id,
+                              label: p.business_name || p.contact_name,
+                              stageId: p.stage_id,
+                              currentStageName:
+                                p.stage_name ||
+                                ((p as Record<string, unknown>)["stage_name"] as string) ||
+                                (p.stage_id ? formatStageSlugOrName(p.stage_id) : "Prospect"),
+                            });
+                          }}
+                        >
+                          <RefreshCw className="size-3.5 text-blue-600" />
+                          <span>Update Stage</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center gap-2 cursor-pointer font-semibold text-xs py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteTarget({ id: p.id, name: p.contact_name });
+                            setDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="size-3.5 text-rose-500" />
+                          <span>Delete</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  {/* Quick Details: Phone & Service */}
+                  <div className="mt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-300 font-semibold">
+                    <div className="flex items-center gap-2">
+                      <Phone className="size-3.5 text-slate-400 shrink-0" />
+                      <span className="font-mono text-xs text-slate-800 dark:text-slate-200 truncate">
+                        {p.phone || "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <User className="size-3.5 text-slate-400 shrink-0" />
+                      <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                        {p.service_name || p.business_name || "General Service"}
+                      </span>
                     </div>
                   </div>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7.5 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-accent shrink-0 -mr-1 transition-colors cursor-pointer"
-                      >
-                        <MoreVertical className="size-4" />
-                        <span className="sr-only">Open menu</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="w-36 rounded-xl shadow-lg border-slate-200 dark:border-slate-800"
+                  {/* Stage Badge Pill */}
+                  <div className="mt-2.5">
+                    <div
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border shadow-2xs transition-all"
+                      style={{
+                        backgroundColor: `${stageColor}18`,
+                        color: stageColor,
+                        borderColor: `${stageColor}35`,
+                      }}
                     >
-                      <DropdownMenuItem
-                        className="flex items-center gap-2 cursor-pointer font-semibold text-xs py-2"
-                        onClick={() => {
-                          setEditProspectId(p.id);
-                          setEditProspectOpen(true);
-                        }}
+                      <div
+                        className="size-4 rounded-md flex items-center justify-center text-white shrink-0 shadow-2xs"
+                        style={{ backgroundColor: stageColor }}
                       >
-                        <Pencil className="size-3.5 text-slate-500" />
-                        <span>Edit</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="flex items-center gap-2 cursor-pointer font-semibold text-xs py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40"
-                        onClick={() => {
-                          setDeleteTarget({ id: p.id, name: p.contact_name });
-                          setDeleteDialogOpen(true);
-                        }}
-                      >
-                        <Trash2 className="size-3.5 text-rose-500" />
-                        <span>Delete</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-
-                {/* Quick Details: Phone & Service */}
-                <div className="mt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-300 font-semibold">
-                  <div className="flex items-center gap-2">
-                    <Phone className="size-3.5 text-slate-400 shrink-0" />
-                    <span className="font-mono text-xs text-slate-800 dark:text-slate-200 truncate">
-                      {p.phone || "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <User className="size-3.5 text-slate-400 shrink-0" />
-                    <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                      {p.service_name || p.business_name || "General Service"}
-                    </span>
+                        <IconComponent className="size-2.5 text-white" />
+                      </div>
+                      <span className="truncate">{stageName}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -600,40 +713,8 @@ function ProspectsPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Bottom Action Pill Buttons */}
-              <div className="mt-3.5 space-y-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full h-9 rounded-xl bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 font-bold text-xs sm:text-sm shadow-2xs transition-all cursor-pointer"
-                  onClick={() =>
-                    setStageTarget({
-                      id: p.id,
-                      label: p.business_name || p.contact_name,
-                      stageId: p.stage_id,
-                      currentStageName:
-                        p.stage_name ||
-                        ((p as Record<string, unknown>)["stage_name"] as string) ||
-                        (p.stage_id ? formatStageSlugOrName(p.stage_id) : "Prospect"),
-                    })
-                  }
-                >
-                  Update Status
-                </Button>
-                <Button
-                  size="sm"
-                  className="w-full h-9 rounded-xl bg-[#67B239] hover:bg-[#5AA030] text-white font-bold text-xs sm:text-sm shadow-2xs transition-all cursor-pointer"
-                  onClick={() => {
-                    setViewStageProspect(p as unknown as Prospect);
-                    setViewStageOpen(true);
-                  }}
-                >
-                  View Stage
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -642,6 +723,57 @@ function ProspectsPage() {
         onOpenChange={(open) => {
           if (!open) setStageTarget(null);
         }}
+        onStageChange={(_stageId, stageName) => {
+          const normalised = stageName.toLowerCase().trim();
+          if (normalised === "meeting scheduled") {
+            const pid = stageTarget?.id;
+            setStageTarget(null); // close ChangeStageDialog first
+            setScheduleMeetingProspectId(pid);
+            setScheduleMeetingOpen(true);
+          } else if (normalised.includes("denied")) {
+            const pid = stageTarget?.id;
+            setStageTarget(null); // close ChangeStageDialog first
+            setDeniedPaymentProspectId(pid);
+            setDeniedPaymentOpen(true);
+          } else if (normalised.includes("opportunity")) {
+            const pid = stageTarget?.id;
+            setStageTarget(null); // close ChangeStageDialog first
+            setAddInvoiceProspectId(pid);
+            setAddInvoiceOpen(true);
+          } else if (normalised.includes("follow")) {
+            const pid = stageTarget?.id;
+            const plabel = stageTarget?.label;
+            setStageTarget(null); // close ChangeStageDialog first
+            setScheduleFollowUpProspectId(pid);
+            setScheduleFollowUpProspectLabel(plabel);
+            setScheduleFollowUpOpen(true);
+          }
+        }}
+      />
+
+      <FollowUpDialog
+        open={scheduleFollowUpOpen}
+        onOpenChange={setScheduleFollowUpOpen}
+        prospectId={scheduleFollowUpProspectId}
+        prospectLabel={scheduleFollowUpProspectLabel}
+      />
+
+      <ScheduleMeetingDialog
+        open={scheduleMeetingOpen}
+        onOpenChange={setScheduleMeetingOpen}
+        defaultProspectId={scheduleMeetingProspectId}
+      />
+
+      <RecordDeniedPaymentDialog
+        open={deniedPaymentOpen}
+        onOpenChange={setDeniedPaymentOpen}
+        defaultProspectId={deniedPaymentProspectId}
+      />
+
+      <AddInvoiceDialog
+        open={addInvoiceOpen}
+        onOpenChange={setAddInvoiceOpen}
+        defaultProspectId={addInvoiceProspectId}
       />
 
       <AddProspectDialog open={addProspectOpen} onOpenChange={setAddProspectOpen} />

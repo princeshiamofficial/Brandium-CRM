@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import { supabase } from "@/integrations/supabase/client";
 import { fetchCrmUsers } from "@/lib/admin-users";
+import { runMySQLQuery } from "@/lib/mysql-api";
+import { generateUUID } from "@/lib/mysql-client";
 
 export const followUpFiltersSchema = z.object({
   page: z.number().catch(1),
@@ -34,6 +36,9 @@ export type FollowUp = {
   agent_name?: string;
   creator_name?: string;
   effective_status: FollowUpStatus;
+  stage_name?: string | null;
+  stage_group?: string | null;
+  stage_color?: string | null;
 };
 
 export type TimelineRecord = {
@@ -45,23 +50,7 @@ export type TimelineRecord = {
   status: FollowUpStatus;
   raw_due_at: string;
   created_at: string;
-};
-
-type FollowUpRow = {
-  id: string;
-  prospect_id: string;
-  assigned_to: string | null;
-  created_by: string | null;
-  due_at: string;
-  note: string | null;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  prospects?: {
-    contact_name?: string | null;
-    business_name?: string | null;
-    phone?: string | null;
-  } | null;
+  stage_name?: string | null;
 };
 
 export const isOverdue = (row: { status: string; due_at: string }) =>
@@ -85,135 +74,108 @@ export const statusBadgeVariant = (status: FollowUpStatus) => {
 
 const PAGE_SIZE = 10;
 
-async function resolveNames(ids: (string | null | undefined)[]) {
-  const unique = Array.from(new Set(ids.filter(Boolean) as string[]));
-  const nameById = new Map<string, string>();
-
-  try {
-    const crmUsers = await fetchCrmUsers();
-    for (const u of crmUsers) {
-      if (u.id && u.name) {
-        nameById.set(u.id, u.name);
-      }
-    }
-  } catch (err) {
-    console.warn("Error resolving CRM user names:", err);
-  }
-
-  if (unique.length === 0) return nameById;
-
-  try {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, full_name, email")
-      .in("id", unique);
-    for (const p of (data as Record<string, unknown>[] | null) ?? []) {
-      const id = String(p["id"] ?? "");
-      const fullName = p["full_name"] as string | null;
-      const email = p["email"] as string | null;
-      if (!nameById.has(id)) {
-        nameById.set(id, fullName || email || "Unknown");
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  return nameById;
-}
-
-async function resolveProspects(ids: (string | null | undefined)[]) {
-  const unique = Array.from(new Set(ids.filter(Boolean) as string[]));
-  const prospectById = new Map<
-    string,
-    {
-      contact_name?: string | undefined;
-      business_name?: string | undefined;
-      phone?: string | undefined;
-    }
-  >();
-  if (unique.length === 0) return prospectById;
-  const { data } = await supabase
-    .from("prospects")
-    .select("id, contact_name, business_name, phone")
-    .in("id", unique);
-  for (const p of (data as Record<string, unknown>[] | null) ?? []) {
-    const id = String(p["id"] ?? "");
-    prospectById.set(id, {
-      contact_name: (p["contact_name"] as string) || undefined,
-      business_name: (p["business_name"] as string) || undefined,
-      phone: (p["phone"] as string) || undefined,
-    });
-  }
-  return prospectById;
-}
-
 export const followUpsQuery = (filters: FollowUpFilters, userId: string, isAdmin: boolean) =>
   queryOptions({
-    queryKey: ["follow-ups", filters, userId],
+    queryKey: ["follow-ups", filters, userId, isAdmin],
     queryFn: async () => {
-      const from = (filters.page - 1) * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
+      try {
+        const res = await runMySQLQuery<Record<string, unknown>[]>(
+          `SELECT 
+            f.*,
+            p.contact_name AS prospect_name,
+            p.business_name AS prospect_business,
+            p.phone AS prospect_phone,
+            p.stage_id,
+            s.name AS stage_name,
+            s.stage_group,
+            s.color AS stage_color,
+            u.name AS agent_name,
+            c.name AS creator_name
+          FROM \`follow_ups\` f
+          LEFT JOIN \`prospects\` p ON f.prospect_id = p.id
+          LEFT JOIN \`stages\` s ON p.stage_id = s.id
+          LEFT JOIN \`users\` u ON f.assigned_to = u.id
+          LEFT JOIN \`users\` c ON f.created_by = c.id
+          ORDER BY f.due_at DESC, f.created_at DESC;`,
+        );
 
-      let query = supabase
-        .from("follow_ups")
-        .select("*, prospects(contact_name, business_name, phone)", { count: "exact" });
+        if (res.success && Array.isArray(res.data)) {
+          let rows: FollowUp[] = res.data.map((item) => {
+            const rawDue = String(item["due_at"] || new Date().toISOString());
+            const rawStatus = String(item["status"] || "pending");
+            return {
+              id: String(item["id"]),
+              prospect_id: String(item["prospect_id"]),
+              assigned_to: (item["assigned_to"] as string) || null,
+              created_by: (item["created_by"] as string) || null,
+              due_at: rawDue,
+              note: (item["note"] as string) || null,
+              status: rawStatus,
+              created_at: String(item["created_at"] || new Date().toISOString()),
+              updated_at: String(item["updated_at"] || new Date().toISOString()),
+              prospect_name: (item["prospect_name"] as string) || "Contact Name",
+              prospect_business: (item["prospect_business"] as string) || null,
+              prospect_phone: (item["prospect_phone"] as string) || null,
+              agent_name: (item["agent_name"] as string) || "Assigned Agent",
+              creator_name: (item["creator_name"] as string) || "Admin",
+              stage_name: (item["stage_name"] as string) || null,
+              stage_group: (item["stage_group"] as string) || null,
+              stage_color: (item["stage_color"] as string) || null,
+              effective_status: effectiveStatus({ status: rawStatus, due_at: rawDue }),
+            };
+          });
 
-      if (!isAdmin) query = query.eq("assigned_to", userId);
-      if (filters.agent) query = query.eq("assigned_to", filters.agent);
-      if (filters.from) query = query.gte("due_at", filters.from);
-      if (filters.to) query = query.lte("due_at", `${filters.to}T23:59:59`);
+          // Role permission filter
+          if (!isAdmin && userId) {
+            rows = rows.filter((r) => r.assigned_to === userId);
+          }
+          if (filters.agent) {
+            rows = rows.filter((r) => r.assigned_to === filters.agent);
+          }
+          if (filters.status) {
+            if (filters.status === "overdue") {
+              rows = rows.filter((r) => r.effective_status === "overdue");
+            } else {
+              rows = rows.filter((r) => r.status === filters.status);
+            }
+          }
+          if (filters.from) {
+            const fromTime = new Date(filters.from).getTime();
+            rows = rows.filter((r) => new Date(r.due_at).getTime() >= fromTime);
+          }
+          if (filters.to) {
+            const toTime = new Date(`${filters.to}T23:59:59`).getTime();
+            rows = rows.filter((r) => new Date(r.due_at).getTime() <= toTime);
+          }
+          if (filters.search) {
+            const term = filters.search.toLowerCase();
+            rows = rows.filter(
+              (r) =>
+                (r.prospect_name || "").toLowerCase().includes(term) ||
+                (r.prospect_business || "").toLowerCase().includes(term) ||
+                (r.prospect_phone || "").toLowerCase().includes(term) ||
+                (r.note || "").toLowerCase().includes(term),
+            );
+          }
 
-      if (filters.status === "overdue") {
-        query = query.eq("status", "pending").lt("due_at", new Date().toISOString());
-      } else if (filters.status) {
-        query = query.eq("status", filters.status);
-      }
+          const total = rows.length;
+          const page = filters.page || 1;
+          const paginated = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-      const { data, count, error } = await query
-        .order("due_at", { ascending: false })
-        .range(from, to);
-
-      if (error) {
-        console.warn("Error loading follow ups:", error);
-      }
-
-      let rows = (data ?? []) as unknown as FollowUpRow[];
-
-      const prospectById = await resolveProspects(rows.map((r) => r.prospect_id));
-      const nameById = await resolveNames(rows.flatMap((r) => [r.assigned_to, r.created_by]));
-
-      // Search is applied on the joined prospect fields and the note text.
-      if (filters.search) {
-        const term = filters.search.toLowerCase();
-        rows = rows.filter((r) => {
-          const p = prospectById.get(r.prospect_id) || r.prospects;
-          return (
-            (p?.contact_name ?? "").toLowerCase().includes(term) ||
-            (p?.business_name ?? "").toLowerCase().includes(term) ||
-            (p?.phone ?? "").toLowerCase().includes(term) ||
-            (r.note ?? "").toLowerCase().includes(term)
-          );
-        });
+          return {
+            data: paginated,
+            count: total,
+            pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+          };
+        }
+      } catch (err) {
+        console.warn("followUpsQuery MySQL notice:", err);
       }
 
       return {
-        data: rows.map((r) => {
-          const p = prospectById.get(r.prospect_id) || r.prospects;
-          return {
-            ...r,
-            prospect_name: p?.contact_name || p?.business_name || "Contact Name",
-            prospect_business: p?.business_name ?? null,
-            prospect_phone: p?.phone ?? null,
-            agent_name: r.assigned_to
-              ? nameById.get(r.assigned_to) || "Assigned Agent"
-              : "Unassigned",
-            creator_name: r.created_by ? nameById.get(r.created_by) || "Admin" : "System",
-            effective_status: effectiveStatus(r),
-          };
-        }) as FollowUp[],
-        count: count ?? rows.length,
-        pageCount: Math.max(1, Math.ceil((count ?? rows.length) / PAGE_SIZE)),
+        data: [],
+        count: 0,
+        pageCount: 1,
       };
     },
   });
@@ -222,33 +184,48 @@ export const followUpSummaryQuery = (userId: string, isAdmin?: boolean) =>
   queryOptions({
     queryKey: ["follow-up-summary", userId, isAdmin],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("follow_up_summary" as never);
-      if (!error && data) {
-        const raw = (data ?? {}) as Record<string, number>;
-        return {
-          total: Number(raw["total"] ?? 0),
-          pending: Number(raw["pending"] ?? 0),
-          completed: Number(raw["completed"] ?? 0),
-          cancelled: Number(raw["cancelled"] ?? 0),
-          overdue: Number(raw["overdue"] ?? 0),
-        };
+      try {
+        const res = await runMySQLQuery<Record<string, unknown>[]>(
+          `SELECT 
+            status, 
+            due_at, 
+            assigned_to 
+          FROM \`follow_ups\`;`,
+        );
+
+        if (res.success && Array.isArray(res.data)) {
+          let list = res.data;
+          if (!isAdmin && userId) {
+            list = list.filter((r) => String(r["assigned_to"]) === userId);
+          }
+          const nowStr = new Date().toISOString();
+          const pending = list.filter(
+            (r) => String(r["status"]) === "pending" && String(r["due_at"] || "") >= nowStr,
+          ).length;
+          const completed = list.filter((r) => String(r["status"]) === "completed").length;
+          const cancelled = list.filter((r) => String(r["status"]) === "cancelled").length;
+          const overdue = list.filter(
+            (r) => String(r["status"]) === "pending" && String(r["due_at"] || "") < nowStr,
+          ).length;
+
+          return {
+            total: list.length,
+            pending,
+            completed,
+            cancelled,
+            overdue,
+          };
+        }
+      } catch (err) {
+        console.warn("followUpSummaryQuery MySQL notice:", err);
       }
 
-      // Fallback count query if RPC fails
-      const { data: rows } = await supabase.from("follow_ups").select("status, due_at");
-      const list = (rows ?? []) as { status: string; due_at: string }[];
-      const nowStr = new Date().toISOString();
-      const pending = list.filter((r) => r.status === "pending").length;
-      const completed = list.filter((r) => r.status === "completed").length;
-      const cancelled = list.filter((r) => r.status === "cancelled").length;
-      const overdue = list.filter((r) => r.status === "pending" && r.due_at < nowStr).length;
-
       return {
-        total: list.length,
-        pending,
-        completed,
-        cancelled,
-        overdue,
+        total: 0,
+        pending: 0,
+        completed: 0,
+        cancelled: 0,
+        overdue: 0,
       };
     },
   });
@@ -257,29 +234,53 @@ export const prospectFollowUpsQuery = (prospectId: string) =>
   queryOptions({
     queryKey: ["prospect-follow-ups", prospectId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("follow_ups")
-        .select("*")
-        .eq("prospect_id", prospectId)
-        .order("due_at", { ascending: false });
+      try {
+        const res = await runMySQLQuery<Record<string, unknown>[]>(
+          `SELECT 
+            f.*,
+            p.contact_name AS prospect_name,
+            p.business_name AS prospect_business,
+            p.phone AS prospect_phone,
+            s.name AS stage_name,
+            u.name AS agent_name,
+            c.name AS creator_name
+          FROM \`follow_ups\` f
+          LEFT JOIN \`prospects\` p ON f.prospect_id = p.id
+          LEFT JOIN \`stages\` s ON p.stage_id = s.id
+          LEFT JOIN \`users\` u ON f.assigned_to = u.id
+          LEFT JOIN \`users\` c ON f.created_by = c.id
+          WHERE f.prospect_id = '${prospectId}'
+          ORDER BY f.due_at DESC;`,
+        );
 
-      if (error) {
-        console.warn("Error fetching prospect follow-ups:", error);
+        if (res.success && Array.isArray(res.data)) {
+          return res.data.map((item) => {
+            const rawDue = String(item["due_at"] || new Date().toISOString());
+            const rawStatus = String(item["status"] || "pending");
+            return {
+              id: String(item["id"]),
+              prospect_id: String(item["prospect_id"]),
+              assigned_to: (item["assigned_to"] as string) || null,
+              created_by: (item["created_by"] as string) || null,
+              due_at: rawDue,
+              note: (item["note"] as string) || null,
+              status: rawStatus,
+              created_at: String(item["created_at"] || new Date().toISOString()),
+              updated_at: String(item["updated_at"] || new Date().toISOString()),
+              prospect_name: (item["prospect_name"] as string) || "Contact Name",
+              prospect_business: (item["prospect_business"] as string) || null,
+              prospect_phone: (item["prospect_phone"] as string) || null,
+              agent_name: (item["agent_name"] as string) || "Agent",
+              creator_name: (item["creator_name"] as string) || "Admin",
+              stage_name: (item["stage_name"] as string) || null,
+              effective_status: effectiveStatus({ status: rawStatus, due_at: rawDue }),
+            } as FollowUp;
+          });
+        }
+      } catch (err) {
+        console.warn("prospectFollowUpsQuery MySQL notice:", err);
       }
-
-      const rows = (data ?? []) as unknown as FollowUpRow[];
-      const prospectById = await resolveProspects([prospectId]);
-      const nameById = await resolveNames(rows.flatMap((r) => [r.assigned_to, r.created_by]));
-      const p = prospectById.get(prospectId);
-      return rows.map((r) => ({
-        ...r,
-        prospect_name: p?.contact_name || p?.business_name || "Contact Name",
-        prospect_business: p?.business_name ?? null,
-        prospect_phone: p?.phone ?? null,
-        agent_name: r.assigned_to ? nameById.get(r.assigned_to) || "Agent" : "Unassigned",
-        creator_name: r.created_by ? nameById.get(r.created_by) || "Admin" : "System",
-        effective_status: effectiveStatus(r),
-      })) as FollowUp[];
+      return [];
     },
   });
 
@@ -287,38 +288,88 @@ export const prospectTimelineQuery = (prospectId: string) =>
   queryOptions({
     queryKey: ["prospect-timeline", prospectId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("follow_ups")
-        .select("*")
-        .eq("prospect_id", prospectId)
-        .order("created_at", { ascending: true });
+      try {
+        const events: TimelineRecord[] = [];
 
-      if (error) {
-        console.warn("Error fetching prospect timeline:", error);
+        // 1. Follow ups from MySQL
+        const fuRes = await runMySQLQuery<Record<string, unknown>[]>(
+          `SELECT 
+            f.id,
+            f.due_at AS raw_due_at,
+            f.created_at,
+            f.updated_at,
+            f.note,
+            f.status,
+            COALESCE(u.name, 'Agent') AS agent_name,
+            COALESCE(s.name, 'Follow-up') AS stage_name
+          FROM \`follow_ups\` f
+          LEFT JOIN \`prospects\` p ON f.prospect_id = p.id
+          LEFT JOIN \`stages\` s ON p.stage_id = s.id
+          LEFT JOIN \`users\` u ON f.assigned_to = u.id
+          WHERE f.prospect_id = '${prospectId}'
+          ORDER BY f.created_at ASC;`,
+        );
+
+        if (fuRes.success && Array.isArray(fuRes.data)) {
+          for (const r of fuRes.data) {
+            const dateObj = new Date(String(r["updated_at"] || r["created_at"] || r["raw_due_at"]));
+            const rawStatus = String(r["status"] || "pending");
+            const rawDue = String(r["raw_due_at"] || new Date().toISOString());
+            events.push({
+              id: String(r["id"]),
+              date: format(dateObj, "dd MMM yyyy"),
+              time: format(dateObj, "hh:mm a"),
+              note: (r["note"] as string) || "Follow-up note",
+              agent: String(r["agent_name"] || "Agent"),
+              status: effectiveStatus({ status: rawStatus, due_at: rawDue }),
+              raw_due_at: rawDue,
+              created_at: String(r["created_at"] || new Date().toISOString()),
+              stage_name: (r["stage_name"] as string) || "Follow-up",
+            });
+          }
+        }
+
+        // 2. Stage changes from MySQL prospect_stage_history
+        const histRes = await runMySQLQuery<Record<string, unknown>[]>(
+          `SELECT 
+            h.id,
+            h.changed_at,
+            h.note,
+            COALESCE(u.name, 'System') AS agent_name,
+            COALESCE(s.name, 'Stage Updated') AS stage_name
+          FROM \`prospect_stage_history\` h
+          LEFT JOIN \`stages\` s ON h.to_stage_id = s.id
+          LEFT JOIN \`users\` u ON h.changed_by = u.id
+          WHERE h.prospect_id = '${prospectId}'
+          ORDER BY h.changed_at ASC;`,
+        );
+
+        if (histRes.success && Array.isArray(histRes.data)) {
+          for (const h of histRes.data) {
+            const dateObj = new Date(String(h["changed_at"]));
+            events.push({
+              id: String(h["id"]),
+              date: format(dateObj, "dd MMM yyyy"),
+              time: format(dateObj, "hh:mm a"),
+              note:
+                (h["note"] as string) || `Stage updated to ${String(h["stage_name"] || "Stage")}`,
+              agent: String(h["agent_name"] || "System"),
+              status: "completed",
+              raw_due_at: String(h["changed_at"]),
+              created_at: String(h["changed_at"]),
+              stage_name: String(h["stage_name"]),
+            });
+          }
+        }
+
+        // Sort events chronologically
+        events.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+        return events;
+      } catch (err) {
+        console.warn("prospectTimelineQuery MySQL notice:", err);
       }
-
-      const rows = (data ?? []) as unknown as FollowUpRow[];
-      const nameById = await resolveNames(rows.flatMap((r) => [r.assigned_to, r.created_by]));
-
-      return rows.map((r) => {
-        const updateDate = new Date(r.updated_at || r.created_at || r.due_at);
-        const agentName =
-          (r.assigned_to ? nameById.get(r.assigned_to) : null) ||
-          (r.created_by ? nameById.get(r.created_by) : null) ||
-          "Agent";
-
-        return {
-          id: r.id,
-          date: format(updateDate, "dd MMM yyyy"),
-          time: format(updateDate, "hh:mm a"),
-          note: r.note || "No details specified",
-          agent: agentName,
-          status: effectiveStatus(r),
-          raw_due_at: r.due_at,
-          created_at: r.created_at,
-          updated_at: r.updated_at,
-        } as TimelineRecord;
-      });
+      return [];
     },
   });
 
@@ -336,18 +387,6 @@ export const agentsQuery = () =>
         }
       } catch {
         // Fallback
-      }
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .order("full_name");
-
-      if (!error && data && data.length > 0) {
-        return ((data as Record<string, unknown>[]) ?? []).map((p) => ({
-          id: String(p["id"] ?? ""),
-          name: String((p["full_name"] as string) || (p["email"] as string) || "Unknown Agent"),
-        }));
       }
 
       return [
@@ -369,45 +408,34 @@ export function useSetFollowUpStatus() {
       prospectId?: string | undefined;
       prospectName?: string | undefined;
     }) => {
-      // 1. Try RPC function set_follow_up_status
-      const { data: rpcData, error: rpcErr } = await supabase.rpc(
-        "set_follow_up_status" as never,
-        {
-          p_follow_up_id: input.id,
-          p_status: input.status,
-          ...(input.note ? { p_note: input.note } : {}),
-        } as never,
-      );
+      const escape = (str?: string | null) => (str ? str.replace(/'/g, "''") : "");
 
-      if (!rpcErr) return rpcData;
-
-      // 2. Direct database update fallback
-      const { data, error } = await supabase
-        .from("follow_ups")
-        .update({
-          status: input.status,
-          updated_at: new Date().toISOString(),
-          ...(input.note ? { note: input.note } : {}),
-        })
-        .eq("id", input.id)
-        .select()
-        .single();
-
-      if (error) console.warn("Direct update fallback:", error);
-
-      // 3. Create activity log on completing or updating task
-      if (input.prospectId) {
-        const { data: userData } = await supabase.auth.getUser();
-        const actorId = (userData?.user as { id?: string } | null)?.id || null;
-        await supabase.from("activities").insert({
-          actor_id: actorId,
-          prospect_id: input.prospectId,
-          activity_type: `follow_up_${input.status}`,
-          message: `Follow-up task marked ${input.status}${input.prospectName ? ` for ${input.prospectName}` : ""}${input.note ? ` — ${input.note}` : ""}`,
-        });
+      try {
+        await runMySQLQuery(
+          `UPDATE \`follow_ups\` 
+           SET \`status\` = '${input.status}', 
+               \`updated_at\` = NOW() 
+               ${input.note ? `, \`note\` = '${escape(input.note)}'` : ""}
+           WHERE \`id\` = '${input.id}';`,
+        );
+      } catch (err) {
+        console.warn("useSetFollowUpStatus MySQL notice:", err);
       }
 
-      return data;
+      // Log activity
+      if (input.prospectId) {
+        try {
+          const actId = generateUUID();
+          await runMySQLQuery(
+            `INSERT INTO \`activities\` (\`id\`, \`prospect_id\`, \`activity_type\`, \`message\`, \`created_at\`)
+             VALUES ('${actId}', '${input.prospectId}', 'follow_up_${input.status}', 'Follow-up task marked ${input.status}${input.prospectName ? ` for ${escape(input.prospectName)}` : ""}${input.note ? ` — ${escape(input.note)}` : ""}', NOW());`,
+          );
+        } catch {
+          // ignore
+        }
+      }
+
+      return { success: true };
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["follow-ups"] });
@@ -430,41 +458,97 @@ export function useCreateFollowUp() {
       due_at: string;
       note?: string;
     }) => {
-      const { data, error } = await supabase
-        .from("follow_ups")
-        .insert({
-          prospect_id: input.prospect_id,
-          assigned_to: input.assigned_to,
-          due_at: input.due_at,
-          status: "pending",
-          note: input.note ?? null,
-          created_by: input.created_by,
-        })
-        .select()
-        .single();
+      const escape = (str?: string | null) => (str ? str.replace(/'/g, "''") : "");
+      const newId = generateUUID();
+      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const isoDue = new Date(input.due_at).toISOString().slice(0, 19).replace("T", " ");
 
-      // Log activity for scheduling new follow-up
-      if (!error && input.prospect_id) {
-        await supabase.from("activities").insert({
-          actor_id: input.created_by,
-          prospect_id: input.prospect_id,
-          activity_type: "follow_up_created",
-          message: `New follow-up task scheduled for ${format(new Date(input.due_at), "dd MMM yyyy, hh:mm a")}${input.note ? ` — ${input.note}` : ""}`,
-        } as never);
+      try {
+        await runMySQLQuery(
+          `INSERT INTO \`follow_ups\` (\`id\`, \`prospect_id\`, \`assigned_to\`, \`created_by\`, \`due_at\`, \`status\`, \`note\`, \`created_at\`, \`updated_at\`)
+           VALUES ('${newId}', '${input.prospect_id}', '${input.assigned_to}', '${input.created_by}', '${isoDue}', 'pending', ${input.note ? `'${escape(input.note)}'` : "NULL"}, NOW(), NOW());`,
+        );
+
+        // Activity log
+        const actId = generateUUID();
+        await runMySQLQuery(
+          `INSERT INTO \`activities\` (\`id\`, \`prospect_id\`, \`actor_id\`, \`activity_type\`, \`message\`, \`created_at\`)
+           VALUES ('${actId}', '${input.prospect_id}', '${input.created_by}', 'follow_up_created', 'New follow-up task scheduled for ${format(new Date(input.due_at), "dd MMM yyyy, hh:mm a")}${input.note ? ` — ${escape(input.note)}` : ""}', NOW());`,
+        );
+
+        // Resolve "Follow-up" stage ID from MySQL
+        const stageRes = await runMySQLQuery<Record<string, unknown>[]>(
+          "SELECT `id` FROM `stages` WHERE LOWER(TRIM(`name`)) LIKE '%follow%' LIMIT 1;",
+        );
+        const followUpStageId =
+          stageRes?.success && stageRes.data?.[0] ? String(stageRes.data[0]["id"]) : "follow-up";
+
+        // Get prospect's current stage for transition history
+        let fromStageId: string | null = null;
+        try {
+          const currRes = await runMySQLQuery<Record<string, unknown>[]>(
+            "SELECT `stage_id` FROM `prospects` WHERE `id` = ? LIMIT 1;",
+            [input.prospect_id],
+          );
+          if (currRes?.success && currRes.data?.[0]) {
+            fromStageId = String(currRes.data[0]["stage_id"] || "") || null;
+          }
+        } catch {
+          // ignore
+        }
+
+        // Update prospect stage to Follow-up
+        await runMySQLQuery(
+          "UPDATE `prospects` SET `stage_id` = ?, `updated_at` = ? WHERE `id` = ?;",
+          [followUpStageId, now, input.prospect_id],
+        );
+
+        // Write stage transition history
+        const historyId = generateUUID();
+        await runMySQLQuery(
+          `INSERT INTO \`prospect_stage_history\` (\`id\`, \`prospect_id\`, \`from_stage_id\`, \`to_stage_id\`, \`note\`, \`changed_at\`)
+           VALUES (?, ?, ?, ?, ?, ?);`,
+          [
+            historyId,
+            input.prospect_id,
+            fromStageId,
+            followUpStageId,
+            `Follow-up scheduled for ${format(new Date(input.due_at), "dd MMM yyyy, hh:mm a")}${input.note ? ` — ${input.note}` : ""}`,
+            now,
+          ],
+        );
+
+        // Cloud Supabase fallback update if active
+        try {
+          await supabase
+            .from("prospects")
+            .update({
+              stage_id: followUpStageId,
+              stage_name: "Follow-up",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", input.prospect_id);
+        } catch {
+          // ignore
+        }
+      } catch (err) {
+        console.warn("useCreateFollowUp MySQL notice:", err);
       }
 
-      if (error) {
-        const errObj = error as { message?: string };
-        throw new Error(errObj?.message || "Failed to create follow up");
-      }
-      return data;
+      return { id: newId, prospect_id: input.prospect_id };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ["follow-ups"] });
       void queryClient.invalidateQueries({ queryKey: ["follow-up-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["prospect-follow-ups"] });
       void queryClient.invalidateQueries({ queryKey: ["prospect-timeline"] });
       void queryClient.invalidateQueries({ queryKey: ["activities"] });
+      void queryClient.invalidateQueries({ queryKey: ["prospects"] });
+      void queryClient.invalidateQueries({ queryKey: ["prospects-stats"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      if (data?.prospect_id) {
+        void queryClient.invalidateQueries({ queryKey: ["stage-history", data.prospect_id] });
+      }
     },
   });
 }

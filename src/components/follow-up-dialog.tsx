@@ -26,16 +26,23 @@ import {
 import { useAuth } from "@/lib/auth";
 import { agentsQuery, useCreateFollowUp } from "@/lib/follow-ups";
 
+import { runMySQLQuery } from "@/lib/mysql-api";
+
 function prospectOptionsQuery() {
   return queryOptions({
     queryKey: ["prospect-options-follow-up"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("prospects")
-        .select("id, contact_name, business_name")
-        .order("contact_name");
-      if (error) throw error;
-      return data || [];
+      try {
+        const res = await runMySQLQuery<Record<string, unknown>[]>(
+          "SELECT id, contact_name, business_name FROM `prospects` WHERE is_active = 1 ORDER BY contact_name ASC;",
+        );
+        if (res.success && Array.isArray(res.data)) {
+          return res.data;
+        }
+      } catch (err) {
+        console.warn("prospectOptionsQuery MySQL notice:", err);
+      }
+      return [];
     },
   });
 }
@@ -51,8 +58,8 @@ function defaultDueAt(): string {
 export type FollowUpDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  prospectId?: string;
-  prospectLabel?: string;
+  prospectId?: string | undefined;
+  prospectLabel?: string | undefined;
 };
 
 export function FollowUpDialog({

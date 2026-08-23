@@ -30,10 +30,18 @@ import { useAuth } from "@/lib/auth";
 export type AddInvoiceDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  invoiceToEdit?: Invoice | null;
+  invoiceToEdit?: Invoice | null | undefined;
+  defaultProspectId?: string | undefined;
+  onSuccess?: () => void;
 };
 
-export function AddInvoiceDialog({ open, onOpenChange, invoiceToEdit }: AddInvoiceDialogProps) {
+export function AddInvoiceDialog({
+  open,
+  onOpenChange,
+  invoiceToEdit,
+  defaultProspectId,
+  onSuccess,
+}: AddInvoiceDialogProps) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -56,7 +64,7 @@ export function AddInvoiceDialog({ open, onOpenChange, invoiceToEdit }: AddInvoi
         setDueDate(invoiceToEdit.due_date || new Date().toISOString().split("T")[0]!);
         setNotes(invoiceToEdit.notes || "");
       } else {
-        setProspectId("");
+        setProspectId(defaultProspectId || "");
         setDescription("");
         setTotalAmountStr("");
         setBillDate(new Date().toISOString().split("T")[0]!);
@@ -64,7 +72,7 @@ export function AddInvoiceDialog({ open, onOpenChange, invoiceToEdit }: AddInvoi
         setNotes("");
       }
     }
-  }, [open, invoiceToEdit]);
+  }, [open, invoiceToEdit, defaultProspectId]);
 
   const { data: prospectOptions = [] } = useQuery({
     ...prospectsOptionsQuery(),
@@ -109,7 +117,14 @@ export function AddInvoiceDialog({ open, onOpenChange, invoiceToEdit }: AddInvoi
           : `Invoice ${inv.invoice_number} created successfully!`,
       );
       void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      void queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      void queryClient.invalidateQueries({ queryKey: ["opportunity-summary"] });
+      void queryClient.invalidateQueries({ queryKey: ["prospects"] });
+      void queryClient.invalidateQueries({ queryKey: ["prospects-stats"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       onOpenChange(false);
+      if (onSuccess) onSuccess();
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to save invoice.");
