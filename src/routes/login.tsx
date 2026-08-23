@@ -6,7 +6,8 @@ import { Mail, Lock, Eye, EyeOff, LogIn, Command, ShieldCheck, User } from "luci
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { AccountSuspendedModal } from "@/components/account-suspended-modal";
-import { fetchMySQLUsers } from "@/lib/auth.functions";
+import { fetchMySQLUsers, authenticateXamppUser } from "@/lib/auth.functions";
+
 
 export const Route = createFileRoute("/login")({
   ssr: false,
@@ -46,42 +47,48 @@ function LoginPage() {
     setPassword(targetPass);
 
     try {
-      const { users } = await fetchMySQLUsers();
-      const target = users.find(
-        (u) => String(u["email"] || "").toLowerCase() === targetEmail.trim().toLowerCase(),
-      );
-      if (
-        target &&
-        (String(target["status"] || "") !== "Active" || Boolean(target["is_deleted"]))
-      ) {
-        setSubmitting(false);
-        setSuspendedModalOpen(true);
-        return;
+      const res = await fetchMySQLUsers();
+      if (res?.users) {
+        const target = res.users.find(
+          (u) => String(u["email"] || "").toLowerCase() === targetEmail.trim().toLowerCase(),
+        );
+        if (
+          target &&
+          (String(target["status"] || "") !== "Active" || Boolean(target["is_deleted"]))
+        ) {
+          setSubmitting(false);
+          setSuspendedModalOpen(true);
+          return;
+        }
       }
     } catch {
       // Ignore
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: targetEmail,
-      password: targetPass,
+    const res = await authenticateXamppUser({
+      data: { email: targetEmail, password: targetPass },
     });
 
-    if (error || !data?.user) {
+    if (!res.success || !res.user) {
       setSubmitting(false);
-      toast.error(error?.message || "Invalid email or password. Please check your credentials.");
+      if (res.isSuspended) {
+        setSuspendedModalOpen(true);
+        return;
+      }
+      toast.error(res.error || "Invalid email or password. Please check your credentials.");
       return;
     }
 
-    const userId = data.user.id;
-    const userName = data.user.user_metadata?.full_name || targetEmail.split("@")[0] || "User";
-    const userRole = (data.user.user_metadata?.role || "agent") as "admin" | "agent";
-    setAuthenticatedDbSession(userId, userName, targetEmail, userRole);
+    const userId = res.user.id;
+    const userName = res.user.name || targetEmail.split("@")[0] || "User";
+    const userRole = res.user.role || "agent";
+    setAuthenticatedDbSession(userId, userName, targetEmail, userRole, res.user.avatar_url || null);
 
     setSubmitting(false);
     toast.success(`Signed in successfully as ${userName} (${userRole.toUpperCase()})!`);
     void navigate({ to: "/dashboard", replace: true });
   }
+
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
