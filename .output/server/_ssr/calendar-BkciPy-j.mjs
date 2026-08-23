@@ -4,7 +4,7 @@ import { t as buttonVariants } from "./button-variants-FB7ScDjE.mjs";
 import { u as require_react } from "../_libs/@floating-ui/react-dom+[...].mjs";
 import { N as require_jsx_runtime } from "../_libs/@radix-ui/react-alert-dialog+[...].mjs";
 import { t as Button } from "./button-Cef07JZR.mjs";
-import { Ht as ChevronRight, Ut as ChevronLeft, Wt as ChevronDown } from "../_libs/lucide-react.mjs";
+import { Gt as ChevronDown, Ut as ChevronRight, Wt as ChevronLeft } from "../_libs/lucide-react.mjs";
 import { n as getDefaultClassNames, t as DayPicker } from "../_libs/react-day-picker.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/calendar-BkciPy-j.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
