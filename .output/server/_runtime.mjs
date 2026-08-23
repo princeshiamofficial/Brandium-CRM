@@ -39,6 +39,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 	enumerable: true
 }) : target, mod));
 var __toCommonJS = (mod) => __hasOwnProp.call(mod, "module.exports") ? mod["module.exports"] : __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var __require = /* #__PURE__ */ (() => createRequire(import.meta.url || "file:///"))();
+var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();
 //#endregion
 export { __toCommonJS as a, __require as i, __esmMin as n, __toESM as o, __exportAll as r, __commonJSMin as t };

@@ -9,7 +9,7 @@ var require_is_property = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 //#endregion
 //#region node_modules/generate-function/index.js
 var require_generate_function = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	var util = __require("node:util");
+	var util = __require("util");
 	var isProperty = require_is_property();
 	var INDENT_START = /[\{\[]/;
 	var INDENT_END = /[\}\]]/;

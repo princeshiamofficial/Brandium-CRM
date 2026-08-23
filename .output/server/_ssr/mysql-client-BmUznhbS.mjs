@@ -1,8 +1,7 @@
 import { o as __toESM } from "../_runtime.mjs";
-import processModule from "node:process";
 //#region node_modules/.nitro/vite/services/ssr/assets/mysql-client-BmUznhbS.js
 function getMySQLConfig() {
-	const serverEnv = typeof processModule !== "undefined" ? processModule.env : void 0;
+	const serverEnv = typeof process !== "undefined" ? process.env : void 0;
 	const clientEnv = typeof import.meta !== "undefined" ? {
 		"BASE_URL": "/",
 		"DEV": false,

@@ -1,8 +1,7 @@
 import { a as __toCommonJS, i as __require, n as __esmMin, r as __exportAll, t as __commonJSMin } from "../_runtime.mjs";
-import processModule from "node:process";
 //#region node_modules/safer-buffer/safer.js
 var require_safer = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	var buffer = __require("node:buffer");
+	var buffer = __require("buffer");
 	var Buffer = buffer.Buffer;
 	var safer = {};
 	var key;
@@ -33,7 +32,7 @@ var require_safer = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		return buf;
 	};
 	if (!safer.kStringMaxLength) try {
-		safer.kStringMaxLength = processModule.binding("buffer").kStringMaxLength;
+		safer.kStringMaxLength = process.binding("buffer").kStringMaxLength;
 	} catch (e) {}
 	if (!safer.constants) {
 		safer.constants = { MAX_LENGTH: safer.kMaxLength };
@@ -129,7 +128,7 @@ var require_internal = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	}
 	InternalCodec.prototype.encoder = InternalEncoder;
 	InternalCodec.prototype.decoder = InternalDecoder;
-	var StringDecoder = __require("node:string_decoder").StringDecoder;
+	var StringDecoder = __require("string_decoder").StringDecoder;
 	function InternalDecoder(options, codec) {
 		this.decoder = new StringDecoder(codec.enc);
 	}
@@ -2862,7 +2861,7 @@ var require_lib = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	};
 	var streamModule;
 	try {
-		streamModule = __require("node:stream");
+		streamModule = __require("stream");
 	} catch (e) {}
 	if (streamModule && streamModule.Transform) module.exports.enableStreamingAPI(streamModule);
 	else module.exports.encodeStream = module.exports.decodeStream = function() {

@@ -1,5 +1,4 @@
-import { setImmediate } from "node:timers";
-import nodeCrypto from "node:crypto";
+import nodeCrypto from "crypto";
 //#region node_modules/bcryptjs/index.js
 /**
 * The random implementation to use as a fallback.

@@ -1,5 +1,4 @@
 import { t as __commonJSMin } from "../_runtime.mjs";
-import { f as globalthis_default, p as init_globalthis } from "./@tanstack/router-core+[...].mjs";
 //#region node_modules/lodash/isArray.js
 var require_isArray = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	module.exports = Array.isArray;
@@ -7,8 +6,7 @@ var require_isArray = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 //#endregion
 //#region node_modules/lodash/_freeGlobal.js
 var require__freeGlobal = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	init_globalthis();
-	module.exports = typeof globalthis_default == "object" && globalthis_default && globalthis_default.Object === Object && globalthis_default;
+	module.exports = typeof global == "object" && global && global.Object === Object && global;
 }));
 //#endregion
 //#region node_modules/lodash/_root.js
