@@ -318,6 +318,32 @@ async function runMigration() {
     }
   }
 
+  // 8. Seed default demo user accounts into users & profiles
+  const [userCount] = await conn.query("SELECT COUNT(*) as cnt FROM `users` WHERE is_deleted = 0;");
+  if (Number(userCount?.[0]?.cnt ?? 0) === 0) {
+    console.log("Seeding default Admin & Agent user accounts...");
+    const hashAdmin = "$2b$10$qpjXnl8CfUihiIU0F5/WbejBPBQSgIdrXIuRsD.xbi.4nUorC8FUS";
+    const hashAgent = "$2b$10$EUTCyQWyN2.RES4exZkSVOzCpKGLF7cPmbvkNXsu4359niH7nu84G";
+    const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+
+    await conn.query(
+      `INSERT INTO \`users\` (\`id\`, \`name\`, \`email\`, \`password_hash\`, \`role\`, \`status\`, \`avatar_url\`, \`is_deleted\`, \`created_at\`, \`updated_at\`)
+       VALUES
+       ('usr-admin-1', 'Mehan Ahmed (System Admin)', 'admin@example.com', ?, 'ADMIN', 'Active', NULL, 0, ?, ?),
+       ('usr-admin-2', 'Mehan Ahmed', 'mehan.ahmed.official@gmail.com', ?, 'ADMIN', 'Active', NULL, 0, ?, ?),
+       ('usr-agent-0', 'Agent User', 'agent@brandium.com', ?, 'AGENT', 'Active', NULL, 0, ?, ?);`,
+      [hashAdmin, now, now, hashAdmin, now, now, hashAgent, now, now]
+    );
+
+    await conn.query(
+      `INSERT INTO \`profiles\` (\`id\`, \`full_name\`, \`email\`, \`created_at\`, \`updated_at\`)
+       SELECT \`id\`, \`name\`, \`email\`, \`created_at\`, \`updated_at\` FROM \`users\`
+       ON DUPLICATE KEY UPDATE \`full_name\` = VALUES(\`full_name\`), \`email\` = VALUES(\`email\`);`
+    );
+    console.log("Default Admin & Agent user accounts seeded successfully!");
+  }
+
+
   console.log("Migration executed successfully!");
   await conn.end();
 }
