@@ -595,14 +595,25 @@ export const authenticateXamppUser = createServerFn({ method: "POST" })
       // Execute ERP Automatic Database Table & Schema Auto-Creation Engine
       await ensureMySQLTablesExist(conn, config.database);
 
-      if (email === "admin@example.com" || email === "agent@brandium.com") {
+      if (email === "admin@example.com" || email === "mehan.ahmed.official@gmail.com" || email === "agent@brandium.com") {
         try {
+          const roleVal = email === "agent@brandium.com" ? "AGENT" : "ADMIN";
+          const hashVal = email === "agent@brandium.com" ? "$2b$10$EUTCyQWyN2.RES4exZkSVOzCpKGLF7cPmbvkNXsu4359niH7nu84G" : "$2b$10$qpjXnl8CfUihiIU0F5/WbejBPBQSgIdrXIuRsD.xbi.4nUorC8FUS";
+          const nameVal = email === "agent@brandium.com" ? "Agent User" : "Mehan Ahmed (System Admin)";
+          const idVal = email === "agent@brandium.com" ? "usr-agent-0" : (email === "admin@example.com" ? "usr-admin-1" : "usr-admin-2");
+          const nowStr = new Date().toISOString().slice(0, 19).replace("T", " ");
+
           await conn.query(
-            "UPDATE `users` SET `status` = 'Active', `is_deleted` = 0 WHERE LOWER(`email`) = ?",
-            [email],
+            "REPLACE INTO `users` (`id`, `name`, `email`, `password_hash`, `role`, `status`, `avatar_url`, `is_deleted`, `created_at`, `updated_at`) VALUES (?, ?, ?, ?, ?, 'Active', NULL, 0, ?, ?)",
+            [idVal, nameVal, email, hashVal, roleVal, nowStr, nowStr],
           );
-        } catch {
-          // Ignore
+
+          await conn.query(
+            "REPLACE INTO `profiles` (`id`, `full_name`, `email`, `created_at`, `updated_at`) VALUES (?, ?, ?, ?, ?)",
+            [idVal, nameVal, email, nowStr, nowStr],
+          );
+        } catch (e) {
+          console.warn("Auto-upsert default user notice:", e);
         }
       }
 
@@ -610,6 +621,7 @@ export const authenticateXamppUser = createServerFn({ method: "POST" })
         "SELECT id, name, email, password_hash, role, status, avatar_url, is_deleted FROM users WHERE LOWER(email) = ? AND is_deleted = 0 LIMIT 1",
         [email],
       );
+
       await conn.end();
 
       const userList = rows as Array<{
