@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { runMySQLQuery } from "@/lib/mysql-api";
 
 export type ClientBalance = {
   client_id: string;
@@ -19,25 +19,6 @@ export type ClientBalanceFilters = {
   to_date?: string | undefined;
 };
 
-// Safe DB accessor wrapper
-const dynamicDb = supabase as unknown as {
-  from: (table: string) => {
-    select: (cols: string) => {
-      order: (
-        col: string,
-        opts?: { ascending?: boolean },
-      ) => Promise<{ data: unknown[]; error: unknown }>;
-    };
-  };
-};
-
-// Client Balances Dataset
-const demoClientBalances: ClientBalance[] = [];
-
-/**
- * Pure SQL Aggregation Calculator
- * Formula: Current Balance = SUM(non-cancelled invoices) - SUM(valid payments)
- */
 export function calculateClientBalance(totalBilled: number, totalPaid: number): number {
   return Math.max(0, totalBilled - totalPaid);
 }
@@ -46,23 +27,35 @@ export async function fetchClientBalances(
   filters: ClientBalanceFilters = {},
 ): Promise<ClientBalance[]> {
   try {
-    const { data, error } = await dynamicDb
-      .from("client_balances_view")
-      .select("*")
-      .order("current_balance", { ascending: false });
+    const res = await runMySQLQuery<Record<string, unknown>[]>(
+      `SELECT 
+        p.id AS client_id,
+        p.contact_name AS name,
+        p.business_name,
+        p.phone,
+        p.email,
+        p.updated_at AS last_updated,
+        COALESCE(SUM(CASE WHEN i.status != 'Cancelled' THEN i.total_amount ELSE 0 END), 0) AS total_billed,
+        COALESCE(SUM(CASE WHEN i.status != 'Cancelled' THEN i.paid_amount ELSE 0 END), 0) AS total_paid
+      FROM \`prospects\` p
+      LEFT JOIN \`invoices\` i ON p.id = i.prospect_id
+      WHERE p.is_active = 1
+      GROUP BY p.id, p.contact_name, p.business_name, p.phone, p.email, p.updated_at
+      ORDER BY total_billed DESC, p.created_at DESC;`,
+    );
 
-    if (error || !data || data.length === 0) {
-      return applyClientBalanceFilters(demoClientBalances, filters);
+    if (!res.success || !Array.isArray(res.data)) {
+      return [];
     }
 
-    const mapped: ClientBalance[] = (data as Record<string, unknown>[]).map((item) => {
+    const mapped: ClientBalance[] = res.data.map((item) => {
       const billed = Number(item["total_billed"] || 0);
       const paid = Number(item["total_paid"] || 0);
       const bal = calculateClientBalance(billed, paid);
 
       return {
-        client_id: String(item["client_id"] || item["id"]),
-        name: String(item["name"] || item["contact_name"] || "Client"),
+        client_id: String(item["client_id"] || ""),
+        name: String(item["name"] || "Client"),
         business_name: (item["business_name"] as string) || undefined,
         phone: (item["phone"] as string) || undefined,
         email: (item["email"] as string) || undefined,
@@ -74,8 +67,9 @@ export async function fetchClientBalances(
     });
 
     return applyClientBalanceFilters(mapped, filters);
-  } catch {
-    return applyClientBalanceFilters(demoClientBalances, filters);
+  } catch (err) {
+    console.warn("fetchClientBalances error:", err);
+    return [];
   }
 }
 

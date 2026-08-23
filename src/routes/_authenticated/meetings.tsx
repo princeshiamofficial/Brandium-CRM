@@ -340,7 +340,7 @@ function MeetingsPage() {
       </div>
 
       {/* Summary KPI Cards Grid */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         <StatCard
           label="Total Meetings"
           value={totalCount}
@@ -494,8 +494,8 @@ function MeetingsPage() {
           <table className="w-full text-left border-collapse text-sm">
             <thead>
               <tr className="border-b bg-slate-50/80 dark:bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <th className="py-3 px-4">Title & Prospect</th>
-                <th className="py-3 px-4">Type</th>
+                <th className="py-3 px-4">Title</th>
+                <th className="py-3 px-4">Prospect</th>
                 <th className="py-3 px-4">Date & Time</th>
                 <th className="py-3 px-4">Location / Link</th>
                 <th className="py-3 px-4">Status</th>
@@ -523,31 +523,39 @@ function MeetingsPage() {
                       key={m.id}
                       className="hover:bg-slate-50/60 dark:hover:bg-muted/30 transition-colors"
                     >
-                      {/* Title & Prospect */}
-                      <td className="py-3.5 px-4 max-w-60">
-                        <button
-                          type="button"
-                          onClick={() => setViewDetailMeeting(m)}
-                          className="font-semibold text-foreground hover:text-[#67B239] transition-colors truncate block text-left cursor-pointer"
-                        >
-                          {m.title}
-                        </button>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {m.business_name
-                            ? `${m.business_name} (${m.prospect_name})`
-                            : m.prospect_name || "Direct Client"}{" "}
-                          {m.phone && <span className="font-mono">· {m.phone}</span>}
-                        </p>
+                      {/* Title */}
+                      <td className="py-3.5 px-4 max-w-56">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => setViewDetailMeeting(m)}
+                            className="font-semibold text-foreground hover:text-[#67B239] transition-colors truncate block text-left cursor-pointer"
+                          >
+                            {m.title}
+                          </button>
+                          <Badge
+                            variant="outline"
+                            className="gap-1 text-[10px] px-1.5 py-0 border-slate-300 dark:border-border font-normal text-muted-foreground"
+                          >
+                            <TypeIcon className="size-2.5 text-[#67B239]" /> {m.meeting_type}
+                          </Badge>
+                        </div>
                       </td>
 
-                      {/* Type */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <Badge
-                          variant="outline"
-                          className="gap-1 text-xs border-slate-300 dark:border-border"
-                        >
-                          <TypeIcon className="size-3 text-[#67B239]" /> {m.meeting_type}
-                        </Badge>
+                      {/* Prospect */}
+                      <td className="py-3.5 px-4 max-w-56 text-xs">
+                        <p className="font-medium text-foreground truncate">
+                          {m.business_name || m.prospect_name || "Direct Client"}
+                        </p>
+                        <p className="text-muted-foreground truncate">
+                          {m.business_name && m.prospect_name ? `${m.prospect_name}` : ""}
+                          {m.phone && (
+                            <span className="font-mono">
+                              {m.business_name && m.prospect_name ? " · " : ""}
+                              {m.phone}
+                            </span>
+                          )}
+                        </p>
                       </td>
 
                       {/* Schedule */}

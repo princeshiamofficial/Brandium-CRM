@@ -6,7 +6,7 @@ import { Mail, Lock, Eye, EyeOff, LogIn, Command, ShieldCheck, User } from "luci
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { AccountSuspendedModal } from "@/components/account-suspended-modal";
-import { authenticateXamppUser, fetchMySQLUsers } from "@/lib/auth.functions";
+import { fetchMySQLUsers } from "@/lib/auth.functions";
 
 export const Route = createFileRoute("/login")({
   ssr: false,
@@ -46,55 +46,41 @@ function LoginPage() {
     setPassword(targetPass);
 
     try {
-      // 1. Direct MySQL Database Authentication via Server Function
-      const mysqlRes = await authenticateXamppUser({
-        data: { email: targetEmail, password: targetPass },
-      });
-
-      if (mysqlRes?.success && mysqlRes.user) {
-        const u = mysqlRes.user;
-        setAuthenticatedDbSession(u.id, u.name, u.email, u.role);
-        setSubmitting(false);
-        toast.success(`Signed in successfully as ${u.name} (${u.role.toUpperCase()})!`);
-        void navigate({ to: "/dashboard", replace: true });
-        return;
-      }
-
-      if (mysqlRes?.isSuspended) {
+      const { users } = await fetchMySQLUsers();
+      const target = users.find(
+        (u) => String(u["email"] || "").toLowerCase() === targetEmail.trim().toLowerCase(),
+      );
+      if (
+        target &&
+        (String(target["status"] || "") !== "Active" || Boolean(target["is_deleted"]))
+      ) {
         setSubmitting(false);
         setSuspendedModalOpen(true);
         return;
       }
-
-      // 2. Secondary fallback to Supabase auth
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: targetEmail,
-        password: targetPass,
-      });
-
-      if (error || !data?.user) {
-        setSubmitting(false);
-        toast.error(
-          mysqlRes?.error ||
-            error?.message ||
-            "Invalid email or password. Please check your credentials.",
-        );
-        return;
-      }
-
-      const userId = data.user.id;
-      const userName = data.user.user_metadata?.full_name || targetEmail.split("@")[0] || "User";
-      const userRole = (data.user.user_metadata?.role || "agent") as "admin" | "agent";
-      setAuthenticatedDbSession(userId, userName, targetEmail, userRole);
-
-      setSubmitting(false);
-      toast.success(`Signed in successfully as ${userName} (${userRole.toUpperCase()})!`);
-      void navigate({ to: "/dashboard", replace: true });
-    } catch (err: unknown) {
-      setSubmitting(false);
-      const msg = err instanceof Error ? err.message : "Failed to sign in.";
-      toast.error(msg);
+    } catch {
+      // Ignore
     }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: targetEmail,
+      password: targetPass,
+    });
+
+    if (error || !data?.user) {
+      setSubmitting(false);
+      toast.error(error?.message || "Invalid email or password. Please check your credentials.");
+      return;
+    }
+
+    const userId = data.user.id;
+    const userName = data.user.user_metadata?.full_name || targetEmail.split("@")[0] || "User";
+    const userRole = (data.user.user_metadata?.role || "agent") as "admin" | "agent";
+    setAuthenticatedDbSession(userId, userName, targetEmail, userRole);
+
+    setSubmitting(false);
+    toast.success(`Signed in successfully as ${userName} (${userRole.toUpperCase()})!`);
+    void navigate({ to: "/dashboard", replace: true });
   }
 
   async function handleSignIn(e: React.FormEvent) {

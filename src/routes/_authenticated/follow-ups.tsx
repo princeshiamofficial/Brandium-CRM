@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/placeholder-page";
 import { FollowUpDialog } from "@/components/follow-up-dialog";
 import { FollowUpDetailModal } from "@/components/follow-up-detail-modal";
+import { ChangeStageDialog, type ChangeStageTarget } from "@/components/change-stage-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -205,6 +206,21 @@ function StatCard({
   );
 }
 
+function getStageBadgeColor(stageName?: string | null) {
+  const name = (stageName || "").toLowerCase();
+  if (name.includes("won") || name.includes("sales")) return "bg-[#67B239] text-white";
+  if (name.includes("prospect") || name.includes("lead")) return "bg-blue-600 text-white";
+  if (name.includes("follow")) return "bg-teal-600 text-white";
+  if (name.includes("opportunity")) return "bg-orange-500 text-white";
+  if (name.includes("dnp")) return "bg-amber-500 text-white";
+  if (name.includes("switched")) return "bg-purple-600 text-white";
+  if (name.includes("invalid")) return "bg-rose-600 text-white";
+  if (name.includes("not_interested") || name.includes("not interested"))
+    return "bg-slate-600 text-white";
+  if (name.includes("denied")) return "bg-red-700 text-white";
+  return "bg-indigo-600 text-white";
+}
+
 function FollowUpTimelineList({
   prospectId,
   currentFollowUp,
@@ -305,6 +321,7 @@ function FollowUpsPage() {
   // Dialog & Detail Modal states
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogTarget, setDialogTarget] = useState<{ id: string; label: string } | null>(null);
+  const [changeStageTarget, setChangeStageTarget] = useState<ChangeStageTarget | null>(null);
 
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedFollowUp, setSelectedFollowUp] = useState<FollowUp | null>(null);
@@ -414,7 +431,7 @@ function FollowUpsPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3.5 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
         <StatCard
           label="Total Tasks"
           value={summary.data?.total ?? 0}
@@ -654,9 +671,11 @@ function FollowUpsPage() {
                         <User className="size-4" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <span className="inline-block text-[9px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full mb-0.5">
-                          Follow-up Contract
-                        </span>
+                        <Badge
+                          className={`${getStageBadgeColor(row.stage_name)} text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full mb-1 border-0 shadow-2xs`}
+                        >
+                          {row.stage_name || "Follow-up"}
+                        </Badge>
                         <h3
                           className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate leading-tight"
                           title={row.prospect_name}
@@ -743,11 +762,12 @@ function FollowUpsPage() {
 
                   <Button
                     onClick={() => {
-                      setDialogTarget({
+                      setChangeStageTarget({
                         id: row.prospect_id,
-                        label: row.prospect_name || "Prospect",
+                        label: row.prospect_name || row.prospect_business || "Prospect",
+                        stageId: null,
+                        currentStageName: row.stage_name || "Follow-up",
                       });
-                      setDialogOpen(true);
                     }}
                     className="flex-1 xl:flex-none w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs h-9 rounded-xl shadow-2xs transition-colors cursor-pointer"
                   >
@@ -821,6 +841,25 @@ function FollowUpsPage() {
         {...(dialogTarget
           ? { prospectId: dialogTarget.id, prospectLabel: dialogTarget.label }
           : {})}
+      />
+
+      {/* Update Status / Change Stage Dialog */}
+      <ChangeStageDialog
+        target={changeStageTarget}
+        onOpenChange={(open) => {
+          if (!open) setChangeStageTarget(null);
+        }}
+        onStageChange={(_stageId, stageName) => {
+          const normalised = stageName.toLowerCase().trim();
+          if (normalised.includes("follow")) {
+            const target = changeStageTarget;
+            setChangeStageTarget(null);
+            if (target) {
+              setDialogTarget({ id: target.id, label: target.label });
+              setDialogOpen(true);
+            }
+          }
+        }}
       />
     </div>
   );

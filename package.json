@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "deploy": "git pull origin main && npm install && npm run build && (pm2 restart brandium-crm || PORT=3005 NITRO_PORT=3005 pm2 start .output/server/index.mjs --name brandium-crm)"
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck \u0026\u0026 npm run lint \u0026\u0026 npm run build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -74,7 +75,6 @@
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "^2.10.0",
     "@types/bcryptjs": "^2.4.6",
-    "cross-env": "^7.0.3",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

@@ -60,9 +60,11 @@ function getBadgeColor(stageName?: string | null) {
 export function ChangeStageDialog({
   target,
   onOpenChange,
+  onStageChange,
 }: {
   target: ChangeStageTarget | null;
   onOpenChange: (open: boolean) => void;
+  onStageChange?: (stageId: string, stageName: string) => void;
 }) {
   const stages = useQuery(stagesQuery());
   const mutation = useChangeProspectStage();
@@ -100,6 +102,9 @@ export function ChangeStageDialog({
       stageName: targetObj?.name || "Stage Update",
       ...(trimmed ? { note: trimmed } : {}),
     });
+    if (onStageChange) {
+      onStageChange(stageId, targetObj?.name || "");
+    }
     onOpenChange(false);
   };
 
@@ -142,7 +147,14 @@ export function ChangeStageDialog({
             <Label htmlFor="stage" className="text-xs font-bold text-slate-700 dark:text-slate-300">
               New Stage
             </Label>
-            <Select value={stageId} onValueChange={setStageId}>
+            <Select
+              value={stageId}
+              onValueChange={(val) => {
+                setStageId(val);
+                const name = availableStages.find((s) => s.id === val)?.name ?? "";
+                onStageChange?.(val, name);
+              }}
+            >
               <SelectTrigger
                 id="stage"
                 className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"

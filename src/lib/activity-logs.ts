@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { runMySQLQuery } from "@/lib/mysql-api";
 
 export type EntityType =
   | "prospect"
@@ -36,40 +36,23 @@ export type ActivityLogFilters = {
   user_id?: string | "all" | undefined;
 };
 
-// Safe DB accessor wrapper
-const dynamicDb = supabase as unknown as {
-  from: (table: string) => {
-    select: (cols: string) => {
-      order: (
-        col: string,
-        opts?: { ascending?: boolean },
-      ) => Promise<{ data: unknown[]; error: unknown }>;
-    };
-  };
-  rpc: (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
-};
+function generateUUID(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
-// Activity Logs Dataset
-const demoActivityLogs: ActivityLog[] = [];
-
-/**
- * Reusable Logging Engine used across all 9 event categories:
- * - Prospect created/edited
- * - Stage changed
- * - Follow-up created/completed
- * - Opportunity created/won/lost
- * - Meeting scheduled
- * - SMS sent/failed
- * - Bill created/edited/cancelled
- * - Payment recorded
- * - User created/updated/deactivated
- */
 export async function logActivity(
   input: LogActivityInput,
   user?: { id?: string; email?: string } | null,
 ): Promise<ActivityLog> {
-  const now = new Date().toISOString();
-  const logId = `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const logId = generateUUID();
+  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
 
   const newLog: ActivityLog = {
     id: logId,
@@ -83,51 +66,290 @@ export async function logActivity(
   };
 
   try {
-    const { data, error } = await dynamicDb.rpc("log_crm_activity", {
-      p_user_id: user?.id || null,
-      p_user_name: user?.email || "Agent",
-      p_action: input.action,
-      p_entity_type: input.entity_type,
-      p_entity_id: input.entity_id || null,
-      p_metadata: input.metadata || {},
-    });
-
-    if (!error && data) {
-      newLog.id = String(data);
-    }
-  } catch {
-    // Fallback local logging
+    await runMySQLQuery(
+      `INSERT INTO \`activities\` (\`id\`, \`actor_id\`, \`prospect_id\`, \`activity_type\`, \`message\`, \`created_at\`)
+       VALUES (?, ?, ?, ?, ?, ?);`,
+      [
+        logId,
+        user?.id || null,
+        input.entity_type === "prospect" ? input.entity_id : null,
+        input.entity_type,
+        input.action,
+        now,
+      ],
+    );
+  } catch (err) {
+    console.warn("logActivity MySQL error:", err);
   }
 
-  demoActivityLogs.unshift(newLog);
   return newLog;
 }
 
 export async function fetchActivityLogs(filters: ActivityLogFilters = {}): Promise<ActivityLog[]> {
   try {
-    const { data, error } = await dynamicDb
-      .from("activity_logs")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const allLogs: ActivityLog[] = [];
 
-    if (error || !data || data.length === 0) {
-      return applyActivityFilters(demoActivityLogs, filters);
+    // 1. Fetch direct activities table
+    try {
+      const actRes = await runMySQLQuery<Record<string, unknown>[]>(
+        `SELECT 
+          a.id,
+          a.actor_id AS user_id,
+          COALESCE(u.name, u.email, 'Agent') AS user_name,
+          COALESCE(a.message, a.activity_type) AS action,
+          a.activity_type AS entity_type,
+          a.prospect_id AS entity_id,
+          p.contact_name AS prospect_name,
+          p.business_name,
+          p.phone,
+          a.created_at
+        FROM \`activities\` a
+        LEFT JOIN \`users\` u ON a.actor_id = u.id
+        LEFT JOIN \`prospects\` p ON a.prospect_id = p.id
+        ORDER BY a.created_at DESC
+        LIMIT 100;`,
+      );
+      if (actRes.success && Array.isArray(actRes.data)) {
+        for (const r of actRes.data) {
+          allLogs.push({
+            id: String(r["id"]),
+            user_id: (r["user_id"] as string) || null,
+            user_name: String(r["user_name"] || "Agent"),
+            action: String(r["action"] || "Activity Logged"),
+            entity_type: String(r["entity_type"] || "general"),
+            entity_id: (r["entity_id"] as string) || null,
+            metadata_json: {
+              prospect_name: r["prospect_name"] || undefined,
+              business_name: r["business_name"] || undefined,
+              phone: r["phone"] || undefined,
+              message: r["action"] || undefined,
+              source_table: "activities",
+            },
+            created_at: String(r["created_at"] || new Date().toISOString()),
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("fetchActivityLogs activities query error:", err);
     }
 
-    const mapped: ActivityLog[] = (data as Record<string, unknown>[]).map((log) => ({
-      id: String(log["id"]),
-      user_id: (log["user_id"] as string) || null,
-      user_name: String(log["user_name"] || "Agent"),
-      action: String(log["action"] || "Action"),
-      entity_type: String(log["entity_type"] || "general"),
-      entity_id: (log["entity_id"] as string) || null,
-      metadata_json: (log["metadata_json"] as Record<string, unknown>) || {},
-      created_at: String(log["created_at"] || new Date().toISOString()),
-    }));
+    // 2. Fetch stage transitions from prospect_stage_history
+    try {
+      const stageRes = await runMySQLQuery<Record<string, unknown>[]>(
+        `SELECT 
+          sh.id,
+          sh.changed_by AS user_id,
+          COALESCE(u.name, 'Agent') AS user_name,
+          COALESCE(s_to.name, 'New Stage') AS to_stage_name,
+          COALESCE(s_from.name, 'Previous Stage') AS from_stage_name,
+          sh.notes AS note,
+          sh.prospect_id AS entity_id,
+          p.contact_name AS prospect_name,
+          p.business_name,
+          p.phone,
+          sh.created_at
+        FROM \`prospect_stage_history\` sh
+        LEFT JOIN \`users\` u ON sh.changed_by = u.id
+        LEFT JOIN \`stages\` s_from ON sh.from_stage_id = s_from.id
+        LEFT JOIN \`stages\` s_to ON sh.to_stage_id = s_to.id
+        LEFT JOIN \`prospects\` p ON sh.prospect_id = p.id
+        ORDER BY sh.created_at DESC
+        LIMIT 50;`,
+      );
+      if (stageRes.success && Array.isArray(stageRes.data)) {
+        for (const r of stageRes.data) {
+          const toStage = String(r["to_stage_name"] || "Stage");
+          const fromStage = String(r["from_stage_name"] || "Previous");
+          const noteText = r["note"] ? ` - ${r["note"]}` : "";
+          allLogs.push({
+            id: `sh_${r["id"]}`,
+            user_id: (r["user_id"] as string) || null,
+            user_name: String(r["user_name"] || "Agent"),
+            action: `Stage transitioned: ${fromStage} → ${toStage}${noteText}`,
+            entity_type: "stage",
+            entity_id: (r["entity_id"] as string) || null,
+            metadata_json: {
+              prospect_name: r["prospect_name"] || undefined,
+              business_name: r["business_name"] || undefined,
+              phone: r["phone"] || undefined,
+              from_stage: fromStage,
+              to_stage: toStage,
+              note: r["note"] || undefined,
+              source_table: "prospect_stage_history",
+            },
+            created_at: String(r["created_at"] || new Date().toISOString()),
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("fetchActivityLogs stage history query error:", err);
+    }
 
-    return applyActivityFilters(mapped, filters);
-  } catch {
-    return applyActivityFilters(demoActivityLogs, filters);
+    // 3. Fetch meetings
+    try {
+      const meetRes = await runMySQLQuery<Record<string, unknown>[]>(
+        `SELECT 
+          m.id,
+          m.assigned_user_id AS user_id,
+          COALESCE(u.name, 'Agent') AS user_name,
+          m.title,
+          m.status AS meeting_status,
+          m.meeting_type,
+          m.meeting_date,
+          m.meeting_time,
+          m.location,
+          m.notes,
+          m.prospect_id AS entity_id,
+          p.contact_name AS prospect_name,
+          p.business_name,
+          p.phone,
+          m.created_at
+        FROM \`meetings\` m
+        LEFT JOIN \`users\` u ON m.assigned_user_id = u.id
+        LEFT JOIN \`prospects\` p ON m.prospect_id = p.id
+        ORDER BY m.created_at DESC
+        LIMIT 50;`,
+      );
+      if (meetRes.success && Array.isArray(meetRes.data)) {
+        for (const r of meetRes.data) {
+          allLogs.push({
+            id: `mt_${r["id"]}`,
+            user_id: (r["user_id"] as string) || null,
+            user_name: String(r["user_name"] || "Agent"),
+            action: `Meeting ${r["meeting_status"] || "Scheduled"}: ${r["title"] || "Client Meeting"} on ${r["meeting_date"] || "TBD"}`,
+            entity_type: "meeting",
+            entity_id: (r["entity_id"] as string) || null,
+            metadata_json: {
+              prospect_name: r["prospect_name"] || undefined,
+              business_name: r["business_name"] || undefined,
+              phone: r["phone"] || undefined,
+              meeting_type: r["meeting_type"] || undefined,
+              meeting_date: r["meeting_date"] || undefined,
+              meeting_time: r["meeting_time"] || undefined,
+              location: r["location"] || undefined,
+              notes: r["notes"] || undefined,
+              source_table: "meetings",
+            },
+            created_at: String(r["created_at"] || new Date().toISOString()),
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("fetchActivityLogs meetings query error:", err);
+    }
+
+    // 4. Fetch invoices
+    try {
+      const invRes = await runMySQLQuery<Record<string, unknown>[]>(
+        `SELECT 
+          i.id,
+          i.created_by AS user_id,
+          COALESCE(u.name, 'Agent') AS user_name,
+          i.invoice_number,
+          i.total_amount,
+          i.due_amount,
+          i.status AS invoice_status,
+          i.description,
+          i.bill_date,
+          i.due_date,
+          i.prospect_id AS entity_id,
+          p.contact_name AS prospect_name,
+          p.business_name,
+          p.phone,
+          i.created_at
+        FROM \`invoices\` i
+        LEFT JOIN \`users\` u ON i.created_by = u.id
+        LEFT JOIN \`prospects\` p ON i.prospect_id = p.id
+        ORDER BY i.created_at DESC
+        LIMIT 50;`,
+      );
+      if (invRes.success && Array.isArray(invRes.data)) {
+        for (const r of invRes.data) {
+          allLogs.push({
+            id: `inv_${r["id"]}`,
+            user_id: (r["user_id"] as string) || null,
+            user_name: String(r["user_name"] || "Agent"),
+            action: `Invoice ${r["invoice_number"] || ""} generated (৳${r["total_amount"] || 0}) - ${r["description"] || "Service"}`,
+            entity_type: "invoice",
+            entity_id: (r["entity_id"] as string) || null,
+            metadata_json: {
+              prospect_name: r["prospect_name"] || undefined,
+              business_name: r["business_name"] || undefined,
+              phone: r["phone"] || undefined,
+              invoice_number: r["invoice_number"] || undefined,
+              total_amount: r["total_amount"] || 0,
+              due_amount: r["due_amount"] || 0,
+              status: r["invoice_status"] || "Pending",
+              bill_date: r["bill_date"] || undefined,
+              source_table: "invoices",
+            },
+            created_at: String(r["created_at"] || new Date().toISOString()),
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("fetchActivityLogs invoices query error:", err);
+    }
+
+    // 5. Fetch payments
+    try {
+      const payRes = await runMySQLQuery<Record<string, unknown>[]>(
+        `SELECT 
+          py.id,
+          py.recorded_by AS user_id,
+          COALESCE(u.name, 'Agent') AS user_name,
+          py.amount,
+          py.payment_method,
+          py.transaction_reference,
+          py.payment_date,
+          py.notes,
+          inv.prospect_id AS entity_id,
+          p.contact_name AS prospect_name,
+          p.business_name,
+          p.phone,
+          py.created_at
+        FROM \`payments\` py
+        LEFT JOIN \`users\` u ON py.recorded_by = u.id
+        LEFT JOIN \`invoices\` inv ON py.invoice_id = inv.id
+        LEFT JOIN \`prospects\` p ON inv.prospect_id = p.id
+        ORDER BY py.created_at DESC
+        LIMIT 50;`,
+      );
+      if (payRes.success && Array.isArray(payRes.data)) {
+        for (const r of payRes.data) {
+          allLogs.push({
+            id: `pay_${r["id"]}`,
+            user_id: (r["user_id"] as string) || null,
+            user_name: String(r["user_name"] || "Agent"),
+            action: `Payment of ৳${r["amount"] || 0} received via ${r["payment_method"] || "Bank Transfer"}`,
+            entity_type: "payment",
+            entity_id: (r["entity_id"] as string) || null,
+            metadata_json: {
+              prospect_name: r["prospect_name"] || undefined,
+              business_name: r["business_name"] || undefined,
+              phone: r["phone"] || undefined,
+              amount: r["amount"] || 0,
+              payment_method: r["payment_method"] || undefined,
+              transaction_reference: r["transaction_reference"] || undefined,
+              payment_date: r["payment_date"] || undefined,
+              notes: r["notes"] || undefined,
+              source_table: "payments",
+            },
+            created_at: String(r["created_at"] || new Date().toISOString()),
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("fetchActivityLogs payments query error:", err);
+    }
+
+    // Sort all aggregated logs by created_at descending
+    allLogs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    return applyActivityFilters(allLogs, filters);
+  } catch (err) {
+    console.warn("fetchActivityLogs general error:", err);
+    return [];
   }
 }
 
@@ -136,7 +358,12 @@ function applyActivityFilters(list: ActivityLog[], filters: ActivityLogFilters):
 
   if (filters.entity_type && filters.entity_type !== "all") {
     const et = filters.entity_type.toLowerCase();
-    result = result.filter((log) => log.entity_type.toLowerCase() === et);
+    result = result.filter((log) => {
+      const currentEt = log.entity_type.toLowerCase();
+      if (et === "followup" && (currentEt === "followup" || currentEt === "meeting")) return true;
+      if (et === "invoice" && (currentEt === "invoice" || currentEt === "billing")) return true;
+      return currentEt === et;
+    });
   }
 
   if (filters.user_id && filters.user_id !== "all") {

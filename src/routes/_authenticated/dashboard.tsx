@@ -20,6 +20,7 @@ import {
   dashboardMetricsQuery,
   formatCurrency,
   recentProspectsQuery,
+  getProspectBucket,
   type RecentProspect,
 } from "@/lib/dashboard";
 import { cn } from "@/lib/utils";
@@ -74,8 +75,7 @@ function Dashboard() {
       labelColor: "text-slate-900 dark:text-teal-200 font-bold",
       badgeBg: "bg-[#67B239] text-white font-bold shadow-xs",
       items: (prospects.data ?? []).filter(
-        (p: RecentProspect) =>
-          (p.stage_name || "").toLowerCase() !== "sales won" && p.stage_group !== "won",
+        (p: RecentProspect) => getProspectBucket(p) === "new_prospects",
       ),
     },
     {
@@ -87,8 +87,7 @@ function Dashboard() {
       labelColor: "text-slate-900 dark:text-emerald-200 font-bold",
       badgeBg: "bg-emerald-600 text-white font-bold shadow-xs",
       items: (prospects.data ?? []).filter(
-        (p: RecentProspect) =>
-          p.stage_group === "won" || (p.stage_name || "").toLowerCase().includes("won"),
+        (p: RecentProspect) => getProspectBucket(p) === "won_sales",
       ),
     },
     {
@@ -99,8 +98,7 @@ function Dashboard() {
       labelColor: "text-slate-900 dark:text-rose-200 font-bold",
       badgeBg: "bg-orange-500 text-white font-bold shadow-xs",
       items: (prospects.data ?? []).filter(
-        (p: RecentProspect) =>
-          p.stage_group === "in_progress" || (p.stage_name || "").toLowerCase().includes("follow"),
+        (p: RecentProspect) => getProspectBucket(p) === "pending_tasks",
       ),
     },
     {
@@ -112,11 +110,7 @@ function Dashboard() {
       labelColor: "text-slate-900 dark:text-amber-200 font-bold",
       badgeBg: "bg-amber-500 text-white font-bold shadow-xs",
       items: (prospects.data ?? []).filter(
-        (p: RecentProspect) =>
-          (p.stage_name || "").toLowerCase().includes("follow") ||
-          p.stage_group === "in_progress" ||
-          p.stage_group === "new" ||
-          (p.stage_name || "").toLowerCase() !== "sales won",
+        (p: RecentProspect) => getProspectBucket(p) === "follow_up_stage",
       ),
     },
   ];
@@ -126,7 +120,7 @@ function Dashboard() {
       <DashboardGreetingBanner />
 
       {/* Row 1: Primary Activity Metrics (5 Column Grid - Matching Pastel Fills) */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         <StatCard
           label="Total Prospects"
           value={String(m?.total_prospects ?? 0)}
@@ -166,7 +160,7 @@ function Dashboard() {
 
       <section className="mt-4">
         {prospects.isPending ? (
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {[0, 1, 2, 3, 4].map((i) => (
               <div key={i} className="rounded-xl border bg-card text-card-foreground p-5 shadow-xs">
                 <Skeleton className="h-4 w-24" />
@@ -178,7 +172,7 @@ function Dashboard() {
             ))}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {categoryLists.map((cat) => (
               <div
                 key={cat.key}

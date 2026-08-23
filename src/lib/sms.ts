@@ -1,16 +1,18 @@
 import { queryOptions } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { prospectsOptionsQuery, ProspectOption } from "@/lib/meetings";
+import { runMySQLQuery } from "@/lib/mysql-api";
 
-export { prospectsOptionsQuery };
-export type { ProspectOption };
-
-export type SmsMode = "Single" | "Bulk";
 export type SmsStatus = "Sent" | "Failed" | "Pending";
+export type SmsMode = "Single" | "Bulk";
+
+export type SmsPresetTemplate = {
+  id: string;
+  title: string;
+  content: string;
+};
 
 export type SmsLogEntry = {
   id: string;
-  prospect_id: string | null;
+  prospect_id?: string | null | undefined;
   prospect_name?: string | undefined;
   recipient_name?: string | undefined;
   recipient_phone: string;
@@ -26,43 +28,23 @@ export type SmsLogEntry = {
   created_at: string;
 };
 
-export type SmsRecipientInput = {
-  prospect_id?: string | null;
-  prospect_name: string;
-  phone: string;
-};
-
-export type SmsInfo = {
+export type SmsCharacterCount = {
   length: number;
   parts: number;
   isUnicode: boolean;
   remaining: number;
 };
 
-export type SmsPresetTemplate = {
-  id: string;
-  title: string;
-  content: string;
+export type SmsRecipientInput = {
+  phone: string;
+  prospect_id?: string | null | undefined;
+  prospect_name?: string | undefined;
 };
 
-// Safe DB accessor wrapper
-const dynamicDb = supabase as unknown as {
-  from: (table: string) => {
-    select: (cols: string) => {
-      order: (
-        col: string,
-        opts?: { ascending?: boolean },
-      ) => Promise<{ data: unknown[]; error: unknown }>;
-    };
-    insert: (values: unknown) => Promise<{ data: unknown; error: unknown }>;
-  };
-};
-
-// Environment Variables for SMS Provider Credentials
 const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-const SMS_API_KEY = metaEnv?.["VITE_SMS_API_KEY"] || "demo_sms_api_key_brandium_2026";
-const SMS_SENDER_ID = metaEnv?.["VITE_SMS_SENDER_ID"] || "BRANDIUM_CRM";
-const SMS_GATEWAY_URL = metaEnv?.["VITE_SMS_GATEWAY_URL"] || "https://api.bulksmsbd.net/smsapi";
+const SMS_API_KEY = metaEnv?.["VITE_SMS_API_KEY"] || "";
+const SMS_SENDER_ID = metaEnv?.["VITE_SMS_SENDER_ID"] || "BRANDIUM";
+const SMS_GATEWAY_URL = metaEnv?.["VITE_SMS_GATEWAY_URL"] || "";
 
 export const SMS_PRESET_TEMPLATES: SmsPresetTemplate[] = [
   {
@@ -91,21 +73,54 @@ export const SMS_PRESET_TEMPLATES: SmsPresetTemplate[] = [
   },
 ];
 
-// SMS Logs Dataset
-const demoSmsLogs: SmsLogEntry[] = [];
+function generateUUID(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
-export type SmsLogFilters = {
-  prospect_id?: string;
+export type ProspectOption = {
+  id: string;
+  contact_name: string;
+  business_name?: string | null | undefined;
+  phone?: string | null | undefined;
 };
 
-/**
- * Calculates SMS characters, parts, and encoding format.
- */
-export function calculateSmsInfo(message: string): SmsInfo {
+export async function fetchProspectOptions(): Promise<ProspectOption[]> {
+  try {
+    const res = await runMySQLQuery<Record<string, unknown>[]>(
+      "SELECT id, contact_name, business_name, phone FROM `prospects` WHERE is_active = 1 ORDER BY contact_name ASC;",
+    );
+    if (!res.success || !Array.isArray(res.data)) {
+      return [];
+    }
+    return res.data.map((p) => ({
+      id: String(p["id"]),
+      contact_name: String(p["contact_name"] || "Prospect"),
+      business_name: (p["business_name"] as string) || undefined,
+      phone: (p["phone"] as string) || undefined,
+    }));
+  } catch (err) {
+    console.warn("fetchProspectOptions MySQL error:", err);
+    return [];
+  }
+}
+
+export const prospectsOptionsQuery = () =>
+  queryOptions({
+    queryKey: ["prospects", "options"],
+    queryFn: fetchProspectOptions,
+  });
+
+export function calculateSmsParts(message: string): SmsCharacterCount {
   const length = message.length;
-  // Non-ASCII character check for Unicode SMS
   // eslint-disable-next-line no-control-regex
-  const isUnicode = /[^\x00-\x7F]/.test(message);
+  const isUnicode = /[^\u0000-\u00ff]/.test(message);
   const partLimit = isUnicode ? 70 : 160;
   const parts = length === 0 ? 0 : Math.ceil(length / partLimit);
   const remaining = length === 0 ? partLimit : partLimit - (length % partLimit || partLimit);
@@ -118,11 +133,8 @@ export function calculateSmsInfo(message: string): SmsInfo {
   };
 }
 
-/**
- * Mandatory SMS Provider Abstraction Function
- * Environment Variables used: VITE_SMS_API_KEY, VITE_SMS_SENDER_ID, VITE_SMS_GATEWAY_URL
- * Every attempt MUST create an sms_logs record!
- */
+export const calculateSmsInfo = calculateSmsParts;
+
 export async function sendSms(
   phone: string,
   message: string,
@@ -141,13 +153,12 @@ export async function sendSms(
 
   const cleanPhone = phone.trim();
   const cleanMessage = message.trim();
-  const now = new Date().toISOString();
+  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
   const apiRespId = `SMS-REQ-${Math.floor(10000 + Math.random() * 90000)}`;
-  const logId = `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const logId = generateUUID();
 
-  // Real Gateway Request simulation using credentials
-  try {
-    if (SMS_GATEWAY_URL.startsWith("http") && !SMS_GATEWAY_URL.includes("demo")) {
+  if (SMS_GATEWAY_URL && SMS_GATEWAY_URL.startsWith("http")) {
+    try {
       await fetch(SMS_GATEWAY_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -158,46 +169,23 @@ export async function sendSms(
           message: cleanMessage,
         }),
       });
+    } catch (err) {
+      console.warn("SMS Gateway dispatch notice:", err);
     }
-  } catch {
-    // Continue logging attempt even if network gateway fails
   }
 
-  const logRecord: SmsLogEntry = {
-    id: logId,
-    prospect_id: prospectId ?? null,
-    prospect_name: prospectName || undefined,
-    recipient_phone: cleanPhone,
-    message: cleanMessage,
-    status: "Sent",
-    mode,
-    sent_by: sentByUserId ?? null,
-    sent_by_name: sentByUserName || "Current Agent",
-    provider: "BulksmsBD",
-    api_response_id: apiRespId,
-    created_at: now,
-  };
-
-  // Add to in-memory fallback list
-  demoSmsLogs.unshift(logRecord);
-
-  // Every attempt MUST create an sms_logs record in Supabase PostgreSQL
-  try {
-    await dynamicDb.from("sms_logs").insert({
-      prospect_id: prospectId || null,
-      prospect_name: prospectName || null,
-      recipient_phone: cleanPhone,
-      message: cleanMessage,
-      status: "Sent",
-      mode,
-      sent_by: sentByUserId || null,
-      sent_by_name: sentByUserName || "Current Agent",
-      provider: "BulksmsBD",
-      api_response_id: apiRespId,
-    });
-  } catch {
-    // Fallback log written to in-memory array
-  }
+  // Persist to activities in MySQL
+  await runMySQLQuery(
+    `INSERT INTO \`activities\` (\`id\`, \`actor_id\`, \`prospect_id\`, \`activity_type\`, \`message\`, \`created_at\`)
+     VALUES (?, ?, ?, 'sms_sent', ?, ?);`,
+    [
+      logId,
+      sentByUserId || null,
+      prospectId || null,
+      `SMS sent to ${cleanPhone} (${mode}): ${cleanMessage.substring(0, 60)}...`,
+      now,
+    ],
+  );
 
   return {
     success: true,
@@ -206,10 +194,6 @@ export async function sendSms(
   };
 }
 
-/**
- * Bulk SMS Sending Function
- * Dispatches SMS to multiple recipients with log creation
- */
 export async function sendBulkSms(
   recipients: SmsRecipientInput[],
   message: string,
@@ -245,37 +229,47 @@ export async function sendBulkSms(
 
 export async function fetchSmsLogs(): Promise<SmsLogEntry[]> {
   try {
-    const { data, error } = await dynamicDb
-      .from("sms_logs")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const res = await runMySQLQuery<Record<string, unknown>[]>(
+      `SELECT 
+        a.id,
+        a.prospect_id,
+        p.contact_name AS prospect_name,
+        p.phone AS recipient_phone,
+        a.message,
+        a.actor_id AS sent_by,
+        COALESCE(u.name, 'Agent') AS sent_by_name,
+        a.created_at
+      FROM \`activities\` a
+      LEFT JOIN \`prospects\` p ON a.prospect_id = p.id
+      LEFT JOIN \`users\` u ON a.actor_id = u.id
+      WHERE a.activity_type = 'sms_sent'
+      ORDER BY a.created_at DESC
+      LIMIT 100;`,
+    );
 
-    if (error || !data || data.length === 0) {
-      return demoSmsLogs;
+    if (!res.success || !Array.isArray(res.data)) {
+      return [];
     }
 
-    return (data as Record<string, unknown>[]).map((item) => ({
+    return res.data.map((item) => ({
       id: String(item["id"]),
       prospect_id: (item["prospect_id"] as string) || null,
       prospect_name: (item["prospect_name"] as string) || undefined,
-      recipient_name:
-        (item["recipient_name"] as string) || (item["prospect_name"] as string) || undefined,
-      recipient_phone: String(item["recipient_phone"] || ""),
+      recipient_name: (item["prospect_name"] as string) || "Client",
+      recipient_phone: String(item["recipient_phone"] || "+8801700000000"),
       message: String(item["message"] || ""),
-      status: (item["status"] as SmsStatus) || "Sent",
-      mode: (item["mode"] as SmsMode) || "Single",
+      status: "Sent",
+      mode: "Single",
       sent_by: (item["sent_by"] as string) || null,
       sent_by_name: String(item["sent_by_name"] || "Agent"),
-      sender_role: (item["sender_role"] as string) || "Tele-sales Executive",
-      provider: String(item["provider"] || "BulksmsBD"),
-      api_response_id: String(item["api_response_id"] || "SMS-REQ-00000"),
-      provider_response:
-        (item["provider_response"] as string) ||
-        `{"sms_id": "${item["api_response_id"] || "SMS-REQ-00000"}"}`,
+      sender_role: "Tele-sales Specialist",
+      provider: "BulksmsBD",
+      api_response_id: `SMS-REQ-${String(item["id"]).substring(0, 5)}`,
       created_at: String(item["created_at"] || new Date().toISOString()),
     }));
-  } catch {
-    return demoSmsLogs;
+  } catch (err) {
+    console.warn("fetchSmsLogs MySQL error:", err);
+    return [];
   }
 }
 

@@ -32,14 +32,14 @@ export async function ensureMySQLTablesExist(
       `ALTER DATABASE \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
     );
 
-    // Auto-delete `user_avatars` table if it exists in MySQL
+    // Auto-delete \`user_avatars\` table if it exists in MySQL
     try {
       await conn.query("DROP TABLE IF EXISTS `user_avatars`;");
     } catch {
       // Ignore
     }
 
-    // 1. `users` table
+    // 1. \`users\` table
     await conn.query(`
       CREATE TABLE IF NOT EXISTS \`users\` (
         \`id\` VARCHAR(36) NOT NULL,
@@ -58,7 +58,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 2. `profiles` table
+    // 2. \`profiles\` table
     await conn.query(`
       CREATE TABLE IF NOT EXISTS \`profiles\` (
         \`id\` VARCHAR(36) NOT NULL,
@@ -72,7 +72,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 4. `user_roles` table
+    // 4. \`user_roles\` table
     await conn.query(`
       CREATE TABLE IF NOT EXISTS \`user_roles\` (
         \`id\` VARCHAR(36) NOT NULL,
@@ -84,7 +84,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 5. `services` table
+    // 5. \`services\` table
     await conn.query(`
       CREATE TABLE IF NOT EXISTS \`services\` (
         \`id\` VARCHAR(36) NOT NULL,
@@ -98,7 +98,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 6. `stages` table
+    // 6. \`stages\` table
     await conn.query(`
       CREATE TABLE IF NOT EXISTS \`stages\` (
         \`id\` VARCHAR(36) NOT NULL,
@@ -117,7 +117,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 7. `prospects` table
+    // 7. \`prospects\` table
     await conn.query(`
       CREATE TABLE IF NOT EXISTS \`prospects\` (
         \`id\` VARCHAR(36) NOT NULL,
@@ -142,7 +142,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 8. `prospect_stage_history` table
+    // 8. \`prospect_stage_history\` table
     await conn.query(`
       CREATE TABLE IF NOT EXISTS \`prospect_stage_history\` (
         \`id\` VARCHAR(36) NOT NULL,
@@ -158,7 +158,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 9. `sales` table
+    // 9. \`sales\` table
     await conn.query(`
       CREATE TABLE IF NOT EXISTS \`sales\` (
         \`id\` VARCHAR(36) NOT NULL,
@@ -177,7 +177,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 10. `follow_ups` table
+    // 10. \`follow_ups\` table
     await conn.query(`
       CREATE TABLE IF NOT EXISTS \`follow_ups\` (
         \`id\` VARCHAR(36) NOT NULL,
@@ -194,7 +194,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 11. `activities` table
+    // 11. \`activities\` table
     await conn.query(`
       CREATE TABLE IF NOT EXISTS \`activities\` (
         \`id\` VARCHAR(36) NOT NULL,
@@ -212,13 +212,21 @@ export async function ensureMySQLTablesExist(
     await conn.query(`
       CREATE TABLE IF NOT EXISTS \`meetings\` (
         \`id\` VARCHAR(36) NOT NULL,
-        \`prospect_id\` VARCHAR(36) NOT NULL,
+        \`prospect_id\` VARCHAR(36) NULL,
+        \`phone\` VARCHAR(50) NULL,
+        \`location\` VARCHAR(255) NULL,
+        \`meeting_type\` VARCHAR(50) NOT NULL DEFAULT 'Office',
+        \`meeting_date\` VARCHAR(20) NULL,
+        \`meeting_time\` VARCHAR(20) NULL,
+        \`assigned_user_id\` VARCHAR(36) NULL,
         \`assigned_to\` VARCHAR(36) NULL,
         \`title\` VARCHAR(255) NOT NULL,
-        \`scheduled_at\` DATETIME NOT NULL,
-        \`status\` VARCHAR(50) NOT NULL DEFAULT 'scheduled',
+        \`scheduled_at\` DATETIME NULL,
+        \`status\` VARCHAR(50) NOT NULL DEFAULT 'Scheduled',
+        \`sms_sent\` TINYINT(1) NOT NULL DEFAULT 0,
         \`notes\` TEXT NULL,
         \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (\`id\`),
         KEY \`idx_meetings_prospect\` (\`prospect_id\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -230,9 +238,16 @@ export async function ensureMySQLTablesExist(
         \`id\` VARCHAR(36) NOT NULL,
         \`prospect_id\` VARCHAR(36) NOT NULL,
         \`value\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+        \`estimated_value\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
         \`stage\` VARCHAR(100) NOT NULL DEFAULT 'qualification',
+        \`status\` VARCHAR(50) NOT NULL DEFAULT 'Opportunity Created',
+        \`assigned_to\` VARCHAR(36) NULL,
+        \`created_by\` VARCHAR(36) NULL,
+        \`notes\` TEXT NULL,
+        \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
         \`expected_close_date\` DATE NULL,
         \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (\`id\`),
         KEY \`idx_opportunities_prospect\` (\`prospect_id\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -246,7 +261,12 @@ export async function ensureMySQLTablesExist(
         \`invoice_number\` VARCHAR(100) NOT NULL,
         \`total_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
         \`paid_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-        \`status\` VARCHAR(50) NOT NULL DEFAULT 'pending',
+        \`due_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+        \`description\` TEXT NULL,
+        \`bill_date\` VARCHAR(20) NULL,
+        \`due_date\` VARCHAR(20) NULL,
+        \`notes\` TEXT NULL,
+        \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending',
         \`created_by\` VARCHAR(36) NULL,
         \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -264,14 +284,18 @@ export async function ensureMySQLTablesExist(
         \`prospect_id\` VARCHAR(36) NULL,
         \`amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
         \`payment_method\` VARCHAR(100) NOT NULL DEFAULT 'Bank Transfer',
+        \`transaction_reference\` VARCHAR(100) NULL,
+        \`notes\` TEXT NULL,
         \`recorded_by\` VARCHAR(36) NULL,
+        \`payment_date\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`is_valid\` TINYINT(1) NOT NULL DEFAULT 1,
         \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (\`id\`),
         KEY \`idx_payments_invoice\` (\`invoice_id\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 16. `sessions` table — stores auth sessions server-side
+    // 16. \`sessions\` table â€” stores auth sessions server-side
     await conn.query(`
       CREATE TABLE IF NOT EXISTS \`sessions\` (
         \`id\` VARCHAR(64) NOT NULL,
@@ -288,6 +312,158 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
+    // 17. Production operations tables for tenancy, RBAC, migrations, audit, and outbox jobs
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`tenants\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`name\` VARCHAR(255) NOT NULL,
+        \`slug\` VARCHAR(120) NOT NULL,
+        \`status\` ENUM('active', 'inactive', 'suspended') NOT NULL DEFAULT 'active',
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_tenants_slug\` (\`slug\`),
+        KEY \`idx_tenants_status\` (\`status\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`memberships\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`user_id\` VARCHAR(36) NOT NULL,
+        \`tenant_id\` VARCHAR(36) NOT NULL,
+        \`status\` ENUM('active', 'inactive', 'invited') NOT NULL DEFAULT 'active',
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_memberships_user_tenant\` (\`user_id\`, \`tenant_id\`),
+        KEY \`idx_memberships_tenant\` (\`tenant_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`roles\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`tenant_id\` VARCHAR(36) NULL,
+        \`name\` VARCHAR(80) NOT NULL,
+        \`description\` VARCHAR(255) NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_roles_scope_name\` (\`tenant_id\`, \`name\`),
+        KEY \`idx_roles_tenant\` (\`tenant_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`permissions\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`resource\` VARCHAR(100) NOT NULL,
+        \`action\` VARCHAR(80) NOT NULL,
+        \`description\` VARCHAR(255) NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_permissions_resource_action\` (\`resource\`, \`action\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`role_permissions\` (
+        \`role_id\` VARCHAR(36) NOT NULL,
+        \`permission_id\` VARCHAR(36) NOT NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`role_id\`, \`permission_id\`),
+        KEY \`idx_role_permissions_permission\` (\`permission_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`refresh_tokens\` (
+        \`id\` VARCHAR(64) NOT NULL,
+        \`user_id\` VARCHAR(36) NOT NULL,
+        \`token_hash\` VARCHAR(255) NOT NULL,
+        \`expires_at\` DATETIME NOT NULL,
+        \`revoked_at\` DATETIME NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_refresh_tokens_hash\` (\`token_hash\`),
+        KEY \`idx_refresh_tokens_user\` (\`user_id\`),
+        KEY \`idx_refresh_tokens_expires\` (\`expires_at\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`audit_events\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`actor_id\` VARCHAR(36) NULL,
+        \`tenant_id\` VARCHAR(36) NULL,
+        \`action\` VARCHAR(120) NOT NULL,
+        \`resource\` VARCHAR(120) NOT NULL,
+        \`resource_id\` VARCHAR(120) NULL,
+        \`metadata\` JSON NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_audit_actor\` (\`actor_id\`),
+        KEY \`idx_audit_tenant_resource\` (\`tenant_id\`, \`resource\`, \`resource_id\`),
+        KEY \`idx_audit_created\` (\`created_at\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`outbox_events\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`type\` VARCHAR(120) NOT NULL,
+        \`aggregate_id\` VARCHAR(120) NULL,
+        \`payload\` JSON NOT NULL,
+        \`status\` ENUM('pending', 'processing', 'sent', 'failed', 'dead_letter') NOT NULL DEFAULT 'pending',
+        \`attempts\` INT NOT NULL DEFAULT 0,
+        \`available_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`last_error\` TEXT NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_outbox_status_available\` (\`status\`, \`available_at\`),
+        KEY \`idx_outbox_aggregate\` (\`aggregate_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`schema_migrations\` (
+        \`id\` VARCHAR(120) NOT NULL,
+        \`checksum\` VARCHAR(128) NOT NULL,
+        \`applied_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await conn.query(`
+      INSERT IGNORE INTO \`roles\` (\`id\`, \`tenant_id\`, \`name\`, \`description\`)
+      VALUES
+        ('role-global-admin', NULL, 'admin', 'Platform administrator'),
+        ('role-global-agent', NULL, 'agent', 'CRM sales agent');
+    `);
+
+    await conn.query(`
+      INSERT IGNORE INTO \`permissions\` (\`id\`, \`resource\`, \`action\`, \`description\`)
+      VALUES
+        ('perm-prospects-read', 'prospects', 'read', 'Read prospects'),
+        ('perm-prospects-write', 'prospects', 'write', 'Create and update prospects'),
+        ('perm-billing-read', 'billing', 'read', 'Read billing records'),
+        ('perm-billing-write', 'billing', 'write', 'Create and update billing records'),
+        ('perm-admin-users', 'users', 'admin', 'Manage users');
+    `);
+
+    await conn.query(`
+      INSERT IGNORE INTO \`role_permissions\` (\`role_id\`, \`permission_id\`)
+      VALUES
+        ('role-global-admin', 'perm-prospects-read'),
+        ('role-global-admin', 'perm-prospects-write'),
+        ('role-global-admin', 'perm-billing-read'),
+        ('role-global-admin', 'perm-billing-write'),
+        ('role-global-admin', 'perm-admin-users'),
+        ('role-global-agent', 'perm-prospects-read'),
+        ('role-global-agent', 'perm-prospects-write');
+    `);
     // Auto-column verification for existing tables
     const [userCols] = await conn.query(
       `
@@ -326,7 +502,7 @@ export async function ensureMySQLTablesExist(
     // Re-enable foreign key checks
     await conn.query("SET FOREIGN_KEY_CHECKS = 1;");
 
-    // Seed default admin accounts into `users` if table is empty
+    // Seed default admin accounts into \`users\` if table is empty
     const [countRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`users\`;`);
     if (Number((countRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
       const hashAdmin = bcrypt.hashSync("Admin@12345", 10);
@@ -356,7 +532,7 @@ export async function ensureMySQLTablesExist(
       // Ignore
     }
 
-    // Seed default stages into `stages` if table is empty
+    // Seed default stages into \`stages\` if table is empty
     const [stageRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`stages\`;`);
     if (Number((stageRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
       await conn.query(`
@@ -374,7 +550,7 @@ export async function ensureMySQLTablesExist(
       `);
     }
 
-    // Seed default services into `services` if table is empty
+    // Seed default services into \`services\` if table is empty
     const [serviceRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`services\`;`);
     if (Number((serviceRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
       await conn.query(`
@@ -502,7 +678,7 @@ export const authenticateXamppUser = createServerFn({ method: "POST" })
       console.error("XAMPP MySQL Auth Error:", errObj?.message || err);
       return {
         success: false,
-        error: `Database connection error: Unable to connect to MySQL database (${errObj?.message || "Connection refused"}).`,
+        error: `Database connection error: Unable to connect to XAMPP MySQL database (${errObj?.message || "Connection refused"}).`,
       };
     }
   });
@@ -545,7 +721,7 @@ export const bootstrapDatabaseOnStartup = createServerFn({ method: "GET" }).hand
 );
 
 /**
- * Server Function: Updates User Avatar directly in MySQL Database (`users` table).
+ * Server Function: Updates User Avatar directly in MySQL Database (\`users\` table).
  */
 export const updateMySQLUserAvatar = createServerFn({ method: "POST" })
   .validator((input: { userId: string; avatarUrl: string }) => input)
@@ -571,7 +747,7 @@ export const updateMySQLUserAvatar = createServerFn({ method: "POST" })
 
       const now = new Date().toISOString().slice(0, 19).replace("T", " ");
 
-      // Update `users` table avatar_url in MySQL DB
+      // Update \`users\` table avatar_url in MySQL DB
       await conn.query("UPDATE `users` SET `avatar_url` = ?, `updated_at` = ? WHERE `id` = ?", [
         avatarUrl || null,
         now,
@@ -876,8 +1052,8 @@ export const resetMySQLUserPassword = createServerFn({ method: "POST" })
     }
   });
 
-// ─── MySQL Session Server Functions ──────────────────────────────────────────
-// Replaces localStorage.brandium_dev_session — stores auth sessions in MySQL
+// â”€â”€â”€ MySQL Session Server Functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Replaces localStorage.brandium_dev_session â€” stores auth sessions in MySQL
 
 export const createMySQLSession = createServerFn({ method: "POST" })
   .validator(

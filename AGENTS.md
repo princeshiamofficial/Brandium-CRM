@@ -4,8 +4,8 @@
 
 > [!IMPORTANT]
 > This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
-> published git history — force pushing, or rebasing/amending/squashing commits
-> that are already pushed — as it rewrites history on Lovable's side and the
+> published git history â€” force pushing, or rebasing/amending/squashing commits
+> that are already pushed â€” as it rewrites history on Lovable's side and the
 > user will likely lose their project history.
 >
 > Commits you push to the connected branch sync back to Lovable and show up in
@@ -23,8 +23,8 @@ Welcome to the **Brandium CRM** repository.
 
 ## Universal AI Engineering Framework
 
-- **Mission**: Build production-ready software using an inspect → plan →
-  implement → verify workflow.
+- **Mission**: Build production-ready software using an inspect â†’ plan â†’
+  implement â†’ verify workflow.
 - **Core Rules**:
   - Never claim success without empirical evidence.
   - Prefer maintainable, secure, scalable solutions.
@@ -43,7 +43,7 @@ Welcome to the **Brandium CRM** repository.
   smooth transitions, and curated color palettes.
 - **Banglish Summary**: Provide a concise summary of the work performed in
   **Banglish** (Bengali written in Latin/English script) after completing
-  each task. **NEVER use direct Bengali Unicode characters (e.g., বাংলা)** —
+  each task. **NEVER use direct Bengali Unicode characters (e.g., à¦¬à¦¾à¦‚à¦²à¦¾)** â€”
   always write Bengali phonetically in English letters only (e.g., "Ami kaj
   shesh korlam").
 - **Summary of Actions**: After the Banglish summary, provide a clear,
@@ -117,8 +117,6 @@ Welcome to the **Brandium CRM** repository.
     standard parenthetical syntax `max-h-(--name)`.
   - Replace explicit data attribute brackets like `data-[disabled]:...` with
     concise pseudo-variant syntax like `data-disabled:...`.
-  - Replace legacy gradient syntax like `bg-gradient-to-*` with Tailwind CSS
-    v4 standard `bg-linear-to-*`.
 
 - **Dialog & Modal Sub-component Import Completeness**:
   - Whenever rendering nested modal components (such as `DialogHeader`,
@@ -134,8 +132,8 @@ Welcome to the **Brandium CRM** repository.
     executes queries inside Node.js and persists directly into local MySQL
     database `brandium_crm` visible in phpMyAdmin.
 
-- **TanStack Start Server Function Serializability (`createServerFn`)**:
-  - Server functions (`createServerFn`) require return types to be strictly serializable. Avoid returning `Record<string, unknown>[]` directly as `unknown` fails serialization constraints. Use explicit primitive record types like `Record<string, string | number | boolean | null>[]` or typed interface arrays.
+- **TanStack Start Server Function Serializability & Seroval Serialization**:
+  - Server functions (`createServerFn`) require return types to be strictly serializable. Avoid returning raw `Record<string, unknown>[]` or non-plain MySQL class instances (e.g. `ResultSetHeader`, `Date` objects, `Buffer`) directly as they cause `Seroval Error (specific: 1)`. Always sanitize rows into pure primitive dictionaries (`Record<string, string | number | boolean | null>`) and normalize non-array execution headers into plain `{ affectedRows, insertId }` objects.
 
 - **Pure Direct MySQL Database Persistence Policy**:
   - All data operations and entity mutations bypass client-side localStorage/mock stores completely and execute directly against the local MySQL database (`brandium_crm`) via Node.js `/api/mysql` endpoint and `createServerFn` server functions.
@@ -146,3 +144,22 @@ Welcome to the **Brandium CRM** repository.
 
 - **Exact Optional Property Types Compatibility (TS2379)**:
   - When assigning objects with possible undefined fields to interfaces under `exactOptionalPropertyTypes: true`, always declare property types explicitly as `string | undefined` rather than purely optional `string` to prevent assignment incompatibility.
+
+- **Raw SQL API Bridge Production Guardrail**:
+  - Never expose a browser-callable endpoint that executes arbitrary SQL in production. Keep legacy raw SQL compatibility behind an explicit local-only flag such as `ENABLE_DEV_SQL_API=true`, return redacted database errors to clients, and route production mutations through validated TanStack Start server functions with server-only `MYSQL_*` credentials.
+
+- **Dashboard Metric & Column List Filter Alignment**:
+  - Ensure the statistical counts calculated in `dashboardMetricsQuery` match the exact boolean filter predicates used in the dashboard column category lists (`categoryLists` in `dashboard.tsx`). Specifically, `follow_up_stage` must strictly match prospects with `stage_name` containing "follow" rather than broadly matching all non-won or new prospects, preventing mismatch between top KPI summary cards and bottom category columns.
+
+- **MySQL Table Schema Alignment & Automatic Column Migration**:
+  - Ensure all database tables (`meetings`, `invoices`, `opportunities`, `payments`, `services`, `activities`) contain all entity attributes (e.g. `phone`, `location`, `meeting_type`, `meeting_date`, `meeting_time`, `due_amount`, `transaction_reference`, `icon`) defined in TypeScript models. When creating or bootstrapping schema tables, include all current entity fields and run safe column additions (`ALTER TABLE tbl ADD COLUMN IF NOT EXISTS`) to prevent runtime `Unknown column 'x' in 'field list'` SQL errors during insert/update mutations.
+
+- **Vite Cloudflare Tunnel Host Blocking (`server.allowedHosts`)**:
+  - When port forwarding via Cloudflare Tunnel (`*.trycloudflare.com`), Vite dev server blocks untrusted HTTP `Host` headers by default. Always configure `server: { allowedHosts: true }` in `vite.config.ts` so external tunnel hostnames render without `Blocked request. This host is not allowed` errors. Also point `cloudflared` directly to IPv4 `http://127.0.0.1:<port>` to avoid IPv6 `[::1]` connection refusal issues.
+
+- **MySQL User Table Column Name Alignment (`users.name` vs `profiles.full_name`)**:
+  - In local MySQL database `brandium_crm`, the user name column in table `users` is `name` (not `full_name`), whereas in table `profiles` it is `full_name`. When joining queries with `users` and `profiles`, always use `COALESCE(prof.full_name, u.name, u.email)` to avoid `Unknown column 'u.full_name' in 'field list'` SQL errors.
+
+- **Stage Table Join Column Accuracy (`prospects.stage_id` vs non-existent `prospects.stage_name`)**:
+  - In table `prospects`, stage linkage is stored strictly in `stage_id` (not `stage_name`). Never reference `p.stage_name` in `SELECT` or `ON` clauses. Always join via `LEFT JOIN stages st ON (p.stage_id = st.id OR p.stage_id = REPLACE(st.id, '-', '_') OR p.stage_id = st.name)` and use `COALESCE(st.name, p.stage_id, 'Prospect') AS stage_name` to prevent `Unknown column 'p.stage_name' in 'field list'` SQL exceptions.
+
