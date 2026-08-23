@@ -1,0 +1,498 @@
+import { c as createServerFn } from "./createServerFn-CIHAFgYl.mjs";
+import { t as createSsrRpc } from "./createSsrRpc-Kxpm2tCO.mjs";
+import { t as bcryptjs_default } from "../_libs/bcryptjs.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/auth.functions-DgmNluhz.js
+/**
+* ERP-Style Enterprise Automatic Database Schema Bootstrapper.
+* Automatically checks and creates all missing tables & columns on connection.
+*/
+async function ensureMySQLTablesExist(conn, dbName) {
+	try {
+		await conn.query("SET FOREIGN_KEY_CHECKS = 0;");
+		await conn.query(`ALTER DATABASE \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+		try {
+			await conn.query("DROP TABLE IF EXISTS `user_avatars`;");
+		} catch {}
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`users\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`name\` VARCHAR(255) NOT NULL,
+        \`email\` VARCHAR(255) NOT NULL,
+        \`password_hash\` VARCHAR(255) NOT NULL,
+        \`role\` ENUM('ADMIN', 'AGENT') NOT NULL DEFAULT 'AGENT',
+        \`status\` ENUM('Active', 'Inactive', 'Deleted') NOT NULL DEFAULT 'Active',
+        \`avatar_url\` LONGTEXT NULL,
+        \`is_deleted\` TINYINT(1) NOT NULL DEFAULT 0,
+        \`deleted_at\` DATETIME NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_users_email\` (\`email\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`profiles\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`full_name\` VARCHAR(255) NULL,
+        \`email\` VARCHAR(255) NULL,
+        \`avatar_url\` LONGTEXT NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_profiles_email\` (\`email\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`user_roles\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`user_id\` VARCHAR(36) NOT NULL,
+        \`role\` ENUM('admin', 'agent') NOT NULL DEFAULT 'agent',
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_user_roles_user_id\` (\`user_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`services\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`name\` VARCHAR(255) NOT NULL,
+        \`description\` TEXT NULL,
+        \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_services_active\` (\`is_active\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`stages\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`name\` VARCHAR(255) NOT NULL,
+        \`stage_group\` VARCHAR(100) NOT NULL DEFAULT 'prospect',
+        \`sort_order\` INT NOT NULL DEFAULT 0,
+        \`color\` VARCHAR(50) NULL,
+        \`icon\` VARCHAR(50) NULL,
+        \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+        \`is_follow_up\` TINYINT(1) NOT NULL DEFAULT 0,
+        \`is_system\` TINYINT(1) NULL DEFAULT 0,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_stages_group_sort\` (\`stage_group\`, \`sort_order\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`prospects\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`contact_name\` VARCHAR(255) NOT NULL,
+        \`business_name\` VARCHAR(255) NULL,
+        \`designation\` VARCHAR(150) NULL,
+        \`phone\` VARCHAR(50) NULL,
+        \`alternative_phone\` VARCHAR(50) NULL,
+        \`email\` VARCHAR(255) NULL,
+        \`address\` TEXT NULL,
+        \`service_id\` VARCHAR(36) NULL,
+        \`stage_id\` VARCHAR(36) NULL,
+        \`assigned_to\` VARCHAR(36) NULL,
+        \`created_by\` VARCHAR(36) NULL,
+        \`notes\` TEXT NULL,
+        \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_prospects_stage\` (\`stage_id\`),
+        KEY \`idx_prospects_assigned\` (\`assigned_to\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`prospect_stage_history\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`prospect_id\` VARCHAR(36) NOT NULL,
+        \`from_stage_id\` VARCHAR(36) NULL,
+        \`to_stage_id\` VARCHAR(36) NOT NULL,
+        \`changed_by\` VARCHAR(36) NULL,
+        \`note\` TEXT NULL,
+        \`changed_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_psh_prospect\` (\`prospect_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`sales\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`prospect_id\` VARCHAR(36) NULL,
+        \`service_id\` VARCHAR(36) NULL,
+        \`agent_id\` VARCHAR(36) NULL,
+        \`amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+        \`paid_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+        \`status\` VARCHAR(50) NOT NULL DEFAULT 'closed',
+        \`closed_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_sales_prospect\` (\`prospect_id\`),
+        KEY \`idx_sales_agent\` (\`agent_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`follow_ups\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`prospect_id\` VARCHAR(36) NOT NULL,
+        \`assigned_to\` VARCHAR(36) NULL,
+        \`created_by\` VARCHAR(36) NULL,
+        \`due_at\` DATETIME NOT NULL,
+        \`status\` VARCHAR(50) NOT NULL DEFAULT 'pending',
+        \`note\` TEXT NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_follow_ups_prospect\` (\`prospect_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`activities\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`prospect_id\` VARCHAR(36) NULL,
+        \`actor_id\` VARCHAR(36) NULL,
+        \`activity_type\` VARCHAR(100) NOT NULL,
+        \`message\` TEXT NOT NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_activities_prospect\` (\`prospect_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`meetings\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`prospect_id\` VARCHAR(36) NULL,
+        \`phone\` VARCHAR(50) NULL,
+        \`location\` VARCHAR(255) NULL,
+        \`meeting_type\` VARCHAR(50) NOT NULL DEFAULT 'Office',
+        \`meeting_date\` VARCHAR(20) NULL,
+        \`meeting_time\` VARCHAR(20) NULL,
+        \`assigned_user_id\` VARCHAR(36) NULL,
+        \`assigned_to\` VARCHAR(36) NULL,
+        \`title\` VARCHAR(255) NOT NULL,
+        \`scheduled_at\` DATETIME NULL,
+        \`status\` VARCHAR(50) NOT NULL DEFAULT 'Scheduled',
+        \`sms_sent\` TINYINT(1) NOT NULL DEFAULT 0,
+        \`notes\` TEXT NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_meetings_prospect\` (\`prospect_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`opportunities\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`prospect_id\` VARCHAR(36) NOT NULL,
+        \`value\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+        \`estimated_value\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+        \`stage\` VARCHAR(100) NOT NULL DEFAULT 'qualification',
+        \`status\` VARCHAR(50) NOT NULL DEFAULT 'Opportunity Created',
+        \`assigned_to\` VARCHAR(36) NULL,
+        \`created_by\` VARCHAR(36) NULL,
+        \`notes\` TEXT NULL,
+        \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+        \`expected_close_date\` DATE NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_opportunities_prospect\` (\`prospect_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`invoices\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`prospect_id\` VARCHAR(36) NULL,
+        \`invoice_number\` VARCHAR(100) NOT NULL,
+        \`total_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+        \`paid_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+        \`due_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+        \`description\` TEXT NULL,
+        \`bill_date\` VARCHAR(20) NULL,
+        \`due_date\` VARCHAR(20) NULL,
+        \`notes\` TEXT NULL,
+        \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending',
+        \`created_by\` VARCHAR(36) NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_invoices_prospect\` (\`prospect_id\`),
+        KEY \`idx_invoices_status\` (\`status\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`payments\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`invoice_id\` VARCHAR(36) NULL,
+        \`prospect_id\` VARCHAR(36) NULL,
+        \`amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+        \`payment_method\` VARCHAR(100) NOT NULL DEFAULT 'Bank Transfer',
+        \`transaction_reference\` VARCHAR(100) NULL,
+        \`notes\` TEXT NULL,
+        \`recorded_by\` VARCHAR(36) NULL,
+        \`payment_date\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`is_valid\` TINYINT(1) NOT NULL DEFAULT 1,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_payments_invoice\` (\`invoice_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`sessions\` (
+        \`id\` VARCHAR(64) NOT NULL,
+        \`user_id\` VARCHAR(36) NOT NULL,
+        \`user_email\` VARCHAR(255) NOT NULL,
+        \`user_name\` VARCHAR(255) NOT NULL,
+        \`user_role\` ENUM('admin', 'agent') NOT NULL DEFAULT 'agent',
+        \`avatar_url\` LONGTEXT NULL,
+        \`expires_at\` DATETIME NOT NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_sessions_user\` (\`user_id\`),
+        KEY \`idx_sessions_expires\` (\`expires_at\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`tenants\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`name\` VARCHAR(255) NOT NULL,
+        \`slug\` VARCHAR(120) NOT NULL,
+        \`status\` ENUM('active', 'inactive', 'suspended') NOT NULL DEFAULT 'active',
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_tenants_slug\` (\`slug\`),
+        KEY \`idx_tenants_status\` (\`status\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`memberships\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`user_id\` VARCHAR(36) NOT NULL,
+        \`tenant_id\` VARCHAR(36) NOT NULL,
+        \`status\` ENUM('active', 'inactive', 'invited') NOT NULL DEFAULT 'active',
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_memberships_user_tenant\` (\`user_id\`, \`tenant_id\`),
+        KEY \`idx_memberships_tenant\` (\`tenant_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`roles\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`tenant_id\` VARCHAR(36) NULL,
+        \`name\` VARCHAR(80) NOT NULL,
+        \`description\` VARCHAR(255) NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_roles_scope_name\` (\`tenant_id\`, \`name\`),
+        KEY \`idx_roles_tenant\` (\`tenant_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`permissions\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`resource\` VARCHAR(100) NOT NULL,
+        \`action\` VARCHAR(80) NOT NULL,
+        \`description\` VARCHAR(255) NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_permissions_resource_action\` (\`resource\`, \`action\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`role_permissions\` (
+        \`role_id\` VARCHAR(36) NOT NULL,
+        \`permission_id\` VARCHAR(36) NOT NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`role_id\`, \`permission_id\`),
+        KEY \`idx_role_permissions_permission\` (\`permission_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`refresh_tokens\` (
+        \`id\` VARCHAR(64) NOT NULL,
+        \`user_id\` VARCHAR(36) NOT NULL,
+        \`token_hash\` VARCHAR(255) NOT NULL,
+        \`expires_at\` DATETIME NOT NULL,
+        \`revoked_at\` DATETIME NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_refresh_tokens_hash\` (\`token_hash\`),
+        KEY \`idx_refresh_tokens_user\` (\`user_id\`),
+        KEY \`idx_refresh_tokens_expires\` (\`expires_at\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`audit_events\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`actor_id\` VARCHAR(36) NULL,
+        \`tenant_id\` VARCHAR(36) NULL,
+        \`action\` VARCHAR(120) NOT NULL,
+        \`resource\` VARCHAR(120) NOT NULL,
+        \`resource_id\` VARCHAR(120) NULL,
+        \`metadata\` JSON NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_audit_actor\` (\`actor_id\`),
+        KEY \`idx_audit_tenant_resource\` (\`tenant_id\`, \`resource\`, \`resource_id\`),
+        KEY \`idx_audit_created\` (\`created_at\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`outbox_events\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`type\` VARCHAR(120) NOT NULL,
+        \`aggregate_id\` VARCHAR(120) NULL,
+        \`payload\` JSON NOT NULL,
+        \`status\` ENUM('pending', 'processing', 'sent', 'failed', 'dead_letter') NOT NULL DEFAULT 'pending',
+        \`attempts\` INT NOT NULL DEFAULT 0,
+        \`available_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`last_error\` TEXT NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_outbox_status_available\` (\`status\`, \`available_at\`),
+        KEY \`idx_outbox_aggregate\` (\`aggregate_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`schema_migrations\` (
+        \`id\` VARCHAR(120) NOT NULL,
+        \`checksum\` VARCHAR(128) NOT NULL,
+        \`applied_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+		await conn.query(`
+      INSERT IGNORE INTO \`roles\` (\`id\`, \`tenant_id\`, \`name\`, \`description\`)
+      VALUES
+        ('role-global-admin', NULL, 'admin', 'Platform administrator'),
+        ('role-global-agent', NULL, 'agent', 'CRM sales agent');
+    `);
+		await conn.query(`
+      INSERT IGNORE INTO \`permissions\` (\`id\`, \`resource\`, \`action\`, \`description\`)
+      VALUES
+        ('perm-prospects-read', 'prospects', 'read', 'Read prospects'),
+        ('perm-prospects-write', 'prospects', 'write', 'Create and update prospects'),
+        ('perm-billing-read', 'billing', 'read', 'Read billing records'),
+        ('perm-billing-write', 'billing', 'write', 'Create and update billing records'),
+        ('perm-admin-users', 'users', 'admin', 'Manage users');
+    `);
+		await conn.query(`
+      INSERT IGNORE INTO \`role_permissions\` (\`role_id\`, \`permission_id\`)
+      VALUES
+        ('role-global-admin', 'perm-prospects-read'),
+        ('role-global-admin', 'perm-prospects-write'),
+        ('role-global-admin', 'perm-billing-read'),
+        ('role-global-admin', 'perm-billing-write'),
+        ('role-global-admin', 'perm-admin-users'),
+        ('role-global-agent', 'perm-prospects-read'),
+        ('role-global-agent', 'perm-prospects-write');
+    `);
+		const [userCols] = await conn.query(`
+      SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME = 'avatar_url'
+    `, [dbName]);
+		if (Number(userCols?.[0]?.cnt ?? 0) === 0) try {
+			await conn.query(`ALTER TABLE \`users\` ADD COLUMN \`avatar_url\` LONGTEXT NULL AFTER \`status\`;`);
+		} catch {}
+		const [profCols] = await conn.query(`
+      SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'profiles' AND COLUMN_NAME = 'avatar_url'
+    `, [dbName]);
+		if (Number(profCols?.[0]?.cnt ?? 0) === 0) try {
+			await conn.query(`ALTER TABLE \`profiles\` ADD COLUMN \`avatar_url\` LONGTEXT NULL AFTER \`email\`;`);
+		} catch {}
+		await conn.query("SET FOREIGN_KEY_CHECKS = 1;");
+		const [countRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`users\`;`);
+		if (Number(countRows?.[0]?.cnt ?? 0) === 0) {
+			const hashAdmin = bcryptjs_default.hashSync("Admin@12345", 10);
+			const hashAgent = bcryptjs_default.hashSync("Agent@12345", 10);
+			const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+			await conn.query(`
+        INSERT INTO \`users\` (\`id\`, \`name\`, \`email\`, \`password_hash\`, \`role\`, \`status\`, \`avatar_url\`, \`is_deleted\`, \`created_at\`, \`updated_at\`)
+        VALUES
+        ('usr-admin-1', 'Mehan Ahmed (System Admin)', 'admin@example.com', ?, 'ADMIN', 'Active', NULL, 0, ?, ?),
+        ('usr-admin-2', 'Mehan Ahmed', 'mehan.ahmed.official@gmail.com', ?, 'ADMIN', 'Active', NULL, 0, ?, ?),
+        ('usr-agent-0', 'Agent User', 'agent@brandium.com', ?, 'AGENT', 'Active', NULL, 0, ?, ?);
+      `, [
+				hashAdmin,
+				now,
+				now,
+				hashAdmin,
+				now,
+				now,
+				hashAgent,
+				now,
+				now
+			]);
+		}
+		try {
+			await conn.query(`
+        INSERT INTO \`profiles\` (\`id\`, \`full_name\`, \`email\`, \`created_at\`, \`updated_at\`)
+        SELECT \`id\`, \`name\`, \`email\`, \`created_at\`, \`updated_at\` FROM \`users\`
+        ON DUPLICATE KEY UPDATE \`full_name\` = VALUES(\`full_name\`), \`email\` = VALUES(\`email\`);
+      `);
+		} catch {}
+		const [stageRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`stages\`;`);
+		if (Number(stageRows?.[0]?.cnt ?? 0) === 0) await conn.query(`
+        INSERT INTO \`stages\` (\`id\`, \`name\`, \`stage_group\`, \`sort_order\`, \`is_follow_up\`, \`is_active\`, \`is_system\`)
+        VALUES
+        ('prospect', 'Prospect', 'new', 1, 0, 1, 1),
+        ('follow-up', 'Follow-up', 'in_progress', 2, 1, 1, 1),
+        ('opportunity-created', 'Opportunity Created', 'in_progress', 3, 0, 1, 1),
+        ('sales-won', 'Sales won', 'won', 4, 0, 1, 1),
+        ('dnp', 'DNP (Did Not Pick)', 'unreachable', 5, 0, 1, 1),
+        ('switched-off', 'Switched Off', 'unreachable', 6, 0, 1, 1),
+        ('invalid-number', 'Invalid Number', 'unreachable', 7, 0, 1, 1),
+        ('meeting-scheduled', 'Meeting Scheduled', 'in_progress', 8, 1, 1, 1),
+        ('quotation-sent', 'Quotation Sent', 'in_progress', 9, 0, 1, 1);
+      `);
+		const [serviceRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`services\`;`);
+		if (Number(serviceRows?.[0]?.cnt ?? 0) === 0) await conn.query(`
+        INSERT INTO \`services\` (\`id\`, \`name\`, \`description\`, \`is_active\`)
+        VALUES
+        ('srv-1', 'Product Photography', 'High-end studio & e-commerce product catalog shoot.', 1),
+        ('srv-2', 'Graphics Design', 'Social media banners, ad creatives, and print designs.', 1),
+        ('srv-3', 'Monthly Plan', 'All-in-one monthly digital marketing & telesales management.', 1),
+        ('srv-4', 'Website Development', 'Custom responsive React, Next.js, and WordPress websites.', 1),
+        ('srv-5', 'Celebrity Video Ads', 'Commercial video ads featuring popular celebrities.', 1),
+        ('srv-6', 'TVC', 'Television Commercial production & broadcast formatting.', 1),
+        ('srv-7', 'OVC', 'Online Video Commercials optimized for social media.', 1),
+        ('srv-8', 'Voice-Over Video Ads', 'Professional voice-over narration with dynamic visuals.', 1),
+        ('srv-9', 'Corporate AV', 'Corporate Audio-Visual presentations & company profiles.', 1),
+        ('srv-10', 'Influencer Video Ads', 'Influencer endorsement videos for TikTok, Instagram & FB.', 1),
+        ('srv-11', 'Motion Video Ads', '2D/3D motion graphics animation and visual FX.', 1),
+        ('srv-12', 'Logo Design', 'Custom brand identity, vector logos, and brand guidelines.', 1);
+      `);
+	} catch (e) {
+		console.error("ERP Auto Database Init Error:", e);
+	}
+}
+var authenticateXamppUser = createServerFn({ method: "POST" }).validator((input) => input).handler(createSsrRpc("d9e5c27790b88fb18dc203fd44305fd3ac9aebf6052812970379f69c1db654b4"));
+/**
+* Server Function: Auto-Creates Database and all 13+ Tables on App Startup.
+*/
+var bootstrapDatabaseOnStartup = createServerFn({ method: "GET" }).handler(createSsrRpc("193ca774a5e56dae51169ea7a2dcda9148dcaee39d5353c00708b871a8ce841d"));
+createServerFn({ method: "POST" }).validator((input) => input).handler(createSsrRpc("78a236a0b762f64ed09ba01b9684547004539ef73468d9ca187bdade0a058798"));
+/**
+* Server Function: Fetches all active users from MySQL database including avatar_url.
+*/
+var fetchMySQLUsers = createServerFn({ method: "GET" }).handler(createSsrRpc("91a489c77660dee06bbc6398fb17100b4769f2a601beb05d157794a9b69e532f"));
+createServerFn({ method: "POST" }).validator((input) => input).handler(createSsrRpc("6775950fb1f2337a9abe1504606f7b156cdf4e2db0734c8a7a69b725d1c836ba"));
+createServerFn({ method: "POST" }).validator((input) => input).handler(createSsrRpc("8811da2d312d4af9ec979cb06387812982c75e292456afed42c0d2e505cdac12"));
+createServerFn({ method: "POST" }).validator((input) => input).handler(createSsrRpc("dd8c650e5769ac99590f905397003ba0e9a2b0a996ef88a6dc33d269e7c7e837"));
+createServerFn({ method: "POST" }).validator((input) => input).handler(createSsrRpc("ac4cddad9c3a319ad706badac9762e6e1817b6512bd3f80600ff40673dabec5b"));
+createServerFn({ method: "POST" }).validator((input) => input).handler(createSsrRpc("7ab49a44ca72be4b4ca5f148d03b8f9256ff662ac4021ab429283dd55398b016"));
+var createMySQLSession = createServerFn({ method: "POST" }).validator((d) => d).handler(createSsrRpc("8decbc842acf74ccb35dd2af22591618cf19eebfbb38d55ffb4f217d0caf0277"));
+var getMySQLSession = createServerFn({ method: "GET" }).validator((d) => d).handler(createSsrRpc("6a0938e65611af25332dc99cd74f455b3d22bdcba81469094fa9d5e76660bf67"));
+var deleteMySQLSession = createServerFn({ method: "POST" }).validator((d) => d).handler(createSsrRpc("06d113cc0e90ab16a7ca19902fc6e4dbf802e5ef0e424809f01c1093beca72cf"));
+//#endregion
+export { ensureMySQLTablesExist as a, deleteMySQLSession as i, bootstrapDatabaseOnStartup as n, fetchMySQLUsers as o, createMySQLSession as r, getMySQLSession as s, authenticateXamppUser as t };
