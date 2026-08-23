@@ -502,7 +502,7 @@ export const authenticateXamppUser = createServerFn({ method: "POST" })
       console.error("XAMPP MySQL Auth Error:", errObj?.message || err);
       return {
         success: false,
-        error: `Database connection error: Unable to connect to XAMPP MySQL database (${errObj?.message || "Connection refused"}).`,
+        error: `Database connection error: Unable to connect to MySQL database (${errObj?.message || "Connection refused"}).`,
       };
     }
   });

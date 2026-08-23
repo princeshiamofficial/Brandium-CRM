@@ -13,27 +13,27 @@ export interface MySQLConfig {
 
 export function getMySQLConfig(): MySQLConfig {
   const rawHost =
-    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_HOST"]) ||
     (typeof process !== "undefined" && process.env?.["MYSQL_HOST"]) ||
+    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_HOST"]) ||
     "127.0.0.1";
   const host = rawHost === "localhost" ? "127.0.0.1" : rawHost;
   const port = parseInt(
-    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_PORT"]) ||
-      (typeof process !== "undefined" && process.env?.["MYSQL_PORT"]) ||
+    (typeof process !== "undefined" && process.env?.["MYSQL_PORT"]) ||
+      (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_PORT"]) ||
       "3306",
     10,
   );
   const user =
-    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_USER"]) ||
     (typeof process !== "undefined" && process.env?.["MYSQL_USER"]) ||
+    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_USER"]) ||
     "root";
   const password =
-    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_PASSWORD"]) ||
-    (typeof process !== "undefined" && process.env?.["MYSQL_PASSWORD"]) ||
-    "";
+    (typeof process !== "undefined" && process.env?.["MYSQL_PASSWORD"]) !== undefined
+      ? (process.env?.["MYSQL_PASSWORD"] as string)
+      : (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_PASSWORD"]) || "";
   const database =
-    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_DATABASE"]) ||
     (typeof process !== "undefined" && process.env?.["MYSQL_DATABASE"]) ||
+    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_MYSQL_DATABASE"]) ||
     "brandium_crm";
 
   return { host, port, user, password, database };
