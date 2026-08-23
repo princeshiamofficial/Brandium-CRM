@@ -501,17 +501,15 @@ export async function ensureMySQLTablesExist(
 
     // Re-enable foreign key checks
     await conn.query("SET FOREIGN_KEY_CHECKS = 1;");
+    // Always seed default admin and agent accounts into `users` & `profiles` using INSERT IGNORE
+    const hashAdmin = "$2b$10$qpjXnl8CfUihiIU0F5/WbejBPBQSgIdrXIuRsD.xbi.4nUorC8FUS";
+    const hashAgent = "$2b$10$EUTCyQWyN2.RES4exZkSVOzCpKGLF7cPmbvkNXsu4359niH7nu84G";
+    const now = new Date().toISOString().slice(0, 19).replace("T", " ");
 
-    // Seed default admin accounts into \`users\` if table is empty
-    const [countRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`users\`;`);
-    if (Number((countRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
-      const hashAdmin = bcrypt.hashSync("Admin@12345", 10);
-      const hashAgent = bcrypt.hashSync("Agent@12345", 10);
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
-
+    try {
       await conn.query(
         `
-        INSERT INTO \`users\` (\`id\`, \`name\`, \`email\`, \`password_hash\`, \`role\`, \`status\`, \`avatar_url\`, \`is_deleted\`, \`created_at\`, \`updated_at\`)
+        INSERT IGNORE INTO \`users\` (\`id\`, \`name\`, \`email\`, \`password_hash\`, \`role\`, \`status\`, \`avatar_url\`, \`is_deleted\`, \`created_at\`, \`updated_at\`)
         VALUES
         ('usr-admin-1', 'Mehan Ahmed (System Admin)', 'admin@example.com', ?, 'ADMIN', 'Active', NULL, 0, ?, ?),
         ('usr-admin-2', 'Mehan Ahmed', 'mehan.ahmed.official@gmail.com', ?, 'ADMIN', 'Active', NULL, 0, ?, ?),
@@ -519,17 +517,14 @@ export async function ensureMySQLTablesExist(
       `,
         [hashAdmin, now, now, hashAdmin, now, now, hashAgent, now, now],
       );
-    }
 
-    // Always sync users into profiles table
-    try {
       await conn.query(`
         INSERT INTO \`profiles\` (\`id\`, \`full_name\`, \`email\`, \`created_at\`, \`updated_at\`)
         SELECT \`id\`, \`name\`, \`email\`, \`created_at\`, \`updated_at\` FROM \`users\`
         ON DUPLICATE KEY UPDATE \`full_name\` = VALUES(\`full_name\`), \`email\` = VALUES(\`email\`);
       `);
-    } catch {
-      // Ignore
+    } catch (e) {
+      console.warn("User seeding notice:", e);
     }
 
     // Seed default stages into \`stages\` if table is empty
