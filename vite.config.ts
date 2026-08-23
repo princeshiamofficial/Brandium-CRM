@@ -16,11 +16,11 @@ function viteMySQLPlugin(): Plugin {
   function getPool() {
     if (!pool) {
       pool = mysql.createPool({
-        host: "127.0.0.1",
-        port: 3306,
-        user: "root",
-        password: "",
-        database: "brandium_crm",
+        host: process.env.MYSQL_HOST || "127.0.0.1",
+        port: Number(process.env.MYSQL_PORT) || 3306,
+        user: process.env.MYSQL_USER || "root",
+        password: process.env.MYSQL_PASSWORD || "",
+        database: process.env.MYSQL_DATABASE || "brandium_crm",
         waitForConnections: true,
         connectionLimit: 20,
         queueLimit: 0,
