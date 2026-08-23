@@ -38,7 +38,204 @@ async function runMigration() {
     database,
   });
 
+  // Create base tables IF NOT EXISTS
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS \`users\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`name\` VARCHAR(255) NOT NULL,
+      \`email\` VARCHAR(255) NOT NULL,
+      \`password_hash\` VARCHAR(255) NOT NULL,
+      \`role\` ENUM('ADMIN', 'AGENT') NOT NULL DEFAULT 'AGENT',
+      \`status\` ENUM('Active', 'Inactive', 'Deleted') NOT NULL DEFAULT 'Active',
+      \`avatar_url\` LONGTEXT NULL,
+      \`is_deleted\` TINYINT(1) NOT NULL DEFAULT 0,
+      \`deleted_at\` DATETIME NULL,
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`),
+      UNIQUE KEY \`idx_users_email\` (\`email\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
+    `CREATE TABLE IF NOT EXISTS \`profiles\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`full_name\` VARCHAR(255) NULL,
+      \`email\` VARCHAR(255) NULL,
+      \`avatar_url\` LONGTEXT NULL,
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`),
+      KEY \`idx_profiles_email\` (\`email\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`services\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`name\` VARCHAR(255) NOT NULL,
+      \`description\` TEXT NULL,
+      \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+      \`icon\` VARCHAR(50) NOT NULL DEFAULT 'Layers',
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`stages\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`name\` VARCHAR(255) NOT NULL,
+      \`stage_group\` VARCHAR(100) NOT NULL DEFAULT 'prospect',
+      \`sort_order\` INT NOT NULL DEFAULT 0,
+      \`color\` VARCHAR(50) NULL,
+      \`icon\` VARCHAR(50) NULL,
+      \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+      \`is_follow_up\` TINYINT(1) NOT NULL DEFAULT 0,
+      \`is_system\` TINYINT(1) NULL DEFAULT 0,
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`prospects\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`contact_name\` VARCHAR(255) NOT NULL,
+      \`business_name\` VARCHAR(255) NULL,
+      \`designation\` VARCHAR(150) NULL,
+      \`phone\` VARCHAR(50) NULL,
+      \`alternative_phone\` VARCHAR(50) NULL,
+      \`email\` VARCHAR(255) NULL,
+      \`address\` TEXT NULL,
+      \`service_id\` VARCHAR(36) NULL,
+      \`stage_id\` VARCHAR(36) NULL,
+      \`assigned_to\` VARCHAR(36) NULL,
+      \`created_by\` VARCHAR(36) NULL,
+      \`notes\` TEXT NULL,
+      \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`prospect_stage_history\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`prospect_id\` VARCHAR(36) NOT NULL,
+      \`from_stage_id\` VARCHAR(36) NULL,
+      \`to_stage_id\` VARCHAR(36) NOT NULL,
+      \`changed_by\` VARCHAR(36) NULL,
+      \`note\` TEXT NULL,
+      \`changed_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`sales\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`prospect_id\` VARCHAR(36) NULL,
+      \`service_id\` VARCHAR(36) NULL,
+      \`agent_id\` VARCHAR(36) NULL,
+      \`amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+      \`paid_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+      \`status\` VARCHAR(50) NOT NULL DEFAULT 'closed',
+      \`closed_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`follow_ups\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`prospect_id\` VARCHAR(36) NOT NULL,
+      \`assigned_to\` VARCHAR(36) NULL,
+      \`created_by\` VARCHAR(36) NULL,
+      \`due_at\` DATETIME NOT NULL,
+      \`status\` VARCHAR(50) NOT NULL DEFAULT 'pending',
+      \`note\` TEXT NULL,
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`activities\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`prospect_id\` VARCHAR(36) NULL,
+      \`actor_id\` VARCHAR(36) NULL,
+      \`activity_type\` VARCHAR(100) NOT NULL,
+      \`message\` TEXT NOT NULL,
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`meetings\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`prospect_id\` VARCHAR(36) NULL,
+      \`phone\` VARCHAR(50) NULL,
+      \`location\` VARCHAR(255) NULL,
+      \`meeting_type\` VARCHAR(50) NOT NULL DEFAULT 'Office',
+      \`meeting_date\` VARCHAR(20) NULL,
+      \`meeting_time\` VARCHAR(20) NULL,
+      \`assigned_user_id\` VARCHAR(36) NULL,
+      \`assigned_to\` VARCHAR(36) NULL,
+      \`title\` VARCHAR(255) NOT NULL,
+      \`scheduled_at\` DATETIME NULL,
+      \`status\` VARCHAR(50) NOT NULL DEFAULT 'Scheduled',
+      \`sms_sent\` TINYINT(1) NOT NULL DEFAULT 0,
+      \`notes\` TEXT NULL,
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`opportunities\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`prospect_id\` VARCHAR(36) NOT NULL,
+      \`value\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+      \`estimated_value\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+      \`stage\` VARCHAR(100) NOT NULL DEFAULT 'qualification',
+      \`status\` VARCHAR(50) NOT NULL DEFAULT 'Opportunity Created',
+      \`assigned_to\` VARCHAR(36) NULL,
+      \`created_by\` VARCHAR(36) NULL,
+      \`notes\` TEXT NULL,
+      \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+      \`expected_close_date\` DATE NULL,
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`invoices\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`prospect_id\` VARCHAR(36) NULL,
+      \`invoice_number\` VARCHAR(100) NOT NULL,
+      \`total_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+      \`paid_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+      \`due_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+      \`description\` TEXT NULL,
+      \`bill_date\` VARCHAR(20) NULL,
+      \`due_date\` VARCHAR(20) NULL,
+      \`notes\` TEXT NULL,
+      \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending',
+      \`created_by\` VARCHAR(36) NULL,
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`payments\` (
+      \`id\` VARCHAR(36) NOT NULL,
+      \`invoice_id\` VARCHAR(36) NULL,
+      \`prospect_id\` VARCHAR(36) NULL,
+      \`amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+      \`payment_method\` VARCHAR(100) NOT NULL DEFAULT 'Bank Transfer',
+      \`transaction_reference\` VARCHAR(100) NULL,
+      \`notes\` TEXT NULL,
+      \`recorded_by\` VARCHAR(36) NULL,
+      \`payment_date\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`is_valid\` TINYINT(1) NOT NULL DEFAULT 1,
+      \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+  ];
+
+  for (const query of tables) {
+    await conn.query(query);
+  }
 
   const addCol = async (tbl, col, def) => {
     const [cols] = await conn.query("DESCRIBE `" + tbl + "`");
@@ -47,6 +244,7 @@ async function runMigration() {
       await conn.query("ALTER TABLE `" + tbl + "` ADD COLUMN `" + col + "` " + def);
     }
   };
+
 
   // 1. meetings
   await addCol("meetings", "phone", "VARCHAR(50) NULL");
