@@ -31,64 +31,8 @@ const dynamicDb = supabase as unknown as {
   };
 };
 
-// Rich Demo Client Balances Dataset (Aggregated from live Invoices & Payments)
-const demoClientBalances: ClientBalance[] = [
-  {
-    client_id: "prospect-1",
-    name: "Mehan Ahmed",
-    business_name: "AurevixSoft",
-    phone: "+8801711002233",
-    email: "mehan.ahmed@aurevixsoft.com",
-    total_billed: 125000,
-    total_paid: 125000,
-    current_balance: 0, // 125000 - 125000 = 0
-    last_updated: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    client_id: "prospect-2",
-    name: "Nusrat Jahan",
-    business_name: "GreenTech BD",
-    phone: "+8801822334455",
-    email: "nusrat@greentechbd.org",
-    total_billed: 88000,
-    total_paid: 44000,
-    current_balance: 44000, // 88000 - 44000 = 44000
-    last_updated: new Date(Date.now() - 86400000 * 4).toISOString(),
-  },
-  {
-    client_id: "prospect-3",
-    name: "Mahmud Hasan",
-    business_name: "Star Logistics",
-    phone: "+8801933445566",
-    email: "mahmud@starlogistics.com",
-    total_billed: 145000,
-    total_paid: 0,
-    current_balance: 145000, // 145000 - 0 = 145000
-    last_updated: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-  {
-    client_id: "prospect-4",
-    name: "Sultana Razia",
-    business_name: "Dhaka Fashion Wear",
-    phone: "+8801644556677",
-    email: "sultana@dhakafashion.com.bd",
-    total_billed: 0, // Cancelled invoice ignored
-    total_paid: 0,
-    current_balance: 0,
-    last_updated: new Date(Date.now() - 86400000 * 8).toISOString(),
-  },
-  {
-    client_id: "prospect-5",
-    name: "Kazi Farhan",
-    business_name: "Skyline Travels",
-    phone: "+8801555667788",
-    email: "farhan@skylinetravels.com",
-    total_billed: 95000,
-    total_paid: 30000,
-    current_balance: 65000, // 95000 - 30000 = 65000
-    last_updated: new Date(Date.now() - 86400000 * 12).toISOString(),
-  },
-];
+// Client Balances Dataset
+const demoClientBalances: ClientBalance[] = [];
 
 /**
  * Pure SQL Aggregation Calculator

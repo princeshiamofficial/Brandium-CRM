@@ -38,132 +38,20 @@ export type AgentOption = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const dynamicDb = supabase as unknown as { from: (table: string) => any };
 
-// Rich Demo Dataset for Won Sales (Relationally connected to Prospects, Opportunities, Agents & Billing)
-const DEMO_WON_SALES: WonSale[] = [
-  {
-    id: "ws-101",
-    opportunity_id: "opp-101",
-    prospect_id: "prospect-1",
-    client_name: "Mehan Ahmed",
-    business_name: "AurevixSoft",
-    client_designation: "Chief Technology Officer",
-    phone: "+8801711002233",
-    email: "mehan.ahmed@aurevixsoft.com",
-    sale_amount: 125000,
-    assigned_agent_id: "usr-1",
-    assigned_agent_name: "Mehan Ahmed",
-    created_by_id: "usr-1",
-    created_by_name: "Mehan Ahmed",
-    billing_invoice_id: "INV-2026-801",
-    notes:
-      "Closed annual enterprise license contract with 1-year priority SLAs and custom CRM onboarding.",
-    won_at: new Date(Date.now() - 86400000 * 1).toISOString(),
-    created_at: new Date(Date.now() - 86400000 * 10).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 1).toISOString(),
-  },
-  {
-    id: "ws-102",
-    opportunity_id: "opp-102",
-    prospect_id: "prospect-2",
-    client_name: "Nusrat Jahan",
-    business_name: "GreenTech BD",
-    client_designation: "Managing Director",
-    phone: "+8801822334455",
-    email: "nusrat@greentechbd.org",
-    sale_amount: 88000,
-    assigned_agent_id: "usr-2",
-    assigned_agent_name: "Sabbir Hossain",
-    created_by_id: "usr-1",
-    created_by_name: "Mehan Ahmed",
-    billing_invoice_id: "INV-2026-802",
-    notes: "Multi-branch POS deployment approved with upfront 50% retainer paid.",
-    won_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-    created_at: new Date(Date.now() - 86400000 * 14).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-  },
-  {
-    id: "ws-103",
-    opportunity_id: "opp-103",
-    prospect_id: "prospect-3",
-    client_name: "Mahmud Hasan",
-    business_name: "Star Logistics",
-    client_designation: "Head of Operations",
-    phone: "+8801933445566",
-    email: "mahmud@starlogistics.com",
-    sale_amount: 145000,
-    assigned_agent_id: "usr-3",
-    assigned_agent_name: "Farhana Islam",
-    created_by_id: "usr-3",
-    created_by_name: "Farhana Islam",
-    billing_invoice_id: "INV-2026-803",
-    notes: "Custom fleet management integration & telesales routing system finalized.",
-    won_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-    created_at: new Date(Date.now() - 86400000 * 20).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-  {
-    id: "ws-104",
-    opportunity_id: "opp-104",
-    prospect_id: "prospect-4",
-    client_name: "Sultana Razia",
-    business_name: "Dhaka Fashion Wear",
-    client_designation: "Proprietor",
-    phone: "+8801644556677",
-    email: "sultana@dhakafashion.com.bd",
-    sale_amount: 62000,
-    assigned_agent_id: "usr-1",
-    assigned_agent_name: "Mehan Ahmed",
-    created_by_id: "usr-2",
-    created_by_name: "Sabbir Hossain",
-    billing_invoice_id: "INV-2026-804",
-    notes: "E-commerce platform package with WhatsApp automated order notification API.",
-    won_at: new Date(Date.now() - 86400000 * 7).toISOString(),
-    created_at: new Date(Date.now() - 86400000 * 25).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 7).toISOString(),
-  },
-  {
-    id: "ws-105",
-    opportunity_id: "opp-105",
-    prospect_id: "prospect-5",
-    client_name: "Kazi Farhan",
-    business_name: "Skyline Travels",
-    client_designation: "General Manager",
-    phone: "+8801555667788",
-    email: "farhan@skylinetravels.com",
-    sale_amount: 95000,
-    assigned_agent_id: "usr-2",
-    assigned_agent_name: "Sabbir Hossain",
-    created_by_id: "usr-3",
-    created_by_name: "Farhana Islam",
-    billing_invoice_id: "INV-2026-805",
-    notes: "Lead management pipeline & call center auto-dialer license agreement signed.",
-    won_at: new Date(Date.now() - 86400000 * 12).toISOString(),
-    created_at: new Date(Date.now() - 86400000 * 30).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 12).toISOString(),
-  },
-];
+// Won Sales Dataset
+const DEMO_WON_SALES: WonSale[] = [];
 
-const DEMO_AGENTS: AgentOption[] = [
-  { id: "usr-1", name: "Mehan Ahmed" },
-  { id: "usr-2", name: "Sabbir Hossain" },
-  { id: "usr-3", name: "Farhana Islam" },
-];
+const DEMO_AGENTS: AgentOption[] = [];
 
 export async function fetchWonSales(filters: WonSaleFilters = {}): Promise<WonSale[]> {
   try {
     const { data, error } = await dynamicDb
-      .from("won_sales")
-      .select(
-        `
-        *,
-        prospects(contact_name, business_name, email, phone),
-        opportunities(estimated_value, notes, status)
-      `,
-      )
+      .from("sales")
+      .select("*, prospects(contact_name, business_name, email, phone)")
       .order("won_at", { ascending: false });
 
     if (error || !data || data.length === 0) {
-      return applyClientFilters(DEMO_WON_SALES, filters);
+      return [];
     }
 
     const mapped: WonSale[] = (data as Record<string, unknown>[]).map((item) => {

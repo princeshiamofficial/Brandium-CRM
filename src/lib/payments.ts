@@ -66,35 +66,8 @@ const dynamicDb = supabase as unknown as {
   rpc: (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
 };
 
-// Demo Payments Dataset (Shared with Billing module)
-const demoPaymentsList: Payment[] = [
-  {
-    id: "pay-101",
-    invoice_id: "inv-801",
-    invoice_number: "INV-2026-801",
-    amount: 125000,
-    payment_date: new Date(Date.now() - 86400000 * 2).toISOString(),
-    method: "Bank Transfer",
-    reference: "TRX-EBL-992011",
-    notes: "Full payment credited via Eastern Bank wire.",
-    created_by: "usr-1",
-    created_by_name: "Mehan Ahmed",
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    id: "pay-102",
-    invoice_id: "inv-802",
-    invoice_number: "INV-2026-802",
-    amount: 44000,
-    payment_date: new Date(Date.now() - 86400000 * 4).toISOString(),
-    method: "bKash",
-    reference: "BKSH-9928172X",
-    notes: "50% upfront retainer paid via bKash Merchant.",
-    created_by: "usr-1",
-    created_by_name: "Mehan Ahmed",
-    created_at: new Date(Date.now() - 86400000 * 4).toISOString(),
-  },
-];
+// Payments Dataset
+const demoPaymentsList: Payment[] = [];
 
 /**
  * Pure Financial Status Calculator based on module rules:

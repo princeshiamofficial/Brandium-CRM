@@ -111,86 +111,8 @@ const demoStageHistories: Record<string, StageHistoryRecord[]> = {
   ],
 };
 
-// Rich Demo Dataset for Denied Payments
-const demoDeniedPayments: DeniedPayment[] = [
-  {
-    id: "dp-101",
-    prospect_id: "prospect-dp-1",
-    prospect_name: "Rahim Chowdhury",
-    business_name: "Apex Logistics Ltd",
-    agent_id: "usr-1",
-    agent_name: "Mehan Ahmed",
-    phone: "+8801711223344",
-    service: "Enterprise ERP Software License",
-    denial_reason:
-      "CFO refused invoice payment citing unapproved Q3 budget allocations post-delivery.",
-    denied_by: "Kamrul Hasan (CFO)",
-    denied_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    amount: 85000,
-    current_stage: "Denied Payment",
-    notes: "Requires senior manager intervention and custom milestone payment splitting.",
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    id: "dp-102",
-    prospect_id: "prospect-dp-2",
-    prospect_name: "Tariqul Islam",
-    business_name: "Dhaka Retail Solutions",
-    agent_id: "usr-2",
-    agent_name: "Sabbir Hossain",
-    phone: "+8801822334455",
-    service: "POS & Inventory CRM Module",
-    denial_reason:
-      "Owner requested extra 20% discount after project deployment before signing clearance.",
-    denied_by: "Tariqul Islam (Managing Director)",
-    denied_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-    amount: 42000,
-    current_stage: "Denied Payment",
-    notes:
-      "Agent scheduled follow-up call to offer free 2-month extended support instead of discount.",
-    created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-  },
-  {
-    id: "dp-103",
-    prospect_id: "prospect-dp-3",
-    prospect_name: "Nusrat Parveen",
-    business_name: "Green Valley Agro",
-    agent_id: "usr-3",
-    agent_name: "Farhana Islam",
-    phone: "+8801933445566",
-    service: "Custom Telesales Automation Suite",
-    denial_reason:
-      "Client disputed initial agreement terms claiming scope mismatch for WhatsApp API.",
-    denied_by: "Sharmin Akter (Operations Lead)",
-    denied_at: new Date(Date.now() - 86400000 * 1).toISOString(),
-    amount: 65000,
-    current_stage: "Denied Payment",
-    notes: "Technical team reviewing WhatsApp integration logs to clarify scope.",
-    created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 1).toISOString(),
-  },
-  {
-    id: "dp-104",
-    prospect_id: "prospect-dp-4",
-    prospect_name: "Mahbub Alam",
-    business_name: "Skyline Textiles",
-    agent_id: "usr-1",
-    agent_name: "Mehan Ahmed",
-    phone: "+8801644556677",
-    service: "Cloud HR & Payroll Module",
-    denial_reason:
-      "Delayed payment attempt failed twice via bank transfer, client stopped responding.",
-    denied_by: "Accounts Dept",
-    denied_at: new Date(Date.now() - 86400000 * 6).toISOString(),
-    amount: 38000,
-    current_stage: "Denied Payment",
-    notes: "Follow-up task created for physical office visit.",
-    created_at: new Date(Date.now() - 86400000 * 6).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 6).toISOString(),
-  },
-];
+// Denied Payments Dataset
+const demoDeniedPayments: DeniedPayment[] = [];
 
 export async function fetchDeniedPayments(
   filters: DeniedPaymentFilters = {},
@@ -202,7 +124,7 @@ export async function fetchDeniedPayments(
       .order("denied_at", { ascending: false });
 
     if (error || !data || data.length === 0) {
-      return applyClientFilters(demoDeniedPayments, filters);
+      return [];
     }
 
     const mapped: DeniedPayment[] = (data as Record<string, unknown>[]).map((item) => {

@@ -91,103 +91,12 @@ export const SMS_PRESET_TEMPLATES: SmsPresetTemplate[] = [
   },
 ];
 
-// Rich Demo Logs Dataset (Includes Sent, Pending, and Failed attempts for auditing)
-const demoSmsLogs: SmsLogEntry[] = [
-  {
-    id: "log-101",
-    prospect_id: "prospect-1",
-    prospect_name: "Mehan Ahmed",
-    recipient_name: "Mehan Ahmed",
-    recipient_phone: "+8801711002233",
-    message:
-      "Dear Mehan Ahmed, this is a reminder for your upcoming demo meeting with Brandium Telesales today at 11:30 AM.",
-    status: "Sent",
-    mode: "Single",
-    sent_by: "usr-1",
-    sent_by_name: "Mehan Ahmed",
-    sender_role: "CRM Administrator",
-    provider: "BulksmsBD",
-    api_response_id: "SMS-REQ-88901",
-    provider_response:
-      '{"code": 1000, "status": "SUCCESS", "sms_id": "SMS-REQ-88901", "cost": 0.45}',
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: "log-102",
-    prospect_id: "prospect-2",
-    prospect_name: "Nusrat Jahan",
-    recipient_name: "Nusrat Jahan",
-    recipient_phone: "+8801822334455",
-    message:
-      "Dear Nusrat Jahan, your custom CRM license agreement has been generated. Please check your email for approval.",
-    status: "Sent",
-    mode: "Single",
-    sent_by: "usr-1",
-    sent_by_name: "Mehan Ahmed",
-    sender_role: "CRM Administrator",
-    provider: "BulksmsBD",
-    api_response_id: "SMS-REQ-88902",
-    provider_response:
-      '{"code": 1000, "status": "SUCCESS", "sms_id": "SMS-REQ-88902", "cost": 0.45}',
-    created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
-  },
-  {
-    id: "log-103",
-    prospect_id: "prospect-3",
-    prospect_name: "Mahmud Hasan",
-    recipient_name: "Mahmud Hasan",
-    recipient_phone: "+8801933445566",
-    message:
-      "Exclusive Offer! Upgrade your telesales CRM workflow this month and get a 15% discount on annual billing.",
-    status: "Pending",
-    mode: "Bulk",
-    sent_by: "usr-2",
-    sent_by_name: "Sabbir Hossain",
-    sender_role: "Tele-sales Executive",
-    provider: "BulksmsBD",
-    api_response_id: "SMS-REQ-88903",
-    provider_response: '{"code": 1002, "status": "PENDING_QUEUE", "sms_id": "SMS-REQ-88903"}',
-    created_at: new Date(Date.now() - 3600000 * 18).toISOString(),
-  },
-  {
-    id: "log-104",
-    prospect_id: "prospect-4",
-    prospect_name: "Sultana Razia",
-    recipient_name: "Sultana Razia",
-    recipient_phone: "+8801644556677",
-    message:
-      "Dear Sultana Razia, your scheduled follow-up meeting link has been updated. Please check WhatsApp or SMS.",
-    status: "Failed",
-    mode: "Single",
-    sent_by: "usr-3",
-    sent_by_name: "Farhana Islam",
-    sender_role: "Tele-sales Specialist",
-    provider: "BulksmsBD",
-    api_response_id: "SMS-REQ-88904",
-    provider_response:
-      '{"code": 1006, "status": "FAILED_INVALID_NUMBER", "error": "Handset un-reachable or invalid MSISDN"}',
-    created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-  },
-  {
-    id: "log-105",
-    prospect_id: "prospect-5",
-    prospect_name: "Kazi Farhan",
-    recipient_name: "Kazi Farhan",
-    recipient_phone: "+8801555667788",
-    message:
-      "Welcome to Brandium CRM! Your account has been activated. Contact your designated CR agent for setup assistance.",
-    status: "Sent",
-    mode: "Bulk",
-    sent_by: "usr-2",
-    sent_by_name: "Sabbir Hossain",
-    sender_role: "Tele-sales Executive",
-    provider: "BulksmsBD",
-    api_response_id: "SMS-REQ-88905",
-    provider_response:
-      '{"code": 1000, "status": "SUCCESS", "sms_id": "SMS-REQ-88905", "cost": 0.45}',
-    created_at: new Date(Date.now() - 3600000 * 36).toISOString(),
-  },
-];
+// SMS Logs Dataset
+const demoSmsLogs: SmsLogEntry[] = [];
+
+export type SmsLogFilters = {
+  prospect_id?: string;
+};
 
 /**
  * Calculates SMS characters, parts, and encoding format.
