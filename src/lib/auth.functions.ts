@@ -636,53 +636,11 @@ export const authenticateXamppUser = createServerFn({ method: "POST" })
       }>;
 
       if (!userList || userList.length === 0 || !userList[0]) {
-        // Auto-create user account in MySQL database if not found
-        const newUserId = `usr-${Date.now()}`;
-        const rawName = email.split("@")[0] || "User";
-        const displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-        const newHash = bcrypt.hashSync(password, 10);
-        const assignedRole = email.includes("admin") ? "ADMIN" : "AGENT";
-        const nowIso = new Date().toISOString().slice(0, 19).replace("T", " ");
-
-        try {
-          await conn.query(
-            "INSERT INTO `users` (`id`, `name`, `email`, `password_hash`, `role`, `status`, `avatar_url`, `is_deleted`, `created_at`, `updated_at`) VALUES (?, ?, ?, ?, ?, 'Active', NULL, 0, ?, ?)",
-            [newUserId, displayName, email, newHash, assignedRole, nowIso, nowIso],
-          );
-
-          await conn.query(
-            "INSERT INTO `profiles` (`id`, `full_name`, `email`, `created_at`, `updated_at`) VALUES (?, ?, ?, ?, ?)",
-            [newUserId, displayName, email, nowIso, nowIso],
-          );
-
-          await conn.end();
-
-          return {
-            success: true,
-            user: {
-              id: newUserId,
-              name: displayName,
-              email,
-              role: assignedRole.toLowerCase() as "admin" | "agent",
-              avatar_url: null,
-            },
-          };
-        } catch (e) {
-          console.warn("Auto-create user error:", e);
-          await conn.end();
-          return {
-            success: true,
-            user: {
-              id: newUserId,
-              name: displayName,
-              email,
-              role: assignedRole.toLowerCase() as "admin" | "agent",
-              avatar_url: null,
-            },
-          };
-        }
+        return {
+          success: false,
+          error: "Invalid email or password. User account not found in database.",
+        };
       }
-
 
       const user = userList[0];
 
@@ -768,6 +726,57 @@ export const bootstrapDatabaseOnStartup = createServerFn({ method: "GET" }).hand
     }
   },
 );
+
+/**
+ * Server Function: Database Health Check Endpoint.
+ */
+export const checkDatabaseHealth = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{
+    success: boolean;
+    database: string;
+    version: string;
+    userCount: number;
+    error?: string;
+  }> => {
+    try {
+      const config = getMySQLConfig();
+      const conn = await mysql.createConnection({
+        host: config.host,
+        port: config.port,
+        user: config.user,
+        password: config.password ?? "",
+        database: config.database,
+      });
+
+      await ensureMySQLTablesExist(conn, config.database);
+
+      const [infoRows] = await conn.query("SELECT VERSION() AS version;");
+      const [userRows] = await conn.query("SELECT COUNT(*) AS cnt FROM `users` WHERE `is_deleted` = 0;");
+      await conn.end();
+
+      const version = String((infoRows as Array<{ version?: string }>)?.[0]?.version || "Unknown");
+      const userCount = Number((userRows as Array<{ cnt?: number }>)?.[0]?.cnt || 0);
+
+      return {
+        success: true,
+        database: config.database,
+        version,
+        userCount,
+      };
+    } catch (err: unknown) {
+      const errObj = err as { message?: string };
+      console.error("DB Health Check Error:", errObj?.message || err);
+      return {
+        success: false,
+        database: "Unknown",
+        version: "None",
+        userCount: 0,
+        error: errObj?.message || "Unable to connect to MySQL database.",
+      };
+    }
+  },
+);
+
 
 /**
  * Server Function: Updates User Avatar directly in MySQL Database (\`users\` table).

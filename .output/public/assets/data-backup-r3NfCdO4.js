@@ -1,0 +1,1 @@
+import{n as e}from"./index-CugytCj4.js";var t=e;export{t as component};
