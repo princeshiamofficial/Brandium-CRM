@@ -375,8 +375,7 @@ export async function updateMeetingNotes(id: string, notes: string): Promise<Mee
 
 export async function sendMeetingReminderSms(
   meetingId: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  customMessage?: string,
+  _customMessage?: string,
 ): Promise<{ success: boolean; message: string }> {
   const meeting = await fetchMeetingById(meetingId);
   if (!meeting) throw new Error("Meeting not found");

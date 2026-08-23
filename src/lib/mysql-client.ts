@@ -2,6 +2,8 @@
  * Standalone MySQL Database Engine & Connection Helper.
  * Server code reads secrets from MYSQL_* only; client-visible VITE_* values are limited to non-secret hints.
  */
+import fs from "fs";
+import path from "path";
 import type mysql from "mysql2/promise";
 
 export interface MySQLConfig {
@@ -18,13 +20,8 @@ function loadEnvFromFile(): void {
   if (envLoaded || typeof process === "undefined" || !process.versions?.node) return;
   envLoaded = true;
   try {
-    const fs = require("fs");
-    const path = require("path");
     const cwd = process.cwd();
-    const envPaths = [
-      path.resolve(cwd, ".env"),
-      "/home/crm.brandiumagency.com/public_html/.env",
-    ];
+    const envPaths = [path.resolve(cwd, ".env"), "/home/crm.brandiumagency.com/public_html/.env"];
 
     for (const envPath of envPaths) {
       if (fs.existsSync(envPath)) {
@@ -67,19 +64,10 @@ export function getMySQLConfig(): MySQLConfig {
       ? (import.meta.env as Record<string, string | undefined>)
       : undefined;
 
-  const rawHost =
-    serverEnv?.["MYSQL_HOST"] ||
-    clientEnv?.["VITE_MYSQL_HOST"] ||
-    "127.0.0.1";
+  const rawHost = serverEnv?.["MYSQL_HOST"] || clientEnv?.["VITE_MYSQL_HOST"] || "127.0.0.1";
   const host = rawHost === "localhost" ? "127.0.0.1" : rawHost;
-  const port = parseInt(
-    serverEnv?.["MYSQL_PORT"] || clientEnv?.["VITE_MYSQL_PORT"] || "3306",
-    10,
-  );
-  const user =
-    serverEnv?.["MYSQL_USER"] ||
-    clientEnv?.["VITE_MYSQL_USER"] ||
-    "root";
+  const port = parseInt(serverEnv?.["MYSQL_PORT"] || clientEnv?.["VITE_MYSQL_PORT"] || "3306", 10);
+  const user = serverEnv?.["MYSQL_USER"] || clientEnv?.["VITE_MYSQL_USER"] || "root";
   const password =
     serverEnv?.["MYSQL_PASSWORD"] !== undefined
       ? (serverEnv["MYSQL_PASSWORD"] as string)
@@ -87,9 +75,7 @@ export function getMySQLConfig(): MySQLConfig {
         ? (clientEnv["VITE_MYSQL_PASSWORD"] as string)
         : "";
   const database =
-    serverEnv?.["MYSQL_DATABASE"] ||
-    clientEnv?.["VITE_MYSQL_DATABASE"] ||
-    "brandium_crm";
+    serverEnv?.["MYSQL_DATABASE"] || clientEnv?.["VITE_MYSQL_DATABASE"] || "brandium_crm";
   const connectionLimit = parseInt(serverEnv?.["MYSQL_CONNECTION_LIMIT"] || "20", 10);
 
   return {

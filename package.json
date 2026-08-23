@@ -11,8 +11,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run lint && npm run build",
-    "deploy": "git pull origin main && npm install && npm run build && (pm2 restart brandium-crm --update-env || PORT=3005 NITRO_PORT=3005 pm2 start .output/server/index.mjs --name brandium-crm)"
+    "check": "npm run typecheck \u0026\u0026 npm run lint \u0026\u0026 npm run build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
