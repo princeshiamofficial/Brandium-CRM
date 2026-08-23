@@ -4,6 +4,34 @@
  */
 import type mysql from "mysql2/promise";
 
+import fs from "node:fs";
+import path from "node:path";
+
+function loadEnvFile() {
+  if (typeof process === "undefined" || typeof process.cwd !== "function") return;
+  try {
+    const envPath = path.join(process.cwd(), ".env");
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, "utf8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith("#") && trimmed.includes("=")) {
+          const idx = trimmed.indexOf("=");
+          const key = trimmed.slice(0, idx).trim();
+          const val = trimmed.slice(idx + 1).trim();
+          if (!process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore runtime error
+  }
+}
+
+loadEnvFile();
+
 export interface MySQLConfig {
   host: string;
   port: number;
@@ -14,6 +42,7 @@ export interface MySQLConfig {
 }
 
 export function getMySQLConfig(): MySQLConfig {
+  loadEnvFile();
   const serverEnv =
     typeof process !== "undefined"
       ? (process.env as Record<string, string | undefined>)
@@ -22,6 +51,7 @@ export function getMySQLConfig(): MySQLConfig {
     typeof import.meta !== "undefined"
       ? (import.meta.env as Record<string, string | undefined>)
       : undefined;
+
 
   const host = serverEnv?.["MYSQL_HOST"] || clientEnv?.["VITE_MYSQL_HOST"] || "localhost";
   const port = parseInt(serverEnv?.["MYSQL_PORT"] || clientEnv?.["VITE_MYSQL_PORT"] || "3306", 10);
