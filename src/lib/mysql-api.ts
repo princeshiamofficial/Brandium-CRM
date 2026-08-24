@@ -6,12 +6,21 @@
  */
 import { executeMySQLQueryFn } from "./crm.functions";
 
+let isApiMysqlDisabled = false;
+
 export async function runMySQLQuery<T = unknown>(
   sql: string,
   params: unknown[] = [],
 ): Promise<{ success: boolean; data?: T; error?: string }> {
-  // 1. In browser environment: execute directly via Vite Node.js endpoint for instant query execution
-  if (typeof window !== "undefined" && typeof fetch !== "undefined") {
+  const isDev = Boolean(import.meta.env?.DEV);
+
+  // 1. In browser dev mode: execute directly via Vite Node.js endpoint if available
+  if (
+    isDev &&
+    !isApiMysqlDisabled &&
+    typeof window !== "undefined" &&
+    typeof fetch !== "undefined"
+  ) {
     try {
       const response = await fetch("/api/mysql", {
         method: "POST",
@@ -21,8 +30,11 @@ export async function runMySQLQuery<T = unknown>(
       if (response.ok) {
         const result = (await response.json()) as { success: boolean; data?: T; error?: string };
         if (result.success) return result;
+      } else if (response.status === 404 || response.status === 403) {
+        isApiMysqlDisabled = true;
       }
     } catch (err) {
+      isApiMysqlDisabled = true;
       console.warn("Direct /api/mysql browser fetch notice:", err);
     }
   }
