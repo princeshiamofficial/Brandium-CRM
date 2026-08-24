@@ -119,6 +119,7 @@ export async function getMySQLPool(): Promise<mysql.Pool> {
     keepAliveInitialDelay: 10000,
     charset: "utf8mb4",
     timezone: config.timezone,
+    dateStrings: true,
   });
 
   return globalPool;
@@ -247,4 +248,31 @@ export function formatCrmTime(
     return fallback;
   }
 }
+
+/**
+ * Formats DB timestamp or date string cleanly into "MMM D, YYYY, h:mm a" (e.g. "Aug 24, 2026, 11:07 AM").
+ */
+export function formatCrmDateTime(
+  dateInput: string | Date | null | undefined,
+  fallback = "N/A"
+): string {
+  if (!dateInput) return fallback;
+  try {
+    const d = parseCrmDate(dateInput);
+    const datePart = d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const timePart = d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    return `${datePart}, ${timePart}`;
+  } catch {
+    return fallback;
+  }
+}
+
 
