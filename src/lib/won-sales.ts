@@ -137,7 +137,7 @@ function applyClientFilters(list: WonSale[], filters: WonSaleFilters): WonSale[]
 export async function fetchAgentOptions(): Promise<AgentOption[]> {
   try {
     const res = await runMySQLQuery<Record<string, unknown>[]>(
-      "SELECT id, name FROM `users` WHERE is_active = 1 ORDER BY name ASC;",
+      "SELECT id, name FROM `users` WHERE (is_deleted = 0 OR is_deleted IS NULL) AND (status = 'Active' OR status IS NULL) ORDER BY name ASC;",
     );
     if (!res.success || !Array.isArray(res.data)) {
       return [];
