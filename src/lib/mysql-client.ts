@@ -96,6 +96,15 @@ export function checkDatabaseConnection(): boolean {
   return true;
 }
 
+export function sanitizeParams(params: unknown[] = []): unknown[] {
+  return params.map((p) => {
+    if (p instanceof Date) {
+      return getMySQLTimestamp(p);
+    }
+    return p;
+  });
+}
+
 let globalPool: mysql.Pool | null = null;
 
 export async function getMySQLPool(): Promise<mysql.Pool> {
@@ -122,6 +131,14 @@ export async function getMySQLPool(): Promise<mysql.Pool> {
     dateStrings: true,
   });
 
+  try {
+    globalPool.on("connection", (connection) => {
+      connection.query("SET time_zone = '+06:00';");
+    });
+  } catch {
+    // Ignore if listener fails
+  }
+
   return globalPool;
 }
 
@@ -133,7 +150,8 @@ export async function queryPool<T = Record<string, unknown>[]>(
   params: unknown[] = [],
 ): Promise<T> {
   const pool = await getMySQLPool();
-  const [rows] = await pool.query(sql, params);
+  const cleanParams = sanitizeParams(params);
+  const [rows] = await pool.query(sql, cleanParams);
   return rows as T;
 }
 
@@ -142,7 +160,8 @@ export async function executePool(
   params: unknown[] = [],
 ): Promise<{ affectedRows: number; insertId?: number | undefined }> {
   const pool = await getMySQLPool();
-  const [result] = await pool.query(sql, params);
+  const cleanParams = sanitizeParams(params);
+  const [result] = await pool.query(sql, cleanParams);
   const okPacket = result as { affectedRows?: number; insertId?: number };
   return {
     affectedRows: okPacket.affectedRows ?? 0,
