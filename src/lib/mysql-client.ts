@@ -171,3 +171,75 @@ export function generateUUID(): string {
     return v.toString(16);
   });
 }
+
+/**
+ * Helper to get current local timestamp formatted for MySQL DATETIME columns ("YYYY-MM-DD HH:mm:ss").
+ */
+export function getMySQLTimestamp(date: Date = new Date()): string {
+  try {
+    return date.toLocaleString("sv-SE", { timeZone: "Asia/Dhaka" }).replace("T", " ");
+  } catch {
+    return date.toISOString().slice(0, 19).replace("T", " ");
+  }
+}
+
+/**
+ * Formats DB timestamp or date string cleanly into "MMM D, YYYY" (e.g. "Aug 24, 2026")
+ * avoiding unintended client timezone date shifting.
+ */
+export function formatCrmDate(
+  dateInput: string | Date | null | undefined,
+  fallback = "N/A"
+): string {
+  if (!dateInput) return fallback;
+  try {
+    if (dateInput instanceof Date) {
+      if (isNaN(dateInput.getTime())) return fallback;
+      return dateInput.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+
+    const rawStr = String(dateInput).trim();
+    if (!rawStr) return fallback;
+
+    const match = rawStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (match) {
+      const year = parseInt(match[1]!, 10);
+      const monthIdx = parseInt(match[2]!, 10) - 1;
+      const day = parseInt(match[3]!, 10);
+      const monthNames = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
+      if (monthIdx >= 0 && monthIdx < 12 && day > 0 && day <= 31) {
+        return `${monthNames[monthIdx]} ${day}, ${year}`;
+      }
+    }
+
+    const parsed = new Date(
+      rawStr.includes(" ") && !rawStr.includes("T") ? rawStr.replace(" ", "T") : rawStr
+    );
+    if (isNaN(parsed.getTime())) return fallback;
+    return parsed.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return fallback;
+  }
+}
+

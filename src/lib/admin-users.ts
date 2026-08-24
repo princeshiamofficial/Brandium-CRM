@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import bcrypt from "bcryptjs";
 import { runMySQLQuery } from "@/lib/mysql-api";
+import { getMySQLTimestamp } from "@/lib/mysql-client";
 
 export type CrmUserRole = "ADMIN" | "AGENT" | "DEVELOPER";
 export type CrmUserStatus = "Active" | "Inactive" | "Deleted";
@@ -142,7 +143,7 @@ export async function createCrmUser(input: CreateCrmUserInput): Promise<CrmUser>
   }
 
   const hashedPassword = hashPasswordBcrypt(input.password_hash);
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   const userId = generateUUID();
 
   const insertRes = await runMySQLQuery(
@@ -181,7 +182,7 @@ export async function createCrmUser(input: CreateCrmUserInput): Promise<CrmUser>
 
 export async function updateCrmUser(id: string, input: UpdateCrmUserInput): Promise<CrmUser> {
   const inputEmail = input.email.toLowerCase().trim();
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
 
   const dupRes = await runMySQLQuery<Record<string, unknown>[]>(
     "SELECT id FROM `users` WHERE id != ? AND LOWER(email) = LOWER(?) AND is_deleted = 0 LIMIT 1;",
@@ -209,7 +210,7 @@ export async function resetUserPassword(userId: string, newPlaintext: string): P
   }
 
   const hashed = hashPasswordBcrypt(newPlaintext);
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   await runMySQLQuery("UPDATE `users` SET `password_hash` = ?, `updated_at` = ? WHERE `id` = ?;", [
     hashed,
     now,
@@ -235,7 +236,7 @@ export async function changeOwnPassword(
 }
 
 export async function toggleUserStatus(userId: string, newStatus: CrmUserStatus): Promise<boolean> {
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   await runMySQLQuery(
     "UPDATE `users` SET `status` = ?, `is_active` = ?, `updated_at` = ? WHERE `id` = ?;",
     [newStatus, newStatus === "Active" ? 1 : 0, now, userId],
@@ -249,7 +250,7 @@ export async function softDeleteCrmUser(userId: string): Promise<boolean> {
     throw new Error("System default accounts cannot be deleted.");
   }
 
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   await runMySQLQuery(
     "UPDATE `users` SET `is_deleted` = 1, `status` = 'Deleted', `deleted_at` = ?, `updated_at` = ? WHERE `id` = ?;",
     [now, now, userId],
@@ -259,7 +260,7 @@ export async function softDeleteCrmUser(userId: string): Promise<boolean> {
 
 export async function updateUserAvatar(userId: string, avatarUrl: string): Promise<boolean> {
   const newAvatar = avatarUrl || null;
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
 
   if (newAvatar) {
     userAvatarMemoryMap.set(userId, newAvatar);

@@ -70,6 +70,7 @@ const getInitials = (name: string) => {
 };
 
 import { useAuth } from "@/lib/auth";
+import { formatCrmDate } from "@/lib/mysql-client";
 import {
   crmUsersQueryOptions,
   CrmUser,
@@ -365,21 +366,13 @@ function AdminUsersPage() {
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Calendar className="size-3 text-slate-400" />
-                          {new Date(u.created_at).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
+                          {formatCrmDate(u.created_at)}
                         </div>
                       </TableCell>
 
                       {/* Updated At */}
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {new Date(u.updated_at).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
+                        {formatCrmDate(u.updated_at)}
                       </TableCell>
 
                       {/* Status */}
