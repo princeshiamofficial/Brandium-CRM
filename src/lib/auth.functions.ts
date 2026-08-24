@@ -500,6 +500,144 @@ export async function ensureMySQLTablesExist(
       }
     }
 
+    // Safe auto-column additions for invoices, opportunities, meetings, payments, services
+    const autoColumns: Array<{ table: string; col: string; query: string }> = [
+      {
+        table: "invoices",
+        col: "due_amount",
+        query:
+          "ALTER TABLE `invoices` ADD COLUMN `due_amount` DECIMAL(12, 2) NOT NULL DEFAULT 0.00 AFTER `paid_amount`;",
+      },
+      {
+        table: "invoices",
+        col: "description",
+        query: "ALTER TABLE `invoices` ADD COLUMN `description` TEXT NULL AFTER `due_amount`;",
+      },
+      {
+        table: "invoices",
+        col: "bill_date",
+        query: "ALTER TABLE `invoices` ADD COLUMN `bill_date` VARCHAR(20) NULL AFTER `description`;",
+      },
+      {
+        table: "invoices",
+        col: "due_date",
+        query: "ALTER TABLE `invoices` ADD COLUMN `due_date` VARCHAR(20) NULL AFTER `bill_date`;",
+      },
+      {
+        table: "invoices",
+        col: "notes",
+        query: "ALTER TABLE `invoices` ADD COLUMN `notes` TEXT NULL AFTER `due_date`;",
+      },
+      {
+        table: "opportunities",
+        col: "status",
+        query:
+          "ALTER TABLE `opportunities` ADD COLUMN `status` VARCHAR(100) NULL AFTER `stage`;",
+      },
+      {
+        table: "opportunities",
+        col: "estimated_value",
+        query:
+          "ALTER TABLE `opportunities` ADD COLUMN `estimated_value` DECIMAL(12, 2) NOT NULL DEFAULT 0.00 AFTER `value`;",
+      },
+      {
+        table: "opportunities",
+        col: "notes",
+        query:
+          "ALTER TABLE `opportunities` ADD COLUMN `notes` TEXT NULL AFTER `expected_close_date`;",
+      },
+      {
+        table: "opportunities",
+        col: "assigned_to",
+        query:
+          "ALTER TABLE `opportunities` ADD COLUMN `assigned_to` VARCHAR(36) NULL AFTER `notes`;",
+      },
+      {
+        table: "opportunities",
+        col: "updated_at",
+        query:
+          "ALTER TABLE `opportunities` ADD COLUMN `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`;",
+      },
+      {
+        table: "meetings",
+        col: "phone",
+        query: "ALTER TABLE `meetings` ADD COLUMN `phone` VARCHAR(50) NULL AFTER `notes`;",
+      },
+      {
+        table: "meetings",
+        col: "location",
+        query:
+          "ALTER TABLE `meetings` ADD COLUMN `location` VARCHAR(255) NULL AFTER `phone`;",
+      },
+      {
+        table: "meetings",
+        col: "meeting_type",
+        query:
+          "ALTER TABLE `meetings` ADD COLUMN `meeting_type` VARCHAR(50) NULL AFTER `location`;",
+      },
+      {
+        table: "meetings",
+        col: "meeting_date",
+        query:
+          "ALTER TABLE `meetings` ADD COLUMN `meeting_date` VARCHAR(20) NULL AFTER `meeting_type`;",
+      },
+      {
+        table: "meetings",
+        col: "meeting_time",
+        query:
+          "ALTER TABLE `meetings` ADD COLUMN `meeting_time` VARCHAR(20) NULL AFTER `meeting_date`;",
+      },
+      {
+        table: "meetings",
+        col: "updated_at",
+        query:
+          "ALTER TABLE `meetings` ADD COLUMN `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`;",
+      },
+      {
+        table: "payments",
+        col: "transaction_reference",
+        query:
+          "ALTER TABLE `payments` ADD COLUMN `transaction_reference` VARCHAR(255) NULL AFTER `payment_method`;",
+      },
+      {
+        table: "payments",
+        col: "notes",
+        query:
+          "ALTER TABLE `payments` ADD COLUMN `notes` TEXT NULL AFTER `transaction_reference`;",
+      },
+      {
+        table: "services",
+        col: "price",
+        query:
+          "ALTER TABLE `services` ADD COLUMN `price` DECIMAL(12, 2) NOT NULL DEFAULT 0.00 AFTER `description`;",
+      },
+      {
+        table: "services",
+        col: "category",
+        query:
+          "ALTER TABLE `services` ADD COLUMN `category` VARCHAR(100) NULL AFTER `price`;",
+      },
+      {
+        table: "services",
+        col: "icon",
+        query: "ALTER TABLE `services` ADD COLUMN `icon` VARCHAR(100) NULL AFTER `category`;",
+      },
+    ];
+
+    for (const c of autoColumns) {
+      try {
+        const [colCheck] = await conn.query(
+          `SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+          [dbName, c.table, c.col],
+        );
+        if (Number((colCheck as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
+          await conn.query(c.query);
+        }
+      } catch {
+        // Ignore if column already exists
+      }
+    }
+
     // Re-enable foreign key checks
     await conn.query("SET FOREIGN_KEY_CHECKS = 1;");
 
