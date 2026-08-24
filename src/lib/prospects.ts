@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
 import { formatStageSlugOrName } from "@/lib/stages";
 import { runMySQLQuery } from "@/lib/mysql-api";
+import { getMySQLTimestamp } from "@/lib/mysql-client";
 import {
   saveMySQLProspect,
   fetchMySQLProspects,
@@ -418,7 +419,7 @@ export async function generateNextProspectId(): Promise<string> {
 
 export async function createProspect(input: CreateProspectInput): Promise<Prospect> {
   const nextId = await generateNextProspectId();
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
 
   const newProspect: Prospect = {
     id: nextId,
@@ -525,7 +526,7 @@ export async function updateProspect(
   input: Partial<CreateProspectInput>,
 ): Promise<boolean> {
   if (!prospectId) return false;
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
 
   const updateSql = `
     UPDATE \`prospects\` SET

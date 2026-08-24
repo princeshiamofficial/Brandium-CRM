@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import mysql from "mysql2/promise";
-import { getMySQLConfig, generateUUID } from "./mysql-client";
+import { getMySQLConfig, generateUUID, getMySQLTimestamp } from "./mysql-client";
 import { ensureMySQLTablesExist } from "./auth.functions";
 
 async function getMySQLConn() {
@@ -98,7 +98,7 @@ export const saveMySQLProspect = createServerFn({ method: "POST" })
         }
       }
 
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       await conn.query(
         `INSERT INTO \`prospects\` (
@@ -254,7 +254,7 @@ export const seedMySQLProspects = createServerFn({ method: "POST" })
 
       for (const item of list) {
         const prospectId = item.id && item.id.trim() ? item.id.trim() : generateUUID();
-        const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+        const now = getMySQLTimestamp();
 
         await conn.query(
           `INSERT INTO \`prospects\` (
@@ -327,7 +327,7 @@ export const updateMySQLProspect = createServerFn({ method: "POST" })
     }
     try {
       const conn = await getMySQLConn();
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
       await conn.query(
         `UPDATE \`prospects\` SET
           \`contact_name\` = ?,

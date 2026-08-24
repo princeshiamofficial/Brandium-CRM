@@ -184,6 +184,30 @@ export function getMySQLTimestamp(date: Date = new Date()): string {
 }
 
 /**
+ * Helper to safely parse MySQL DATETIME string into a local Date object
+ * preserving exact year, month, day, hour, minute, second values without timezone shifting.
+ */
+export function parseCrmDate(input: string | Date | null | undefined): Date {
+  if (!input) return new Date();
+  if (input instanceof Date) return isNaN(input.getTime()) ? new Date() : input;
+  const str = String(input).trim();
+  const match = str.match(
+    /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T ](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/
+  );
+  if (match) {
+    const year = parseInt(match[1]!, 10);
+    const monthIdx = parseInt(match[2]!, 10) - 1;
+    const day = parseInt(match[3]!, 10);
+    const hour = match[4] ? parseInt(match[4]!, 10) : 0;
+    const min = match[5] ? parseInt(match[5]!, 10) : 0;
+    const sec = match[6] ? parseInt(match[6]!, 10) : 0;
+    return new Date(year, monthIdx, day, hour, min, sec);
+  }
+  const fallback = new Date(str);
+  return isNaN(fallback.getTime()) ? new Date() : fallback;
+}
+
+/**
  * Formats DB timestamp or date string cleanly into "MMM D, YYYY" (e.g. "Aug 24, 2026")
  * avoiding unintended client timezone date shifting.
  */
@@ -193,50 +217,31 @@ export function formatCrmDate(
 ): string {
   if (!dateInput) return fallback;
   try {
-    if (dateInput instanceof Date) {
-      if (isNaN(dateInput.getTime())) return fallback;
-      return dateInput.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-    }
-
-    const rawStr = String(dateInput).trim();
-    if (!rawStr) return fallback;
-
-    const match = rawStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-    if (match) {
-      const year = parseInt(match[1]!, 10);
-      const monthIdx = parseInt(match[2]!, 10) - 1;
-      const day = parseInt(match[3]!, 10);
-      const monthNames = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-      ];
-      if (monthIdx >= 0 && monthIdx < 12 && day > 0 && day <= 31) {
-        return `${monthNames[monthIdx]} ${day}, ${year}`;
-      }
-    }
-
-    const parsed = new Date(
-      rawStr.includes(" ") && !rawStr.includes("T") ? rawStr.replace(" ", "T") : rawStr
-    );
-    if (isNaN(parsed.getTime())) return fallback;
-    return parsed.toLocaleDateString("en-US", {
+    const d = parseCrmDate(dateInput);
+    return d.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
+    });
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Formats DB timestamp or date string cleanly into "h:mm a" (e.g. "11:07 AM").
+ */
+export function formatCrmTime(
+  dateInput: string | Date | null | undefined,
+  fallback = "12:00 AM"
+): string {
+  if (!dateInput) return fallback;
+  try {
+    const d = parseCrmDate(dateInput);
+    return d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
     });
   } catch {
     return fallback;

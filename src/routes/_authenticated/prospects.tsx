@@ -57,6 +57,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { useAuth } from "@/lib/auth";
+import { formatCrmDate, formatCrmTime } from "@/lib/mysql-client";
 import {
   prospectsQuery,
   prospectsStatsQuery,
@@ -692,23 +693,21 @@ function ProspectsPage() {
                   <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 font-medium">
                     <div className="flex items-center gap-1">
                       <CalendarIcon className="size-3.5 text-slate-400 shrink-0" />
-                      <span>Created : {format(new Date(p.created_at), "MMM d, yyyy")}</span>
+                      <span>Created : {formatCrmDate(p.created_at)}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Clock className="size-3.5 text-slate-400 shrink-0" />
-                      <span>{format(new Date(p.created_at), "h:mm a")}</span>
+                      <span>{formatCrmTime(p.created_at)}</span>
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 font-medium">
                     <div className="flex items-center gap-1">
                       <CalendarIcon className="size-3.5 text-slate-400 shrink-0" />
-                      <span>
-                        Updated : {format(new Date(p.updated_at || p.created_at), "MMM d, yyyy")}
-                      </span>
+                      <span>Updated : {formatCrmDate(p.updated_at || p.created_at)}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Clock className="size-3.5 text-slate-400 shrink-0" />
-                      <span>{format(new Date(p.updated_at || p.created_at), "h:mm a")}</span>
+                      <span>{formatCrmTime(p.updated_at || p.created_at)}</span>
                     </div>
                   </div>
                 </div>
