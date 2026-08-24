@@ -1,17 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import mysql from "mysql2/promise";
-import { getMySQLConfig, generateUUID, getMySQLTimestamp } from "./mysql-client";
+import { getMySQLConfig, generateUUID, getMySQLTimestamp, createSingleMySQLConnection } from "./mysql-client";
 import { ensureMySQLTablesExist } from "./auth.functions";
 
 async function getMySQLConn() {
   const config = getMySQLConfig();
-  const conn = await mysql.createConnection({
-    host: config.host === "localhost" ? "127.0.0.1" : config.host,
-    port: config.port,
-    user: config.user,
-    password: config.password ?? "",
-    database: config.database,
-  });
+  const conn = await createSingleMySQLConnection();
   await ensureMySQLTablesExist(conn, config.database);
   return conn;
 }

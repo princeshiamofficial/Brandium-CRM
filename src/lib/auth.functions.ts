@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import bcrypt from "bcryptjs";
 import mysql from "mysql2/promise";
 
-import { getMySQLConfig } from "./mysql-client";
+import { getMySQLConfig, createSingleMySQLConnection, getMySQLTimestamp } from "./mysql-client";
 
 export type AuthenticateUserResponse = {
   success: boolean;
@@ -23,13 +23,14 @@ export type AuthenticateUserResponse = {
  */
 export async function ensureMySQLTablesExist(
   conn: mysql.Connection,
-  dbName: string,
+  dbName?: string,
 ): Promise<void> {
+  const targetDb = dbName || getMySQLConfig().database;
   try {
     // Disable foreign key checks for safe table bootstrapping
     await conn.query("SET FOREIGN_KEY_CHECKS = 0;");
     await conn.query(
-      `ALTER DATABASE \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
+      `ALTER DATABASE \`${targetDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
     );
 
     // Auto-delete \`user_avatars\` table if it exists in MySQL
@@ -588,17 +589,10 @@ export const authenticateXamppUser = createServerFn({ method: "POST" })
     }
 
     try {
-      const config = getMySQLConfig();
-      const conn = await mysql.createConnection({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password ?? "",
-        database: config.database,
-      });
+      const conn = await createSingleMySQLConnection();
 
       // Execute ERP Automatic Database Table & Schema Auto-Creation Engine
-      await ensureMySQLTablesExist(conn, config.database);
+      await ensureMySQLTablesExist(conn);
 
       if (email === "admin@example.com" || email === "agent@brandium.com") {
         try {
@@ -705,7 +699,7 @@ export const bootstrapDatabaseOnStartup = createServerFn({ method: "GET" }).hand
       await conn.query(`USE \`${config.database}\`;`);
 
       // 2. Auto Create All Tables IF NOT EXISTS
-      await ensureMySQLTablesExist(conn, config.database);
+      await ensureMySQLTablesExist(conn);
       await conn.end();
 
       return {
@@ -734,18 +728,10 @@ export const updateMySQLUserAvatar = createServerFn({ method: "POST" })
     }
 
     try {
-      const config = getMySQLConfig();
-      const conn = await mysql.createConnection({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password ?? "",
-        database: config.database,
-      });
+      const conn = await createSingleMySQLConnection();
+      await ensureMySQLTablesExist(conn);
 
-      await ensureMySQLTablesExist(conn, config.database);
-
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       // Update \`users\` table avatar_url in MySQL DB
       await conn.query("UPDATE `users` SET `avatar_url` = ?, `updated_at` = ? WHERE `id` = ?", [
@@ -775,16 +761,8 @@ export const fetchMySQLUsers = createServerFn({ method: "GET" }).handler(
     users: Array<Record<string, string | number | boolean | null>>;
   }> => {
     try {
-      const config = getMySQLConfig();
-      const conn = await mysql.createConnection({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password ?? "",
-        database: config.database,
-      });
-
-      await ensureMySQLTablesExist(conn, config.database);
+      const conn = await createSingleMySQLConnection();
+      await ensureMySQLTablesExist(conn);
 
       const [rows] = await conn.query(
         "SELECT id, name, email, password_hash, role, status, avatar_url, is_deleted, created_at, updated_at FROM users WHERE is_deleted = 0 ORDER BY created_at DESC",
@@ -830,18 +808,10 @@ export const updateMySQLUser = createServerFn({ method: "POST" })
     }
 
     try {
-      const config = getMySQLConfig();
-      const conn = await mysql.createConnection({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password ?? "",
-        database: config.database,
-      });
+      const conn = await createSingleMySQLConnection();
+      await ensureMySQLTablesExist(conn);
 
-      await ensureMySQLTablesExist(conn, config.database);
-
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       await conn.query(
         "UPDATE `users` SET `name` = ?, `email` = ?, `role` = ?, `status` = ?, `updated_at` = ? WHERE `id` = ?",
@@ -900,18 +870,10 @@ export const createMySQLUser = createServerFn({ method: "POST" })
     }
 
     try {
-      const config = getMySQLConfig();
-      const conn = await mysql.createConnection({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password ?? "",
-        database: config.database,
-      });
+      const conn = await createSingleMySQLConnection();
+      await ensureMySQLTablesExist(conn);
 
-      await ensureMySQLTablesExist(conn, config.database);
-
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       await conn.query(
         `INSERT INTO \`users\` (\`id\`, \`name\`, \`email\`, \`password_hash\`, \`role\`, \`status\`, \`avatar_url\`, \`is_deleted\`, \`created_at\`, \`updated_at\`)
@@ -945,18 +907,10 @@ export const toggleMySQLUserStatus = createServerFn({ method: "POST" })
     }
 
     try {
-      const config = getMySQLConfig();
-      const conn = await mysql.createConnection({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password ?? "",
-        database: config.database,
-      });
+      const conn = await createSingleMySQLConnection();
+      await ensureMySQLTablesExist(conn);
 
-      await ensureMySQLTablesExist(conn, config.database);
-
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       await conn.query("UPDATE `users` SET `status` = ?, `updated_at` = ? WHERE `id` = ?", [
         status,
@@ -985,18 +939,10 @@ export const softDeleteMySQLUser = createServerFn({ method: "POST" })
     }
 
     try {
-      const config = getMySQLConfig();
-      const conn = await mysql.createConnection({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password ?? "",
-        database: config.database,
-      });
+      const conn = await createSingleMySQLConnection();
+      await ensureMySQLTablesExist(conn);
 
-      await ensureMySQLTablesExist(conn, config.database);
-
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       await conn.query(
         "UPDATE `users` SET `is_deleted` = 1, `status` = 'Deleted', `deleted_at` = ?, `updated_at` = ? WHERE `id` = ?",
@@ -1025,18 +971,10 @@ export const resetMySQLUserPassword = createServerFn({ method: "POST" })
     }
 
     try {
-      const config = getMySQLConfig();
-      const conn = await mysql.createConnection({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password ?? "",
-        database: config.database,
-      });
+      const conn = await createSingleMySQLConnection();
+      await ensureMySQLTablesExist(conn);
 
-      await ensureMySQLTablesExist(conn, config.database);
-
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       await conn.query("UPDATE `users` SET `password_hash` = ?, `updated_at` = ? WHERE `id` = ?", [
         passwordHash,
@@ -1068,15 +1006,8 @@ export const createMySQLSession = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      const config = getMySQLConfig();
-      const conn = await mysql.createConnection({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password ?? "",
-        database: config.database,
-      });
-      await ensureMySQLTablesExist(conn, config.database);
+      const conn = await createSingleMySQLConnection();
+      await ensureMySQLTablesExist(conn);
 
       // Session expires in 30 days
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
@@ -1117,17 +1048,10 @@ export const getMySQLSession = createServerFn({ method: "GET" })
   .validator((d: { sessionId: string }) => d)
   .handler(async ({ data }) => {
     try {
-      const config = getMySQLConfig();
-      const conn = await mysql.createConnection({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password ?? "",
-        database: config.database,
-      });
-      await ensureMySQLTablesExist(conn, config.database);
+      const conn = await createSingleMySQLConnection();
+      await ensureMySQLTablesExist(conn);
 
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
       const [rows] = await conn.query(
         `SELECT * FROM \`sessions\` WHERE \`id\` = ? AND \`expires_at\` > ? LIMIT 1`,
         [data.sessionId, now],
@@ -1164,15 +1088,8 @@ export const deleteMySQLSession = createServerFn({ method: "POST" })
   .validator((d: { sessionId: string }) => d)
   .handler(async ({ data }) => {
     try {
-      const config = getMySQLConfig();
-      const conn = await mysql.createConnection({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password ?? "",
-        database: config.database,
-      });
-      await ensureMySQLTablesExist(conn, config.database);
+      const conn = await createSingleMySQLConnection();
+      await ensureMySQLTablesExist(conn);
       await conn.query(`DELETE FROM \`sessions\` WHERE \`id\` = ?`, [data.sessionId]);
       await conn.end();
       return { success: true };

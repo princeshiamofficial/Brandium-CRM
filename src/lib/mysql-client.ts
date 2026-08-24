@@ -142,6 +142,26 @@ export async function getMySQLPool(): Promise<mysql.Pool> {
   return globalPool;
 }
 
+export async function createSingleMySQLConnection(): Promise<mysql.Connection> {
+  const mysqlModule = await import("mysql2/promise");
+  const config = getMySQLConfig();
+  const conn = await mysqlModule.default.createConnection({
+    host: config.host === "localhost" ? "127.0.0.1" : config.host,
+    port: config.port,
+    user: config.user,
+    password: config.password ?? "",
+    database: config.database,
+    timezone: config.timezone,
+    dateStrings: true,
+  });
+  try {
+    await conn.query("SET time_zone = '+06:00';");
+  } catch {
+    // Ignore
+  }
+  return conn;
+}
+
 /**
  * Executes a parameterized SQL query against the singleton MySQL connection pool.
  */
