@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { runMySQLQuery } from "@/lib/mysql-api";
+import { getMySQLTimestamp } from "@/lib/mysql-client";
 
 export type EntityType =
   | "prospect"
@@ -52,7 +53,7 @@ export async function logActivity(
   user?: { id?: string; email?: string } | null,
 ): Promise<ActivityLog> {
   const logId = generateUUID();
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
 
   const newLog: ActivityLog = {
     id: logId,

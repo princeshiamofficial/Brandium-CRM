@@ -5,7 +5,7 @@ import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchCrmUsers } from "@/lib/admin-users";
 import { runMySQLQuery } from "@/lib/mysql-api";
-import { generateUUID } from "@/lib/mysql-client";
+import { generateUUID, getMySQLTimestamp } from "@/lib/mysql-client";
 
 export const followUpFiltersSchema = z.object({
   page: z.number().catch(1),
@@ -460,7 +460,7 @@ export function useCreateFollowUp() {
     }) => {
       const escape = (str?: string | null) => (str ? str.replace(/'/g, "''") : "");
       const newId = generateUUID();
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
       const isoDue = new Date(input.due_at).toISOString().slice(0, 19).replace("T", " ");
 
       try {

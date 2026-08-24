@@ -6,7 +6,7 @@
 
 import bcrypt from "bcryptjs";
 import { authenticateXamppUser } from "@/lib/auth.functions";
-import { checkDatabaseConnection, generateUUID } from "@/lib/mysql-client";
+import { checkDatabaseConnection, generateUUID, getMySQLTimestamp } from "@/lib/mysql-client";
 import { runMySQLQuery } from "@/lib/mysql-api";
 
 export class FluentDatabaseQueryBuilder<
@@ -171,7 +171,7 @@ export class FluentDatabaseQueryBuilder<
     if (this.pendingInsert.length > 0) {
       for (const item of this.pendingInsert) {
         const id = (item as Record<string, unknown>)["id"] || generateUUID();
-        const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
         const record = {
           ...item,
           id,
@@ -192,7 +192,7 @@ export class FluentDatabaseQueryBuilder<
 
     const rows = await this.executeDirectMySQLQuery();
     if (this.pendingUpdate) {
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
       for (const r of rows) {
         const id = (r as unknown as { id?: string })?.id;
         if (id) {

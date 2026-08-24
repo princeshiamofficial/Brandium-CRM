@@ -508,7 +508,7 @@ export async function ensureMySQLTablesExist(
     if (Number((countRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
       const hashAdmin = bcrypt.hashSync("Admin@12345", 10);
       const hashAgent = bcrypt.hashSync("Agent@12345", 10);
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       await conn.query(
         `

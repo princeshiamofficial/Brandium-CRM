@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { runMySQLQuery } from "@/lib/mysql-api";
+import { getMySQLTimestamp } from "@/lib/mysql-client";
 
 export type ServiceStatus = "Active" | "Inactive" | "Deleted";
 
@@ -79,7 +80,7 @@ export async function createService(input: CreateServiceInput): Promise<CrmServi
   }
 
   const id = generateUUID();
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
 
   const res = await runMySQLQuery(
     `INSERT INTO \`services\` (\`id\`, \`name\`, \`description\`, \`icon\`, \`is_active\`, \`created_at\`, \`updated_at\`)
@@ -112,7 +113,7 @@ export async function createService(input: CreateServiceInput): Promise<CrmServi
 }
 
 export async function updateService(id: string, input: CreateServiceInput): Promise<CrmService> {
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
 
   await runMySQLQuery(
     `UPDATE \`services\` SET \`name\` = ?, \`description\` = ?, \`icon\` = ?, \`is_active\` = ?, \`updated_at\` = ? WHERE \`id\` = ?;`,
@@ -139,7 +140,7 @@ export async function updateService(id: string, input: CreateServiceInput): Prom
 }
 
 export async function toggleServiceStatus(id: string, newStatus: ServiceStatus): Promise<boolean> {
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   const res = await runMySQLQuery(
     "UPDATE `services` SET `is_active` = ?, `updated_at` = ? WHERE `id` = ?;",
     [newStatus === "Active" ? 1 : 0, now, id],
@@ -148,7 +149,7 @@ export async function toggleServiceStatus(id: string, newStatus: ServiceStatus):
 }
 
 export async function softDeleteService(id: string): Promise<boolean> {
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   const res = await runMySQLQuery(
     "UPDATE `services` SET `is_active` = 0, `updated_at` = ? WHERE `id` = ?;",
     [now, id],

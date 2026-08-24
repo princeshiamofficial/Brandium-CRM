@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getMySQLConfig, getMySQLPool, generateUUID } from "./mysql-client";
+import { getMySQLConfig, getMySQLPool, generateUUID, getMySQLTimestamp } from "./mysql-client";
 import { ensureMySQLTablesExist } from "./auth.functions";
 
 async function ensureBootstrapped() {
@@ -162,7 +162,7 @@ export const saveOpportunityFn = createServerFn({ method: "POST" })
       await ensureBootstrapped();
       const pool = await getMySQLPool();
       const oppId = data.id?.trim() || generateUUID();
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       await pool.query(
         `INSERT INTO opportunities (id, prospect_id, value, stage, expected_close_date, created_at)
@@ -335,7 +335,7 @@ export const saveMeetingFn = createServerFn({ method: "POST" })
       await ensureBootstrapped();
       const pool = await getMySQLPool();
       const meetingId = data.id?.trim() || generateUUID();
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       await pool.query(
         `INSERT INTO meetings (id, prospect_id, assigned_to, title, scheduled_at, status, notes, created_at)
@@ -517,7 +517,7 @@ export const saveFollowUpFn = createServerFn({ method: "POST" })
       await ensureBootstrapped();
       const pool = await getMySQLPool();
       const followUpId = data.id?.trim() || generateUUID();
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       await pool.query(
         `INSERT INTO follow_ups (id, prospect_id, assigned_to, created_by, due_at, status, note, created_at, updated_at)
@@ -709,7 +709,7 @@ export const saveInvoiceFn = createServerFn({ method: "POST" })
         await ensureBootstrapped();
         const pool = await getMySQLPool();
         const invId = data.id?.trim() || generateUUID();
-        const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+        const now = getMySQLTimestamp();
         const invNumber = `INV-${Date.now().toString().slice(-6)}`;
 
         await pool.query(
@@ -754,7 +754,7 @@ export const recordInvoicePaymentFn = createServerFn({ method: "POST" })
       await ensureBootstrapped();
       const pool = await getMySQLPool();
       const paymentId = generateUUID();
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       // 1. Insert into payments table
       await pool.query(
@@ -833,7 +833,7 @@ export const saveServiceFn = createServerFn({ method: "POST" })
       await ensureBootstrapped();
       const pool = await getMySQLPool();
       const sId = data.id?.trim() || generateUUID();
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       await pool.query(
         `INSERT INTO services (id, name, description, is_active, created_at, updated_at)

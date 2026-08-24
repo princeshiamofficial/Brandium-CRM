@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { runMySQLQuery } from "@/lib/mysql-api";
+import { getMySQLTimestamp } from "@/lib/mysql-client";
 import { InvoiceStatus, PaymentMethod } from "@/lib/billing";
 
 export type Payment = {
@@ -65,7 +66,7 @@ export async function processInvoicePayment(
   }
 
   const paymentId = generateUUID();
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
 
   // 1. Fetch current invoice
   const invRes = await runMySQLQuery<Record<string, unknown>[]>(
@@ -149,7 +150,7 @@ export async function processInvoicePayment(
 }
 
 export async function restoreCancelledInvoice(invoiceId: string): Promise<boolean> {
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   const res = await runMySQLQuery(
     "UPDATE `invoices` SET `status` = 'Pending', `updated_at` = ? WHERE `id` = ?;",
     [now, invoiceId],

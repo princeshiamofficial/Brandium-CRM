@@ -1,6 +1,7 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { runMySQLQuery } from "@/lib/mysql-api";
+import { getMySQLTimestamp } from "@/lib/mysql-client";
 
 export const PIPELINE_STAGES = [
   "Opportunity Created",
@@ -299,7 +300,7 @@ export function useCreateOpportunity() {
     }) => {
       const oppId = generateUUID();
       const status = input.status ?? "Opportunity Created";
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       const res = await runMySQLQuery(
         `INSERT INTO \`opportunities\` (
@@ -362,7 +363,7 @@ export function useUpdateOpportunityStatus() {
       prospectName?: string | undefined;
       estimatedValue?: number | undefined;
     }) => {
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
 
       let sql = "UPDATE `opportunities` SET `status` = ?, `updated_at` = ? WHERE `id` = ?;";
       let params: (string | number | null)[] = [input.status, now, input.id];
@@ -430,7 +431,7 @@ export function useSoftDeleteOpportunity() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
       const res = await runMySQLQuery(
         "UPDATE `opportunities` SET `is_active` = 0, `updated_at` = ? WHERE `id` = ?;",
         [now, id],

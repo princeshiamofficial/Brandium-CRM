@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { runMySQLQuery } from "@/lib/mysql-api";
+import { getMySQLTimestamp } from "@/lib/mysql-client";
 
 export type SmsStatus = "Sent" | "Failed" | "Pending";
 export type SmsMode = "Single" | "Bulk";
@@ -153,7 +154,7 @@ export async function sendSms(
 
   const cleanPhone = phone.trim();
   const cleanMessage = message.trim();
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   const apiRespId = `SMS-REQ-${Math.floor(10000 + Math.random() * 90000)}`;
   const logId = generateUUID();
 

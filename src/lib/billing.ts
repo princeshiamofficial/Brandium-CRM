@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { runMySQLQuery } from "@/lib/mysql-api";
+import { getMySQLTimestamp } from "@/lib/mysql-client";
 
 export type InvoiceStatus = "Pending" | "Partially Paid" | "Paid" | "Cancelled";
 export type PaymentMethod = "Bank Transfer" | "bKash" | "Nagad" | "Cash" | "Card";
@@ -233,7 +234,7 @@ export async function createInvoice(
 ): Promise<Invoice> {
   const invId = generateUUID();
   const invNum = `INV-2026-${Math.floor(100 + Math.random() * 900)}`;
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
 
   const res = await runMySQLQuery(
     `INSERT INTO \`invoices\` (
@@ -379,7 +380,7 @@ export async function recordInvoicePayment(
   }
 
   const payId = generateUUID();
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
 
   const payRes = await runMySQLQuery(
     `INSERT INTO \`payments\` (
@@ -432,7 +433,7 @@ export async function recordInvoicePayment(
 }
 
 export async function cancelInvoice(id: string): Promise<void> {
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   await runMySQLQuery(
     "UPDATE `invoices` SET `status` = 'Cancelled', `updated_at` = ? WHERE `id` = ?;",
     [now, id],
@@ -482,7 +483,7 @@ export async function updateInvoice(
   id: string,
   updates: Partial<CreateInvoiceInput>,
 ): Promise<Invoice> {
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   const sets: string[] = ["`updated_at` = ?"];
   const params: (string | number | null)[] = [now];
 

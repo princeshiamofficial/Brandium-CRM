@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { runMySQLQuery } from "@/lib/mysql-api";
+import { getMySQLTimestamp } from "@/lib/mysql-client";
 
 export type MeetingType = "Office" | "Online" | "Client Location" | "Other";
 export type MeetingStatus = "Scheduled" | "Completed" | "Cancelled";
@@ -200,7 +201,7 @@ export async function fetchMeetingById(id: string): Promise<Meeting | null> {
 
 export async function createMeeting(input: CreateMeetingInput): Promise<Meeting> {
   const newId = generateUUID();
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
 
   const res = await runMySQLQuery(
     `INSERT INTO \`meetings\` (
@@ -232,7 +233,7 @@ export async function createMeeting(input: CreateMeetingInput): Promise<Meeting>
   // Auto-update prospect stage to "Meeting Scheduled" when a meeting is created for them
   if (input.prospect_id) {
     try {
-      const nowStr = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const nowStr = getMySQLTimestamp();
 
       // Resolve the "Meeting Scheduled" stage ID from MySQL
       const stageRes = await runMySQLQuery<Record<string, unknown>[]>(
@@ -307,7 +308,7 @@ export async function createMeeting(input: CreateMeetingInput): Promise<Meeting>
 }
 
 export async function updateMeeting(id: string, updates: UpdateMeetingInput): Promise<Meeting> {
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   const sets: string[] = ["`updated_at` = ?"];
   const params: (string | number | null)[] = [now];
 
@@ -383,7 +384,7 @@ export async function sendMeetingReminderSms(
   const phone = meeting.phone || "+8801700000000";
   await updateMeeting(meetingId, { sms_sent: true });
 
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   await runMySQLQuery(
     `INSERT INTO \`activities\` (\`id\`, \`message\`, \`activity_type\`, \`created_at\`)
      VALUES (?, ?, 'sms_sent', ?);`,
@@ -404,7 +405,7 @@ export async function deleteMeeting(id: string): Promise<{ success: boolean; mes
   const existing = await fetchMeetingById(id);
   await runMySQLQuery("DELETE FROM `meetings` WHERE `id` = ?;", [id]);
 
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   await runMySQLQuery(
     `INSERT INTO \`activities\` (\`id\`, \`message\`, \`activity_type\`, \`created_at\`)
      VALUES (?, ?, 'meeting_deleted', ?);`,

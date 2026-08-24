@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { runMySQLQuery } from "@/lib/mysql-api";
+import { getMySQLTimestamp } from "@/lib/mysql-client";
 
 export type DeniedPayment = {
   id: string;
@@ -235,7 +236,7 @@ export type CreateDeniedPaymentRecordInput = {
 export async function createDeniedPaymentRecord(
   input: CreateDeniedPaymentRecordInput,
 ): Promise<void> {
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
 
   // Resolve "Denied Payment" stage ID from MySQL
   const stageRes = await runMySQLQuery<Record<string, unknown>[]>(
@@ -302,7 +303,7 @@ export async function createDeniedPaymentRecord(
 }
 
 export async function changeDeniedPaymentStage(input: ChangeStageInput): Promise<DeniedPayment> {
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = getMySQLTimestamp();
   const prospectId = input.prospectId || input.deniedPaymentId;
 
   // Find target stage

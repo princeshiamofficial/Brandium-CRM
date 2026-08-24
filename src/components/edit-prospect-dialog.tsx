@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { runMySQLQuery } from "@/lib/mysql-api";
+import { getMySQLTimestamp } from "@/lib/mysql-client";
 import { type Prospect } from "@/lib/prospects";
 import { servicesQueryOptions } from "@/lib/services";
 import { agentOptionsQueryOptions } from "@/lib/won-sales";
@@ -170,7 +171,7 @@ export function EditProspectDialog({
       };
 
       // Direct UPDATE to MySQL database brandium_crm.prospects
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = getMySQLTimestamp();
       const res = await runMySQLQuery(
         `UPDATE \`prospects\` SET
           \`contact_name\` = ?,
