@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { changeProspectStage, createStage, updateStage, deleteStage } from "@/lib/stages.functions";
 import { runMySQLQuery } from "@/lib/mysql-api";
-import { generateUUID } from "@/lib/mysql-client";
+import { generateUUID, getMySQLTimestamp } from "@/lib/mysql-client";
 
 export type Stage = {
   id: string;
@@ -498,7 +498,7 @@ export function useChangeProspectStage() {
       // Always update MySQL database `brandium_crm` directly
       if (input.prospectId) {
         try {
-          const nowStr = new Date().toISOString().slice(0, 19).replace("T", " ");
+          const nowStr = getMySQLTimestamp();
 
           let fromStageId: string | null = null;
           try {
@@ -533,7 +533,7 @@ export function useChangeProspectStage() {
         // Also try Supabase update if cloud Supabase is active
         try {
           const updatePayload: Record<string, unknown> = {
-            updated_at: new Date().toISOString(),
+            updated_at: getMySQLTimestamp(),
             stage_name: resolvedStageName,
             stage_id: realStageId,
           };
@@ -542,7 +542,7 @@ export function useChangeProspectStage() {
             prospect_id: input.prospectId,
             to_stage_id: realStageId,
             note: input.note || null,
-            changed_at: new Date().toISOString(),
+            changed_at: getMySQLTimestamp(),
           });
         } catch {
           // ignore
