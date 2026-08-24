@@ -13,6 +13,7 @@ export interface MySQLConfig {
   password?: string;
   database: string;
   connectionLimit: number;
+  timezone: string;
 }
 
 let envLoaded = false;
@@ -77,6 +78,7 @@ export function getMySQLConfig(): MySQLConfig {
   const database =
     serverEnv?.["MYSQL_DATABASE"] || clientEnv?.["VITE_MYSQL_DATABASE"] || "crm_brandium";
   const connectionLimit = parseInt(serverEnv?.["MYSQL_CONNECTION_LIMIT"] || "20", 10);
+  const timezone = serverEnv?.["MYSQL_TIMEZONE"] || clientEnv?.["VITE_MYSQL_TIMEZONE"] || "+06:00";
 
   return {
     host,
@@ -85,6 +87,7 @@ export function getMySQLConfig(): MySQLConfig {
     password,
     database,
     connectionLimit: Number.isFinite(connectionLimit) ? connectionLimit : 20,
+    timezone,
   };
 }
 
@@ -115,6 +118,7 @@ export async function getMySQLPool(): Promise<mysql.Pool> {
     enableKeepAlive: true,
     keepAliveInitialDelay: 10000,
     charset: "utf8mb4",
+    timezone: config.timezone,
   });
 
   return globalPool;

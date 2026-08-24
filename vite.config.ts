@@ -64,6 +64,7 @@ function viteMySQLPlugin(): Plugin {
         connectionLimit: config.connectionLimit,
         queueLimit: 0,
         enableKeepAlive: true,
+        timezone: config.timezone,
       });
     }
 
