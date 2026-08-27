@@ -8,7 +8,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
  */
 export const changeProspectStage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
+  .validator((input) =>
     z
       .object({
         prospectId: z.string().min(1),
@@ -37,7 +37,7 @@ export const changeProspectStage = createServerFn({ method: "POST" })
 
 export const createStage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
+  .validator((input) =>
     z
       .object({
         name: z.string().trim().min(1).max(100),
@@ -84,7 +84,7 @@ export const createStage = createServerFn({ method: "POST" })
 
 export const updateStage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
+  .validator((input) =>
     z
       .object({
         id: z.string().min(1),
@@ -150,7 +150,7 @@ export const updateStage = createServerFn({ method: "POST" })
 
 export const deleteStage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ id: z.string().min(1) }).parse(input))
+  .validator((input) => z.object({ id: z.string().min(1) }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: profile } = await context.supabase
       .from("user_roles")
