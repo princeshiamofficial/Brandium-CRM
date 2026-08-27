@@ -92,8 +92,13 @@ async function tryServeStaticAsset(pathname: string): Promise<Response | null> {
           const fileBuffer = await fs.readFile(fullPath);
           const ext = path.extname(fullPath).toLowerCase();
           const contentType = MIME_TYPES[ext] || "application/octet-stream";
+          const bodyBytes = new Uint8Array(
+            fileBuffer.buffer,
+            fileBuffer.byteOffset,
+            fileBuffer.byteLength,
+          );
 
-          return new Response(fileBuffer, {
+          return new Response(bodyBytes, {
             status: 200,
             headers: {
               "Content-Type": contentType,
