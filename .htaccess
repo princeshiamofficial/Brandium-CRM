@@ -1,0 +1,18 @@
+# Disable OpenLiteSpeed / LiteSpeed caching for real-time CRM
+<IfModule LiteSpeed>
+    CacheLookup off
+    CacheEngine off
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires 0
+</IfModule>
+
+# Proxy to Node PM2 process on port 3005
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^(.*)$ http://127.0.0.1:3005/$1 [P,L]
+</IfModule>
