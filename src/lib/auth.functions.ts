@@ -480,6 +480,96 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
+      // Safe dynamic column migrations for existing tables
+      const ensureColumns = [
+        // meetings
+        { table: "meetings", column: "assigned_user_id", def: "VARCHAR(36) NULL" },
+        { table: "meetings", column: "assigned_to", def: "VARCHAR(36) NULL" },
+        { table: "meetings", column: "phone", def: "VARCHAR(50) NULL" },
+        { table: "meetings", column: "location", def: "VARCHAR(255) NULL" },
+        { table: "meetings", column: "meeting_type", def: "VARCHAR(50) NOT NULL DEFAULT 'Office'" },
+        { table: "meetings", column: "meeting_date", def: "VARCHAR(20) NULL" },
+        { table: "meetings", column: "meeting_time", def: "VARCHAR(20) NULL" },
+        { table: "meetings", column: "scheduled_at", def: "DATETIME NULL" },
+        { table: "meetings", column: "status", def: "VARCHAR(50) NOT NULL DEFAULT 'Scheduled'" },
+        { table: "meetings", column: "sms_sent", def: "TINYINT(1) NOT NULL DEFAULT 0" },
+        { table: "meetings", column: "notes", def: "TEXT NULL" },
+        // prospects
+        { table: "prospects", column: "assigned_artist_id", def: "VARCHAR(36) NULL" },
+        { table: "prospects", column: "business_name", def: "VARCHAR(255) NULL" },
+        { table: "prospects", column: "logo_url", def: "TEXT NULL" },
+        { table: "prospects", column: "address", def: "TEXT NULL" },
+        { table: "prospects", column: "currency", def: "VARCHAR(10) NOT NULL DEFAULT 'USD'" },
+        { table: "prospects", column: "lead_score", def: "INT NOT NULL DEFAULT 0" },
+        { table: "prospects", column: "tags", def: "TEXT NULL" },
+        { table: "prospects", column: "last_activity", def: "DATETIME NULL" },
+        { table: "prospects", column: "website", def: "VARCHAR(255) NULL" },
+        { table: "prospects", column: "city", def: "VARCHAR(100) NULL" },
+        { table: "prospects", column: "country", def: "VARCHAR(100) NULL" },
+        { table: "prospects", column: "state", def: "VARCHAR(100) NULL" },
+        { table: "prospects", column: "priority", def: "VARCHAR(20) NULL" },
+        { table: "prospects", column: "source", def: "VARCHAR(100) NULL" },
+        { table: "prospects", column: "notes", def: "TEXT NULL" },
+        // invoices
+        { table: "invoices", column: "due_amount", def: "DECIMAL(12, 2) NOT NULL DEFAULT 0.00" },
+        { table: "invoices", column: "bill_date", def: "VARCHAR(20) NULL" },
+        { table: "invoices", column: "due_date", def: "VARCHAR(20) NULL" },
+        { table: "invoices", column: "description", def: "TEXT NULL" },
+        { table: "invoices", column: "notes", def: "TEXT NULL" },
+        { table: "invoices", column: "created_by", def: "VARCHAR(36) NULL" },
+        // payments
+        {
+          table: "payments",
+          column: "payment_method",
+          def: "VARCHAR(100) NOT NULL DEFAULT 'Bank Transfer'",
+        },
+        { table: "payments", column: "transaction_reference", def: "VARCHAR(100) NULL" },
+        { table: "payments", column: "notes", def: "TEXT NULL" },
+        { table: "payments", column: "recorded_by", def: "VARCHAR(36) NULL" },
+        { table: "payments", column: "is_valid", def: "TINYINT(1) NOT NULL DEFAULT 1" },
+        // services
+        { table: "services", column: "icon", def: "VARCHAR(50) NULL" },
+        { table: "services", column: "is_active", def: "TINYINT(1) NOT NULL DEFAULT 1" },
+        // opportunities
+        {
+          table: "opportunities",
+          column: "estimated_value",
+          def: "DECIMAL(12, 2) NOT NULL DEFAULT 0.00",
+        },
+        { table: "opportunities", column: "is_active", def: "TINYINT(1) NOT NULL DEFAULT 1" },
+        { table: "opportunities", column: "expected_close_date", def: "DATE NULL" },
+        // projects
+        { table: "projects", column: "assigned_agent_id", def: "VARCHAR(36) NULL" },
+        { table: "projects", column: "assigned_artist_id", def: "VARCHAR(36) NULL" },
+        { table: "projects", column: "budget", def: "DECIMAL(12, 2) NOT NULL DEFAULT 0.00" },
+        { table: "projects", column: "paid_amount", def: "DECIMAL(12, 2) NOT NULL DEFAULT 0.00" },
+        { table: "projects", column: "progress", def: "INT NOT NULL DEFAULT 0" },
+        { table: "projects", column: "deadline", def: "DATE NULL" },
+        { table: "projects", column: "notes", def: "TEXT NULL" },
+        // users & profiles
+        { table: "users", column: "phone", def: "VARCHAR(50) NULL" },
+        { table: "users", column: "avatar_url", def: "TEXT NULL" },
+        { table: "users", column: "status", def: "VARCHAR(20) NOT NULL DEFAULT 'active'" },
+        { table: "profiles", column: "phone", def: "VARCHAR(50) NULL" },
+        { table: "profiles", column: "avatar_url", def: "TEXT NULL" },
+      ];
+
+      for (const col of ensureColumns) {
+        try {
+          const [cols] = await conn.query<mysql.RowDataPacket[]>(
+            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+            [col.table, col.column],
+          );
+          if (cols.length === 0) {
+            await conn.query(
+              `ALTER TABLE \`${col.table}\` ADD COLUMN \`${col.column}\` ${col.def}`,
+            );
+          }
+        } catch {
+          // Ignore if table does not exist yet or column already exists
+        }
+      }
+
       await conn.query(`
         INSERT IGNORE INTO \`roles\` (\`id\`, \`tenant_id\`, \`name\`, \`description\`)
         VALUES
@@ -731,12 +821,14 @@ export async function ensureMySQLTablesExist(
         {
           table: "prospects",
           col: "website_url",
-          query: "ALTER TABLE `prospects` ADD COLUMN `website_url` VARCHAR(500) NULL AFTER `address`;",
+          query:
+            "ALTER TABLE `prospects` ADD COLUMN `website_url` VARCHAR(500) NULL AFTER `address`;",
         },
         {
           table: "prospects",
           col: "logo_url",
-          query: "ALTER TABLE `prospects` ADD COLUMN `logo_url` VARCHAR(500) NULL AFTER `website_url`;",
+          query:
+            "ALTER TABLE `prospects` ADD COLUMN `logo_url` VARCHAR(500) NULL AFTER `website_url`;",
         },
         {
           table: "prospects",
