@@ -87,21 +87,29 @@ async function tryServeStaticAsset(pathname: string): Promise<Response | null> {
       path.resolve(baseDir, "assets", baseName),
     ];
 
-    // If hashed chunk is missing, find any latest chunk with same route prefix (e.g. meetings-*.js)
-    const chunkPrefixMatch = baseName.match(
-      /^([a-zA-Z0-9_\-\.]+?)-[a-zA-Z0-9_\-]{4,16}\.(js|css|mjs)$/,
-    );
-    if (chunkPrefixMatch) {
-      const prefix = chunkPrefixMatch[1];
-      const ext = chunkPrefixMatch[2];
+    // If hashed chunk is missing, find any latest chunk with matching prefix
+    const dotIdx = baseName.lastIndexOf(".");
+    if (dotIdx > 0) {
+      const ext = baseName.slice(dotIdx + 1).toLowerCase();
+      const nameWithoutExt = baseName.slice(0, dotIdx);
+      const parts = nameWithoutExt.split("-");
+      const prefixCandidates = [
+        parts[0],
+        parts.slice(0, 2).join("-"),
+        parts.slice(0, -1).join("-"),
+      ].filter(Boolean) as string[];
+
       for (const targetDir of [baseDir, path.resolve(baseDir, "assets")]) {
         try {
           const files = await fs.readdir(targetDir);
-          const matchedFile = files.find(
-            (f) => f.startsWith(`${prefix}-`) && f.endsWith(`.${ext}`),
-          );
-          if (matchedFile) {
-            candidates.push(path.resolve(targetDir, matchedFile));
+          for (const prefix of prefixCandidates) {
+            const matchedFile = files.find(
+              (f) => f.startsWith(`${prefix}-`) && f.endsWith(`.${ext}`),
+            );
+            if (matchedFile) {
+              candidates.push(path.resolve(targetDir, matchedFile));
+              break;
+            }
           }
         } catch {
           // ignore
