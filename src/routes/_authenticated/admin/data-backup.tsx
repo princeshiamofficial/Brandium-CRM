@@ -1,14 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { AdminBackupPage } from "./backup";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/admin/data-backup")({
-  head: () => ({
-    meta: [
-      { title: "Data Backup | Brandium Telesales CRM" },
-      { name: "description", content: "Export and back up your CRM data." },
-      { property: "og:title", content: "Data Backup | Brandium Telesales CRM" },
-      { property: "og:description", content: "Export and back up your CRM data." },
-    ],
-  }),
-  component: AdminBackupPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/backup" });
+  },
 });

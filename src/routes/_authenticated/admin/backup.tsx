@@ -47,7 +47,7 @@ export const Route = createFileRoute("/_authenticated/admin/backup")({
   component: AdminBackupPage,
 });
 
-export function AdminBackupPage() {
+function AdminBackupPage() {
   const [restoreModalOpen, setRestoreModalOpen] = useState<boolean>(false);
   const { data: metrics, isLoading } = useQuery(backupSummaryQueryOptions());
 
