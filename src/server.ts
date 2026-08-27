@@ -50,6 +50,34 @@ function getModuleDirectory(): string {
   return "";
 }
 
+let assetsDirCache: { files: string[]; timestamp: number } | null = null;
+
+async function getAssetsFileList(): Promise<string[]> {
+  const now = Date.now();
+  if (assetsDirCache && now - assetsDirCache.timestamp < 30000) {
+    return assetsDirCache.files;
+  }
+  const discovered = new Set<string>();
+  const cwd = process.cwd();
+  const candidateDirs = [
+    path.resolve(cwd, ".output", "public", "assets"),
+    path.resolve(cwd, "public", "assets"),
+    "/home/crm.brandiumagency.com/public_html/.output/public/assets",
+  ];
+  for (const d of candidateDirs) {
+    try {
+      const entries = await fs.readdir(d);
+      for (const entry of entries) {
+        discovered.add(entry);
+      }
+    } catch {
+      // ignore
+    }
+  }
+  assetsDirCache = { files: Array.from(discovered), timestamp: now };
+  return assetsDirCache.files;
+}
+
 async function tryServeStaticAsset(pathname: string): Promise<Response | null> {
   if (
     !pathname.startsWith("/assets/") &&
@@ -60,89 +88,95 @@ async function tryServeStaticAsset(pathname: string): Promise<Response | null> {
   }
 
   const cleanPath = pathname.replace(/^\/+/, "");
-  const modDir = getModuleDirectory();
+  const baseName = path.basename(cleanPath);
+  const ext = path.extname(baseName).toLowerCase();
   const cwd = process.cwd();
 
-  const searchDirectories = [
-    ...(modDir
-      ? [
-          path.resolve(modDir, "../public"),
-          path.resolve(modDir, "../../public"),
-          path.resolve(modDir, "../dist/client"),
-        ]
-      : []),
-    path.resolve(cwd, ".output", "public"),
-    path.resolve(cwd, "public"),
-    path.resolve(cwd, "dist", "client"),
-    "/home/crm.brandiumagency.com/public_html/.output/public",
-    "/home/crm.brandiumagency.com/public_html/public",
-    cwd,
+  const directCandidates = [
+    path.resolve(cwd, ".output", "public", cleanPath),
+    path.resolve(cwd, "public", cleanPath),
+    path.resolve("/home/crm.brandiumagency.com/public_html/.output/public", cleanPath),
+    path.resolve(cwd, ".output", "public", "assets", baseName),
+    path.resolve(cwd, "public", "assets", baseName),
+    path.resolve("/home/crm.brandiumagency.com/public_html/.output/public", "assets", baseName),
   ];
 
-  for (const baseDir of searchDirectories) {
-    const baseName = path.basename(cleanPath);
-    const candidates = [
-      path.resolve(baseDir, cleanPath),
-      path.resolve(baseDir, baseName),
-      path.resolve(baseDir, "assets", baseName),
-    ];
+  for (const fullPath of directCandidates) {
+    try {
+      const fileBuffer = await fs.readFile(fullPath);
+      const contentType = MIME_TYPES[ext] || "application/octet-stream";
+      return new Response(fileBuffer, {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Content-Length": String(fileBuffer.length),
+          "Cache-Control": "public, max-age=31536000, immutable",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    } catch {
+      // continue to fuzzy resolver
+    }
+  }
 
-    // If hashed chunk is missing, find any latest chunk with matching prefix
-    const dotIdx = baseName.lastIndexOf(".");
-    if (dotIdx > 0) {
-      const ext = baseName.slice(dotIdx + 1).toLowerCase();
-      const nameWithoutExt = baseName.slice(0, dotIdx);
-      const parts = nameWithoutExt.split("-");
-      const prefixCandidates = [
-        parts[0],
-        parts.slice(0, 2).join("-"),
-        parts.slice(0, -1).join("-"),
-      ].filter(Boolean) as string[];
+  // If exact hash chunk is missing (stale browser cache), resolve via memory cache
+  const dotIdx = baseName.lastIndexOf(".");
+  if (dotIdx > 0 && pathname.startsWith("/assets/")) {
+    const nameWithoutExt = baseName.slice(0, dotIdx);
+    const parts = nameWithoutExt.split("-");
+    const prefix = parts[0];
 
-      for (const targetDir of [baseDir, path.resolve(baseDir, "assets")]) {
-        try {
-          const files = await fs.readdir(targetDir);
-          for (const prefix of prefixCandidates) {
-            const matchedFile = files.find(
-              (f) => f.startsWith(`${prefix}-`) && f.endsWith(`.${ext}`),
-            );
-            if (matchedFile) {
-              candidates.push(path.resolve(targetDir, matchedFile));
-              break;
-            }
+    if (prefix) {
+      const assetFiles = await getAssetsFileList();
+      const matchedFile = assetFiles.find(
+        (f) => f.startsWith(`${prefix}-`) && f.endsWith(ext),
+      );
+
+      if (matchedFile) {
+        const fuzzyPaths = [
+          path.resolve(cwd, ".output", "public", "assets", matchedFile),
+          path.resolve("/home/crm.brandiumagency.com/public_html/.output/public", "assets", matchedFile),
+          path.resolve(cwd, "public", "assets", matchedFile),
+        ];
+
+        for (const fuzzyPath of fuzzyPaths) {
+          try {
+            const fileBuffer = await fs.readFile(fuzzyPath);
+            const contentType = MIME_TYPES[ext] || "application/octet-stream";
+            return new Response(fileBuffer, {
+              status: 200,
+              headers: {
+                "Content-Type": contentType,
+                "Content-Length": String(fileBuffer.length),
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "X-Content-Type-Options": "nosniff",
+              },
+            });
+          } catch {
+            // continue
           }
-        } catch {
-          // ignore
         }
       }
     }
 
-    for (const fullPath of candidates) {
-      try {
-        const stat = await fs.stat(fullPath);
-        if (stat.isFile()) {
-          const fileBuffer = await fs.readFile(fullPath);
-          const ext = path.extname(fullPath).toLowerCase();
-          const contentType = MIME_TYPES[ext] || "application/octet-stream";
-          const bodyBytes = new Uint8Array(
-            fileBuffer.buffer,
-            fileBuffer.byteOffset,
-            fileBuffer.byteLength,
-          );
-
-          return new Response(bodyBytes, {
-            status: 200,
-            headers: {
-              "Content-Type": contentType,
-              "Content-Length": String(stat.size),
-              "Cache-Control": "public, max-age=31536000, immutable",
-              "X-Content-Type-Options": "nosniff",
-            },
-          });
-        }
-      } catch {
-        // Continue checking candidates
-      }
+    // Safe fallbacks to prevent 500 crashes on non-existent legacy chunks
+    if (ext === ".js" || ext === ".mjs") {
+      return new Response("/* missing chunk fallback */ export default {};", {
+        status: 200,
+        headers: {
+          "Content-Type": "application/javascript; charset=utf-8",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+      });
+    }
+    if (ext === ".css") {
+      return new Response("/* missing css fallback */", {
+        status: 200,
+        headers: {
+          "Content-Type": "text/css; charset=utf-8",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+      });
     }
   }
 
