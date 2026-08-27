@@ -41,8 +41,23 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+
+    // Auto-recover from stale deployment chunks (after a new build)
+    const isChunkError =
+      error?.message?.includes("dynamically imported module") ||
+      error?.message?.includes("Failed to fetch") ||
+      error?.message?.includes("Importing a module script failed");
+
+    if (isChunkError && typeof window !== "undefined") {
+      const reloadKey = `chunk_reload_${window.location.pathname}`;
+      if (!sessionStorage.getItem(reloadKey)) {
+        sessionStorage.setItem(reloadKey, "true");
+        window.location.reload();
+      }
+    }
   }, [error]);
 
   return (
@@ -57,8 +72,12 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
-              router.invalidate();
-              reset();
+              if (typeof window !== "undefined") {
+                window.location.reload();
+              } else {
+                router.invalidate();
+                reset();
+              }
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
