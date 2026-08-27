@@ -963,13 +963,138 @@ export type UniversalQueryResponse = {
   error?: string | undefined;
 };
 
+function inferColumnType(columnName: string): string {
+  const col = columnName.toLowerCase();
+  if (
+    col.startsWith("is_") ||
+    col.endsWith("_sent") ||
+    col === "sms_sent" ||
+    col === "is_deleted" ||
+    col === "is_valid" ||
+    col === "is_active"
+  ) {
+    return "TINYINT(1) NOT NULL DEFAULT 0";
+  }
+  if (
+    col.endsWith("_id") ||
+    col.endsWith("_to") ||
+    col.endsWith("_by") ||
+    col === "id" ||
+    col === "prospect_id" ||
+    col === "assigned_artist_id" ||
+    col === "assigned_user_id" ||
+    col === "assigned_agent_id"
+  ) {
+    return "VARCHAR(36) NULL";
+  }
+  if (
+    col.endsWith("_at") ||
+    col.endsWith("_date_time") ||
+    col === "last_activity" ||
+    col === "scheduled_at" ||
+    col === "deleted_at" ||
+    col === "payment_date"
+  ) {
+    return "DATETIME NULL";
+  }
+  if (
+    col.endsWith("_date") ||
+    col === "bill_date" ||
+    col === "due_date" ||
+    col === "deadline" ||
+    col === "expected_close_date"
+  ) {
+    return "VARCHAR(20) NULL";
+  }
+  if (
+    col.endsWith("_amount") ||
+    col.endsWith("_value") ||
+    col === "amount" ||
+    col === "value" ||
+    col === "budget" ||
+    col === "total_amount" ||
+    col === "paid_amount" ||
+    col === "due_amount" ||
+    col === "estimated_value"
+  ) {
+    return "DECIMAL(12, 2) NOT NULL DEFAULT 0.00";
+  }
+  if (
+    col.endsWith("_score") ||
+    col.endsWith("_count") ||
+    col === "lead_score" ||
+    col === "progress" ||
+    col === "attempts"
+  ) {
+    return "INT NOT NULL DEFAULT 0";
+  }
+  if (
+    col === "notes" ||
+    col === "address" ||
+    col === "tags" ||
+    col === "description" ||
+    col === "logo_url" ||
+    col === "avatar_url" ||
+    col.endsWith("_url")
+  ) {
+    return "TEXT NULL";
+  }
+  return "VARCHAR(255) NULL";
+}
+
+function extractTableNameFromSql(sql: string): string | null {
+  const insertMatch = sql.match(/INSERT\s+INTO\s+[`'"]?([a-zA-Z0-9_]+)[`'"]?/i);
+  if (insertMatch && insertMatch[1]) return insertMatch[1];
+
+  const updateMatch = sql.match(/UPDATE\s+[`'"]?([a-zA-Z0-9_]+)[`'"]?/i);
+  if (updateMatch && updateMatch[1]) return updateMatch[1];
+
+  const fromMatch = sql.match(/FROM\s+[`'"]?([a-zA-Z0-9_]+)[`'"]?/i);
+  if (fromMatch && fromMatch[1]) return fromMatch[1];
+
+  return null;
+}
+
 export const executeMySQLQueryFn = createServerFn({ method: "POST" })
   .validator((input: { sql: string; params?: (string | number | boolean | null)[] }) => input)
   .handler(async ({ data }): Promise<UniversalQueryResponse> => {
     try {
       await ensureBootstrapped();
       const pool = await getMySQLPool();
-      const [rows] = await pool.query(data.sql, data.params || []);
+      let rows: unknown;
+
+      try {
+        const [result] = await pool.query(data.sql, data.params || []);
+        rows = result;
+      } catch (queryErr: unknown) {
+        const errMsg = String((queryErr as { message?: string })?.message || queryErr);
+        const colMatch = errMsg.match(/Unknown column '([^']+)'/i);
+        const targetTable = extractTableNameFromSql(data.sql);
+
+        if (colMatch && colMatch[1] && targetTable) {
+          const missingCol = colMatch[1];
+          const colType = inferColumnType(missingCol);
+          console.warn(
+            `[Self-Healing Schema] Auto-migrating missing column ${targetTable}.${missingCol} as ${colType}`,
+          );
+
+          try {
+            await pool.query(
+              `ALTER TABLE \`${targetTable}\` ADD COLUMN \`${missingCol}\` ${colType}`,
+            );
+            const [retryResult] = await pool.query(data.sql, data.params || []);
+            rows = retryResult;
+          } catch (alterErr) {
+            console.error(
+              `[Self-Healing Schema] Auto-migration failed for ${targetTable}.${missingCol}:`,
+              alterErr,
+            );
+            throw queryErr;
+          }
+        } else {
+          throw queryErr;
+        }
+      }
 
       if (Array.isArray(rows)) {
         const plainRows: UniversalQueryResultRow[] = rows.map((r) => {
