@@ -103,9 +103,28 @@ async function tryServeStaticAsset(pathname: string): Promise<Response | null> {
 
   for (const fullPath of directCandidates) {
     try {
-      const fileBuffer = await fs.readFile(fullPath);
+      const ext = path.extname(fullPath).toLowerCase();
       const contentType = MIME_TYPES[ext] || "application/octet-stream";
-      return new Response(fileBuffer, {
+
+      if (ext.match(/\.(js|mjs|css|json|svg|txt)$/i)) {
+        const fileContent = await fs.readFile(fullPath, "utf-8");
+        return new Response(fileContent, {
+          status: 200,
+          headers: {
+            "Content-Type": contentType,
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+          },
+        });
+      }
+
+      const fileBuffer = await fs.readFile(fullPath);
+      const bodyBytes = new Uint8Array(
+        fileBuffer.buffer,
+        fileBuffer.byteOffset,
+        fileBuffer.byteLength,
+      );
+      return new Response(bodyBytes, {
         status: 200,
         headers: {
           "Content-Type": contentType,
@@ -137,13 +156,31 @@ async function tryServeStaticAsset(pathname: string): Promise<Response | null> {
           path.resolve(cwd, ".output", "public", "assets", matchedFile),
           path.resolve("/home/crm.brandiumagency.com/public_html/.output/public", "assets", matchedFile),
           path.resolve(cwd, "public", "assets", matchedFile),
+          path.resolve("/home/crm.brandiumagency.com/public_html", "assets", matchedFile),
         ];
 
         for (const fuzzyPath of fuzzyPaths) {
           try {
-            const fileBuffer = await fs.readFile(fuzzyPath);
             const contentType = MIME_TYPES[ext] || "application/octet-stream";
-            return new Response(fileBuffer, {
+            if (ext.match(/\.(js|mjs|css|json|svg|txt)$/i)) {
+              const fileContent = await fs.readFile(fuzzyPath, "utf-8");
+              return new Response(fileContent, {
+                status: 200,
+                headers: {
+                  "Content-Type": contentType,
+                  "Cache-Control": "no-cache, no-store, must-revalidate",
+                  "X-Content-Type-Options": "nosniff",
+                },
+              });
+            }
+
+            const fileBuffer = await fs.readFile(fuzzyPath);
+            const bodyBytes = new Uint8Array(
+              fileBuffer.buffer,
+              fileBuffer.byteOffset,
+              fileBuffer.byteLength,
+            );
+            return new Response(bodyBytes, {
               status: 200,
               headers: {
                 "Content-Type": contentType,
