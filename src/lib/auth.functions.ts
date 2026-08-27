@@ -570,6 +570,25 @@ export async function ensureMySQLTablesExist(
         }
       }
 
+      // Loosen strict NOT NULL constraints on legacy columns for smooth insertion
+      const legacyModifications = [
+        "ALTER TABLE `meetings` MODIFY COLUMN `scheduled_at` DATETIME NULL DEFAULT NULL;",
+        "ALTER TABLE `meetings` MODIFY COLUMN `meeting_date` VARCHAR(20) NULL DEFAULT NULL;",
+        "ALTER TABLE `meetings` MODIFY COLUMN `meeting_time` VARCHAR(20) NULL DEFAULT NULL;",
+        "ALTER TABLE `meetings` MODIFY COLUMN `phone` VARCHAR(50) NULL DEFAULT NULL;",
+        "ALTER TABLE `meetings` MODIFY COLUMN `location` VARCHAR(255) NULL DEFAULT NULL;",
+        "ALTER TABLE `meetings` MODIFY COLUMN `assigned_user_id` VARCHAR(36) NULL DEFAULT NULL;",
+        "ALTER TABLE `meetings` MODIFY COLUMN `assigned_to` VARCHAR(36) NULL DEFAULT NULL;",
+      ];
+
+      for (const modSql of legacyModifications) {
+        try {
+          await conn.query(modSql);
+        } catch {
+          // Ignore if table doesn't exist yet
+        }
+      }
+
       await conn.query(`
         INSERT IGNORE INTO \`roles\` (\`id\`, \`tenant_id\`, \`name\`, \`description\`)
         VALUES
