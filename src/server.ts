@@ -149,14 +149,19 @@ async function tryServeStaticAsset(pathname: string): Promise<Response | null> {
   return null;
 }
 
-function withSecurityHeaders(response: Response): Response {
+function withSecurityHeaders(response: Response, isHtml: boolean = false): Response {
   try {
     response.headers.set("X-Content-Type-Options", "nosniff");
     response.headers.set("X-Frame-Options", "DENY");
     response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
     response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
 
-    if (!response.headers.has("Cache-Control") && response.status >= 400) {
+    const contentType = response.headers.get("content-type") || "";
+    if (isHtml || contentType.includes("text/html")) {
+      response.headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+      response.headers.set("Pragma", "no-cache");
+      response.headers.set("Expires", "0");
+    } else if (!response.headers.has("Cache-Control") && response.status >= 400) {
       response.headers.set("Cache-Control", "no-store");
     }
 
