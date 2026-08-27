@@ -49,13 +49,17 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     const isChunkError =
       error?.message?.includes("dynamically imported module") ||
       error?.message?.includes("Failed to fetch") ||
-      error?.message?.includes("Importing a module script failed");
+      error?.message?.includes("Importing a module script failed") ||
+      error?.name === "TypeError";
 
     if (isChunkError && typeof window !== "undefined") {
-      const reloadKey = `chunk_reload_${window.location.pathname}`;
-      if (!sessionStorage.getItem(reloadKey)) {
-        sessionStorage.setItem(reloadKey, "true");
-        window.location.reload();
+      const lastReload = sessionStorage.getItem("last_chunk_reload");
+      const now = Date.now();
+      if (!lastReload || now - Number(lastReload) > 8000) {
+        sessionStorage.setItem("last_chunk_reload", String(now));
+        const url = new URL(window.location.href);
+        url.searchParams.set("_v", String(now));
+        window.location.replace(url.toString());
       }
     }
   }, [error]);
@@ -73,7 +77,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
           <button
             onClick={() => {
               if (typeof window !== "undefined") {
-                window.location.reload();
+                sessionStorage.clear();
+                const url = new URL(window.location.href);
+                url.searchParams.set("_v", String(Date.now()));
+                window.location.replace(url.toString());
               } else {
                 router.invalidate();
                 reset();
