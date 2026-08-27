@@ -20,6 +20,8 @@ async function getServerEntry(): Promise<ServerEntry> {
   return serverEntryPromise;
 }
 
+import { fileURLToPath } from "node:url";
+
 const MIME_TYPES: Record<string, string> = {
   ".js": "application/javascript; charset=utf-8",
   ".mjs": "application/javascript; charset=utf-8",
@@ -37,6 +39,17 @@ const MIME_TYPES: Record<string, string> = {
   ".txt": "text/plain; charset=utf-8",
 };
 
+function getModuleDirectory(): string {
+  try {
+    if (typeof import.meta.url === "string") {
+      return path.dirname(fileURLToPath(import.meta.url));
+    }
+  } catch {
+    // Fall back to empty
+  }
+  return "";
+}
+
 async function tryServeStaticAsset(pathname: string): Promise<Response | null> {
   if (
     !pathname.startsWith("/assets/") &&
@@ -47,35 +60,52 @@ async function tryServeStaticAsset(pathname: string): Promise<Response | null> {
   }
 
   const cleanPath = pathname.replace(/^\/+/, "");
+  const modDir = getModuleDirectory();
   const cwd = process.cwd();
+
   const searchDirectories = [
-    path.join(cwd, ".output", "public"),
-    path.join(cwd, "public"),
-    path.join(cwd, "dist", "client"),
+    ...(modDir
+      ? [
+          path.resolve(modDir, "../public"),
+          path.resolve(modDir, "../../public"),
+          path.resolve(modDir, "../dist/client"),
+        ]
+      : []),
+    path.resolve(cwd, ".output", "public"),
+    path.resolve(cwd, "public"),
+    path.resolve(cwd, "dist", "client"),
+    "/home/crm.brandiumagency.com/public_html/.output/public",
+    "/home/crm.brandiumagency.com/public_html/public",
     cwd,
   ];
 
   for (const baseDir of searchDirectories) {
-    const fullPath = path.join(baseDir, cleanPath);
-    try {
-      const stat = await fs.stat(fullPath);
-      if (stat.isFile()) {
-        const fileBuffer = await fs.readFile(fullPath);
-        const ext = path.extname(fullPath).toLowerCase();
-        const contentType = MIME_TYPES[ext] || "application/octet-stream";
+    const candidates = [
+      path.resolve(baseDir, cleanPath),
+      path.resolve(baseDir, path.basename(cleanPath)),
+    ];
 
-        return new Response(fileBuffer, {
-          status: 200,
-          headers: {
-            "Content-Type": contentType,
-            "Content-Length": String(stat.size),
-            "Cache-Control": "public, max-age=31536000, immutable",
-            "X-Content-Type-Options": "nosniff",
-          },
-        });
+    for (const fullPath of candidates) {
+      try {
+        const stat = await fs.stat(fullPath);
+        if (stat.isFile()) {
+          const fileBuffer = await fs.readFile(fullPath);
+          const ext = path.extname(fullPath).toLowerCase();
+          const contentType = MIME_TYPES[ext] || "application/octet-stream";
+
+          return new Response(fileBuffer, {
+            status: 200,
+            headers: {
+              "Content-Type": contentType,
+              "Content-Length": String(stat.size),
+              "Cache-Control": "public, max-age=31536000, immutable",
+              "X-Content-Type-Options": "nosniff",
+            },
+          });
+        }
+      } catch {
+        // Continue checking candidates
       }
-    } catch {
-      // Continue to next directory
     }
   }
 
