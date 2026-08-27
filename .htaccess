@@ -10,9 +10,15 @@
     Header set Expires 0
 </IfModule>
 
-# Proxy to Node PM2 process on port 3005
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # 1. Direct high-speed static asset serving from .output/public/
+    RewriteCond %{DOCUMENT_ROOT}/.output/public%{REQUEST_URI} -f
+    RewriteRule ^(.*)$ .output/public/$1 [L]
+
+    # 2. Reverse proxy all dynamic SSR routes and API requests to PM2 on port 3005
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^(.*)$ http://127.0.0.1:3005/$1 [P,L]
 </IfModule>
+
