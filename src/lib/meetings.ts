@@ -210,13 +210,19 @@ export async function fetchMeetingById(id: string): Promise<Meeting | null> {
 export async function createMeeting(input: CreateMeetingInput): Promise<Meeting> {
   const newId = generateUUID();
   const now = getMySQLTimestamp();
+  const timeStr = input.meeting_time
+    ? input.meeting_time.length === 5
+      ? `${input.meeting_time}:00`
+      : input.meeting_time
+    : "10:00:00";
+  const scheduledAt = input.meeting_date ? `${input.meeting_date} ${timeStr}` : now;
 
   const res = await runMySQLQuery(
     `INSERT INTO \`meetings\` (
       \`id\`, \`title\`, \`prospect_id\`, \`phone\`, \`location\`,
-      \`meeting_type\`, \`meeting_date\`, \`meeting_time\`, \`assigned_user_id\`,
+      \`meeting_type\`, \`meeting_date\`, \`meeting_time\`, \`scheduled_at\`, \`assigned_user_id\`,
       \`notes\`, \`status\`, \`sms_sent\`, \`created_at\`, \`updated_at\`
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Scheduled', ?, ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Scheduled', ?, ?, ?);`,
     [
       newId,
       input.title,
@@ -226,6 +232,7 @@ export async function createMeeting(input: CreateMeetingInput): Promise<Meeting>
       input.meeting_type,
       input.meeting_date,
       input.meeting_time,
+      scheduledAt,
       input.assigned_user_id || null,
       input.notes || null,
       input.send_sms_now ? 1 : 0,
