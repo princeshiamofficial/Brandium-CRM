@@ -80,10 +80,34 @@ async function tryServeStaticAsset(pathname: string): Promise<Response | null> {
   ];
 
   for (const baseDir of searchDirectories) {
+    const baseName = path.basename(cleanPath);
     const candidates = [
       path.resolve(baseDir, cleanPath),
-      path.resolve(baseDir, path.basename(cleanPath)),
+      path.resolve(baseDir, baseName),
+      path.resolve(baseDir, "assets", baseName),
     ];
+
+    // If hashed chunk is missing, find any latest chunk with same route prefix (e.g. meetings-*.js)
+    const chunkPrefixMatch = baseName.match(
+      /^([a-zA-Z0-9_\-\.]+?)-[a-zA-Z0-9_\-]{4,16}\.(js|css|mjs)$/,
+    );
+    if (chunkPrefixMatch) {
+      const prefix = chunkPrefixMatch[1];
+      const ext = chunkPrefixMatch[2];
+      for (const targetDir of [baseDir, path.resolve(baseDir, "assets")]) {
+        try {
+          const files = await fs.readdir(targetDir);
+          const matchedFile = files.find(
+            (f) => f.startsWith(`${prefix}-`) && f.endsWith(`.${ext}`),
+          );
+          if (matchedFile) {
+            candidates.push(path.resolve(targetDir, matchedFile));
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
 
     for (const fullPath of candidates) {
       try {
@@ -118,22 +142,20 @@ async function tryServeStaticAsset(pathname: string): Promise<Response | null> {
 }
 
 function withSecurityHeaders(response: Response): Response {
-  const headers = new Headers(response.headers);
+  try {
+    response.headers.set("X-Content-Type-Options", "nosniff");
+    response.headers.set("X-Frame-Options", "DENY");
+    response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
 
-  headers.set("X-Content-Type-Options", "nosniff");
-  headers.set("X-Frame-Options", "DENY");
-  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    if (!response.headers.has("Cache-Control") && response.status >= 400) {
+      response.headers.set("Cache-Control", "no-store");
+    }
 
-  if (!headers.has("Cache-Control") && response.status >= 400) {
-    headers.set("Cache-Control", "no-store");
+    return response;
+  } catch {
+    return response;
   }
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
 }
 
 // h3 swallows in-handler throws into a normal 500 Response with body

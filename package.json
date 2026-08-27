@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "postbuild": "chmod -R 755 .output 2>/dev/null || true",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
