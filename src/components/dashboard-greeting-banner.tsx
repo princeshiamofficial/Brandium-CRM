@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Calendar as CalendarIcon, ChevronDown, Users2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   DropdownMenu,
@@ -12,10 +12,10 @@ import { useAuth } from "@/lib/auth";
 import { agentsQuery } from "@/lib/follow-ups";
 
 export type DashboardGreetingBannerProps = {
-  selectedAgent?: string;
-  onAgentChange?: (agentId: string | undefined) => void;
-  selectedDateRange?: string;
-  onDateRangeChange?: (range: string) => void;
+  selectedAgent?: string | undefined;
+  onAgentChange?: ((agentId: string | undefined) => void) | undefined;
+  selectedDateRange?: string | undefined;
+  onDateRangeChange?: ((range: string) => void) | undefined;
 };
 
 export function DashboardGreetingBanner({
@@ -24,18 +24,33 @@ export function DashboardGreetingBanner({
   selectedDateRange = "This Month",
   onDateRangeChange,
 }: DashboardGreetingBannerProps) {
-  const { profile, user, isAdmin } = useAuth();
-  const rawName =
-    profile?.full_name?.trim() ||
-    (user?.user_metadata?.["full_name"] as string) ||
-    user?.email ||
-    "Mehan";
-  const firstName = rawName.split(" ")[0] || "Mehan";
+  const { user, isAdmin } = useAuth();
 
-  const agents = useQuery({ ...agentsQuery(), enabled: isAdmin });
+  const agents = useQuery(agentsQuery());
 
   const [dateRange, setDateRange] = useState(selectedDateRange);
   const [selectedAgentLabel, setSelectedAgentLabel] = useState("All Agents");
+
+  useEffect(() => {
+    if (selectedDateRange) {
+      setDateRange(selectedDateRange);
+    }
+  }, [selectedDateRange]);
+
+  useEffect(() => {
+    if (!selectedAgent) {
+      setSelectedAgentLabel("All Agents");
+    } else if (selectedAgent === user?.id) {
+      setSelectedAgentLabel("Assigned to Me");
+    } else {
+      const match = (agents.data ?? []).find((a) => a.id === selectedAgent);
+      if (match) {
+        setSelectedAgentLabel(match.name);
+      } else {
+        setSelectedAgentLabel("Selected Agent");
+      }
+    }
+  }, [selectedAgent, user?.id, agents.data]);
 
   const handleDateSelect = (range: string) => {
     setDateRange(range);

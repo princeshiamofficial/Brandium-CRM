@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { runMySQLQuery } from "@/lib/mysql-api";
 import { getMySQLTimestamp } from "@/lib/mysql-client";
 
-export type CrmUserRole = "ADMIN" | "AGENT" | "DEVELOPER";
+export type CrmUserRole = "ADMIN" | "AGENT" | "ARTIST" | "DEVELOPER" | string;
 export type CrmUserStatus = "Active" | "Inactive" | "Deleted";
 
 export type CrmUser = {

@@ -17,31 +17,44 @@ export type AuthenticateUserResponse = {
   };
 };
 
+// In-Memory Schema Bootstrapping Cache & Concurrency Latch
+let isSchemaInitialized = false;
+let initSchemaPromise: Promise<void> | null = null;
+
 /**
  * ERP-Style Enterprise Automatic Database Schema Bootstrapper.
- * Automatically checks and creates all missing tables & columns on connection.
+ * Automatically checks and creates all missing tables & columns on connection with one-time execution cache.
  */
 export async function ensureMySQLTablesExist(
   conn: mysql.Connection,
   dbName?: string,
 ): Promise<void> {
-  const targetDb = dbName || getMySQLConfig().database;
-  try {
-    // Disable foreign key checks for safe table bootstrapping
-    await conn.query("SET FOREIGN_KEY_CHECKS = 0;");
-    await conn.query(
-      `ALTER DATABASE \`${targetDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
-    );
+  if (isSchemaInitialized) {
+    return;
+  }
 
-    // Auto-delete \`user_avatars\` table if it exists in MySQL
+  if (initSchemaPromise) {
+    return initSchemaPromise;
+  }
+
+  initSchemaPromise = (async () => {
+    const targetDb = dbName || getMySQLConfig().database;
     try {
-      await conn.query("DROP TABLE IF EXISTS `user_avatars`;");
-    } catch {
-      // Ignore
-    }
+      // Disable foreign key checks for safe table bootstrapping
+      await conn.query("SET FOREIGN_KEY_CHECKS = 0;");
+      await conn.query(
+        `ALTER DATABASE \`${targetDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
+      );
 
-    // 1. \`users\` table
-    await conn.query(`
+      // Auto-delete \`user_avatars\` table if it exists in MySQL
+      try {
+        await conn.query("DROP TABLE IF EXISTS `user_avatars`;");
+      } catch {
+        // Ignore
+      }
+
+      // 1. \`users\` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`users\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`name\` VARCHAR(255) NOT NULL,
@@ -59,8 +72,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 2. \`profiles\` table
-    await conn.query(`
+      // 2. \`profiles\` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`profiles\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`full_name\` VARCHAR(255) NULL,
@@ -73,8 +86,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 4. \`user_roles\` table
-    await conn.query(`
+      // 4. \`user_roles\` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`user_roles\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`user_id\` VARCHAR(36) NOT NULL,
@@ -85,8 +98,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 5. \`services\` table
-    await conn.query(`
+      // 5. \`services\` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`services\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`name\` VARCHAR(255) NOT NULL,
@@ -99,8 +112,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 6. \`stages\` table
-    await conn.query(`
+      // 6. \`stages\` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`stages\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`name\` VARCHAR(255) NOT NULL,
@@ -118,8 +131,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 7. \`prospects\` table
-    await conn.query(`
+      // 7. \`prospects\` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`prospects\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`contact_name\` VARCHAR(255) NOT NULL,
@@ -129,6 +142,8 @@ export async function ensureMySQLTablesExist(
         \`alternative_phone\` VARCHAR(50) NULL,
         \`email\` VARCHAR(255) NULL,
         \`address\` TEXT NULL,
+        \`website_url\` VARCHAR(500) NULL,
+        \`logo_url\` VARCHAR(500) NULL,
         \`service_id\` VARCHAR(36) NULL,
         \`stage_id\` VARCHAR(36) NULL,
         \`assigned_to\` VARCHAR(36) NULL,
@@ -143,8 +158,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 8. \`prospect_stage_history\` table
-    await conn.query(`
+      // 8. \`prospect_stage_history\` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`prospect_stage_history\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`prospect_id\` VARCHAR(36) NOT NULL,
@@ -159,8 +174,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 9. \`sales\` table
-    await conn.query(`
+      // 9. \`sales\` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`sales\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`prospect_id\` VARCHAR(36) NULL,
@@ -178,8 +193,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 10. \`follow_ups\` table
-    await conn.query(`
+      // 10. \`follow_ups\` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`follow_ups\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`prospect_id\` VARCHAR(36) NOT NULL,
@@ -195,8 +210,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 11. \`activities\` table
-    await conn.query(`
+      // 11. \`activities\` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`activities\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`prospect_id\` VARCHAR(36) NULL,
@@ -209,8 +224,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 12. `meetings` table
-    await conn.query(`
+      // 12. `meetings` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`meetings\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`prospect_id\` VARCHAR(36) NULL,
@@ -233,8 +248,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 13. `opportunities` table
-    await conn.query(`
+      // 13. `opportunities` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`opportunities\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`prospect_id\` VARCHAR(36) NOT NULL,
@@ -254,8 +269,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 14. `invoices` table
-    await conn.query(`
+      // 14. `invoices` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`invoices\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`prospect_id\` VARCHAR(36) NULL,
@@ -277,8 +292,8 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 15. `payments` table
-    await conn.query(`
+      // 15. `payments` table
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`payments\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`invoice_id\` VARCHAR(36) NULL,
@@ -296,25 +311,53 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 16. \`sessions\` table â€” stores auth sessions server-side
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS \`sessions\` (
-        \`id\` VARCHAR(64) NOT NULL,
-        \`user_id\` VARCHAR(36) NOT NULL,
-        \`user_email\` VARCHAR(255) NOT NULL,
-        \`user_name\` VARCHAR(255) NOT NULL,
-        \`user_role\` ENUM('admin', 'agent') NOT NULL DEFAULT 'agent',
-        \`avatar_url\` LONGTEXT NULL,
-        \`expires_at\` DATETIME NOT NULL,
-        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (\`id\`),
-        KEY \`idx_sessions_user\` (\`user_id\`),
-        KEY \`idx_sessions_expires\` (\`expires_at\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
+      // 16. `sessions` table — stores auth sessions server-side
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS \`sessions\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          \`user_id\` VARCHAR(36) NOT NULL,
+          \`user_email\` VARCHAR(255) NOT NULL,
+          \`user_name\` VARCHAR(255) NOT NULL,
+          \`user_role\` ENUM('admin', 'agent') NOT NULL DEFAULT 'agent',
+          \`avatar_url\` LONGTEXT NULL,
+          \`expires_at\` DATETIME NOT NULL,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          KEY \`idx_sessions_user\` (\`user_id\`),
+          KEY \`idx_sessions_expires\` (\`expires_at\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
 
-    // 17. Production operations tables for tenancy, RBAC, migrations, audit, and outbox jobs
-    await conn.query(`
+      // 17. `projects` table — ERPApp-style Projects & Creative Production Lifecycle
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS \`projects\` (
+          \`id\` VARCHAR(36) NOT NULL,
+          \`project_code\` VARCHAR(50) NOT NULL,
+          \`title\` VARCHAR(255) NOT NULL,
+          \`prospect_id\` VARCHAR(36) NULL,
+          \`client_name\` VARCHAR(255) NOT NULL,
+          \`service_id\` VARCHAR(36) NULL,
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'CR Clearance',
+          \`assigned_agent_id\` VARCHAR(36) NULL,
+          \`assigned_artist_id\` VARCHAR(36) NULL,
+          \`budget\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`paid_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`progress\` INT NOT NULL DEFAULT 0,
+          \`deadline\` DATE NULL,
+          \`notes\` TEXT NULL,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`idx_projects_code\` (\`project_code\`),
+          KEY \`idx_projects_status\` (\`status\`),
+          KEY \`idx_projects_prospect\` (\`prospect_id\`),
+          KEY \`idx_projects_artist\` (\`assigned_artist_id\`),
+          KEY \`idx_projects_agent\` (\`assigned_agent_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      // 17. Production operations tables for tenancy, RBAC, migrations, audit, and outbox jobs
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`tenants\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`name\` VARCHAR(255) NOT NULL,
@@ -328,7 +371,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    await conn.query(`
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`memberships\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`user_id\` VARCHAR(36) NOT NULL,
@@ -342,7 +385,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    await conn.query(`
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`roles\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`tenant_id\` VARCHAR(36) NULL,
@@ -356,7 +399,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    await conn.query(`
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`permissions\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`resource\` VARCHAR(100) NOT NULL,
@@ -368,7 +411,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    await conn.query(`
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`role_permissions\` (
         \`role_id\` VARCHAR(36) NOT NULL,
         \`permission_id\` VARCHAR(36) NOT NULL,
@@ -378,7 +421,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    await conn.query(`
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`refresh_tokens\` (
         \`id\` VARCHAR(64) NOT NULL,
         \`user_id\` VARCHAR(36) NOT NULL,
@@ -393,7 +436,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    await conn.query(`
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`audit_events\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`actor_id\` VARCHAR(36) NULL,
@@ -410,7 +453,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    await conn.query(`
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`outbox_events\` (
         \`id\` VARCHAR(36) NOT NULL,
         \`type\` VARCHAR(120) NOT NULL,
@@ -428,7 +471,7 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    await conn.query(`
+      await conn.query(`
       CREATE TABLE IF NOT EXISTS \`schema_migrations\` (
         \`id\` VARCHAR(120) NOT NULL,
         \`checksum\` VARCHAR(128) NOT NULL,
@@ -437,244 +480,363 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    await conn.query(`
-      INSERT IGNORE INTO \`roles\` (\`id\`, \`tenant_id\`, \`name\`, \`description\`)
-      VALUES
-        ('role-global-admin', NULL, 'admin', 'Platform administrator'),
-        ('role-global-agent', NULL, 'agent', 'CRM sales agent');
-    `);
+      await conn.query(`
+        INSERT IGNORE INTO \`roles\` (\`id\`, \`tenant_id\`, \`name\`, \`description\`)
+        VALUES
+          ('role-global-admin', NULL, 'Admin', 'Platform administrator with full system access'),
+          ('role-global-agent', NULL, 'Agent', 'CRM sales agent for telesales & prospect management'),
+          ('role-global-artist', NULL, 'Artist', 'Creative artist for graphic designs, video ads & media assets');
+      `);
 
-    await conn.query(`
-      INSERT IGNORE INTO \`permissions\` (\`id\`, \`resource\`, \`action\`, \`description\`)
-      VALUES
-        ('perm-prospects-read', 'prospects', 'read', 'Read prospects'),
-        ('perm-prospects-write', 'prospects', 'write', 'Create and update prospects'),
-        ('perm-billing-read', 'billing', 'read', 'Read billing records'),
-        ('perm-billing-write', 'billing', 'write', 'Create and update billing records'),
-        ('perm-admin-users', 'users', 'admin', 'Manage users');
-    `);
+      await conn.query(`
+        INSERT IGNORE INTO \`permissions\` (\`id\`, \`resource\`, \`action\`, \`description\`)
+        VALUES
+          ('perm-prospects-read', 'prospects', 'read', 'View prospects and lead records'),
+          ('perm-prospects-write', 'prospects', 'write', 'Create and update prospects'),
+          ('perm-prospects-delete', 'prospects', 'delete', 'Delete and manage prospects'),
+          ('perm-opportunities-manage', 'opportunities', 'manage', 'Manage sales opportunities and deals'),
+          ('perm-followups-manage', 'follow_ups', 'manage', 'Manage prospect follow-ups'),
+          ('perm-meetings-manage', 'meetings', 'manage', 'Schedule and manage client meetings'),
+          ('perm-sales-view', 'sales', 'read', 'View won sales and achievements'),
+          ('perm-services-read', 'services', 'read', 'View agency services and packages'),
+          ('perm-services-manage', 'services', 'manage', 'Create and modify services'),
+          ('perm-stages-manage', 'stages', 'manage', 'Configure pipeline stages'),
+          ('perm-billing-read', 'billing', 'read', 'Read billing and invoice records'),
+          ('perm-billing-write', 'billing', 'write', 'Create and collect payments/invoices'),
+          ('perm-sms-send', 'sms', 'send', 'Send bulk SMS to clients'),
+          ('perm-reports-view', 'reports', 'read', 'View performance reports and analytics'),
+          ('perm-admin-users', 'users', 'admin', 'Manage user accounts and credentials'),
+          ('perm-admin-roles', 'roles', 'admin', 'Manage system roles and permissions');
+      `);
 
-    await conn.query(`
-      INSERT IGNORE INTO \`role_permissions\` (\`role_id\`, \`permission_id\`)
-      VALUES
-        ('role-global-admin', 'perm-prospects-read'),
-        ('role-global-admin', 'perm-prospects-write'),
-        ('role-global-admin', 'perm-billing-read'),
-        ('role-global-admin', 'perm-billing-write'),
-        ('role-global-admin', 'perm-admin-users'),
-        ('role-global-agent', 'perm-prospects-read'),
-        ('role-global-agent', 'perm-prospects-write');
-    `);
-    // Auto-column verification for existing tables
-    const [userCols] = await conn.query(
-      `
+      await conn.query(`
+        INSERT IGNORE INTO \`role_permissions\` (\`role_id\`, \`permission_id\`)
+        VALUES
+          ('role-global-admin', 'perm-prospects-read'),
+          ('role-global-admin', 'perm-prospects-write'),
+          ('role-global-admin', 'perm-prospects-delete'),
+          ('role-global-admin', 'perm-opportunities-manage'),
+          ('role-global-admin', 'perm-followups-manage'),
+          ('role-global-admin', 'perm-meetings-manage'),
+          ('role-global-admin', 'perm-sales-view'),
+          ('role-global-admin', 'perm-services-read'),
+          ('role-global-admin', 'perm-services-manage'),
+          ('role-global-admin', 'perm-stages-manage'),
+          ('role-global-admin', 'perm-billing-read'),
+          ('role-global-admin', 'perm-billing-write'),
+          ('role-global-admin', 'perm-sms-send'),
+          ('role-global-admin', 'perm-reports-view'),
+          ('role-global-admin', 'perm-admin-users'),
+          ('role-global-admin', 'perm-admin-roles'),
+
+          ('role-global-agent', 'perm-prospects-read'),
+          ('role-global-agent', 'perm-prospects-write'),
+          ('role-global-agent', 'perm-opportunities-manage'),
+          ('role-global-agent', 'perm-followups-manage'),
+          ('role-global-agent', 'perm-meetings-manage'),
+          ('role-global-agent', 'perm-services-read'),
+          ('role-global-agent', 'perm-sales-view'),
+
+          ('role-global-artist', 'perm-prospects-read'),
+          ('role-global-artist', 'perm-services-read'),
+          ('role-global-artist', 'perm-sales-view');
+      `);
+
+      try {
+        await conn.query(
+          "ALTER TABLE `users` MODIFY COLUMN `role` VARCHAR(50) NOT NULL DEFAULT 'AGENT';",
+        );
+      } catch {
+        // Ignore if already modified
+      }
+      // Auto-column verification for existing tables
+      const [userCols] = await conn.query(
+        `
       SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME = 'avatar_url'
     `,
-      [dbName],
-    );
-    if (Number((userCols as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
-      try {
-        await conn.query(
-          `ALTER TABLE \`users\` ADD COLUMN \`avatar_url\` LONGTEXT NULL AFTER \`status\`;`,
-        );
-      } catch {
-        // Ignore if exists
+        [dbName],
+      );
+      if (Number((userCols as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
+        try {
+          await conn.query(
+            `ALTER TABLE \`users\` ADD COLUMN \`avatar_url\` LONGTEXT NULL AFTER \`status\`;`,
+          );
+        } catch {
+          // Ignore if exists
+        }
       }
-    }
 
-    const [profCols] = await conn.query(
-      `
+      const [profCols] = await conn.query(
+        `
       SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'profiles' AND COLUMN_NAME = 'avatar_url'
     `,
-      [dbName],
-    );
-    if (Number((profCols as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
-      try {
-        await conn.query(
-          `ALTER TABLE \`profiles\` ADD COLUMN \`avatar_url\` LONGTEXT NULL AFTER \`email\`;`,
-        );
-      } catch {
-        // Ignore if exists
-      }
-    }
-
-    // Safe auto-column additions for invoices, opportunities, meetings, payments, services
-    const autoColumns: Array<{ table: string; col: string; query: string }> = [
-      {
-        table: "invoices",
-        col: "due_amount",
-        query:
-          "ALTER TABLE `invoices` ADD COLUMN `due_amount` DECIMAL(12, 2) NOT NULL DEFAULT 0.00 AFTER `paid_amount`;",
-      },
-      {
-        table: "invoices",
-        col: "description",
-        query: "ALTER TABLE `invoices` ADD COLUMN `description` TEXT NULL AFTER `due_amount`;",
-      },
-      {
-        table: "invoices",
-        col: "bill_date",
-        query: "ALTER TABLE `invoices` ADD COLUMN `bill_date` VARCHAR(20) NULL AFTER `description`;",
-      },
-      {
-        table: "invoices",
-        col: "due_date",
-        query: "ALTER TABLE `invoices` ADD COLUMN `due_date` VARCHAR(20) NULL AFTER `bill_date`;",
-      },
-      {
-        table: "invoices",
-        col: "notes",
-        query: "ALTER TABLE `invoices` ADD COLUMN `notes` TEXT NULL AFTER `due_date`;",
-      },
-      {
-        table: "opportunities",
-        col: "status",
-        query:
-          "ALTER TABLE `opportunities` ADD COLUMN `status` VARCHAR(100) NULL AFTER `stage`;",
-      },
-      {
-        table: "opportunities",
-        col: "estimated_value",
-        query:
-          "ALTER TABLE `opportunities` ADD COLUMN `estimated_value` DECIMAL(12, 2) NOT NULL DEFAULT 0.00 AFTER `value`;",
-      },
-      {
-        table: "opportunities",
-        col: "notes",
-        query:
-          "ALTER TABLE `opportunities` ADD COLUMN `notes` TEXT NULL AFTER `expected_close_date`;",
-      },
-      {
-        table: "opportunities",
-        col: "assigned_to",
-        query:
-          "ALTER TABLE `opportunities` ADD COLUMN `assigned_to` VARCHAR(36) NULL AFTER `notes`;",
-      },
-      {
-        table: "opportunities",
-        col: "updated_at",
-        query:
-          "ALTER TABLE `opportunities` ADD COLUMN `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`;",
-      },
-      {
-        table: "meetings",
-        col: "phone",
-        query: "ALTER TABLE `meetings` ADD COLUMN `phone` VARCHAR(50) NULL AFTER `notes`;",
-      },
-      {
-        table: "meetings",
-        col: "location",
-        query:
-          "ALTER TABLE `meetings` ADD COLUMN `location` VARCHAR(255) NULL AFTER `phone`;",
-      },
-      {
-        table: "meetings",
-        col: "meeting_type",
-        query:
-          "ALTER TABLE `meetings` ADD COLUMN `meeting_type` VARCHAR(50) NULL AFTER `location`;",
-      },
-      {
-        table: "meetings",
-        col: "meeting_date",
-        query:
-          "ALTER TABLE `meetings` ADD COLUMN `meeting_date` VARCHAR(20) NULL AFTER `meeting_type`;",
-      },
-      {
-        table: "meetings",
-        col: "meeting_time",
-        query:
-          "ALTER TABLE `meetings` ADD COLUMN `meeting_time` VARCHAR(20) NULL AFTER `meeting_date`;",
-      },
-      {
-        table: "meetings",
-        col: "updated_at",
-        query:
-          "ALTER TABLE `meetings` ADD COLUMN `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`;",
-      },
-      {
-        table: "payments",
-        col: "transaction_reference",
-        query:
-          "ALTER TABLE `payments` ADD COLUMN `transaction_reference` VARCHAR(255) NULL AFTER `payment_method`;",
-      },
-      {
-        table: "payments",
-        col: "notes",
-        query:
-          "ALTER TABLE `payments` ADD COLUMN `notes` TEXT NULL AFTER `transaction_reference`;",
-      },
-      {
-        table: "services",
-        col: "price",
-        query:
-          "ALTER TABLE `services` ADD COLUMN `price` DECIMAL(12, 2) NOT NULL DEFAULT 0.00 AFTER `description`;",
-      },
-      {
-        table: "services",
-        col: "category",
-        query:
-          "ALTER TABLE `services` ADD COLUMN `category` VARCHAR(100) NULL AFTER `price`;",
-      },
-      {
-        table: "services",
-        col: "icon",
-        query: "ALTER TABLE `services` ADD COLUMN `icon` VARCHAR(100) NULL AFTER `category`;",
-      },
-    ];
-
-    for (const c of autoColumns) {
-      try {
-        const [colCheck] = await conn.query(
-          `SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
-          [dbName, c.table, c.col],
-        );
-        if (Number((colCheck as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
-          await conn.query(c.query);
+        [dbName],
+      );
+      if (Number((profCols as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
+        try {
+          await conn.query(
+            `ALTER TABLE \`profiles\` ADD COLUMN \`avatar_url\` LONGTEXT NULL AFTER \`email\`;`,
+          );
+        } catch {
+          // Ignore if exists
         }
-      } catch {
-        // Ignore if column already exists
       }
-    }
 
-    // Re-enable foreign key checks
-    await conn.query("SET FOREIGN_KEY_CHECKS = 1;");
+      // Safe auto-column additions for invoices, opportunities, meetings, payments, services
+      const autoColumns: Array<{ table: string; col: string; query: string }> = [
+        {
+          table: "invoices",
+          col: "due_amount",
+          query:
+            "ALTER TABLE `invoices` ADD COLUMN `due_amount` DECIMAL(12, 2) NOT NULL DEFAULT 0.00 AFTER `paid_amount`;",
+        },
+        {
+          table: "invoices",
+          col: "description",
+          query: "ALTER TABLE `invoices` ADD COLUMN `description` TEXT NULL AFTER `due_amount`;",
+        },
+        {
+          table: "invoices",
+          col: "bill_date",
+          query:
+            "ALTER TABLE `invoices` ADD COLUMN `bill_date` VARCHAR(20) NULL AFTER `description`;",
+        },
+        {
+          table: "invoices",
+          col: "due_date",
+          query: "ALTER TABLE `invoices` ADD COLUMN `due_date` VARCHAR(20) NULL AFTER `bill_date`;",
+        },
+        {
+          table: "invoices",
+          col: "notes",
+          query: "ALTER TABLE `invoices` ADD COLUMN `notes` TEXT NULL AFTER `due_date`;",
+        },
+        {
+          table: "opportunities",
+          col: "status",
+          query: "ALTER TABLE `opportunities` ADD COLUMN `status` VARCHAR(100) NULL AFTER `stage`;",
+        },
+        {
+          table: "opportunities",
+          col: "estimated_value",
+          query:
+            "ALTER TABLE `opportunities` ADD COLUMN `estimated_value` DECIMAL(12, 2) NOT NULL DEFAULT 0.00 AFTER `value`;",
+        },
+        {
+          table: "opportunities",
+          col: "notes",
+          query:
+            "ALTER TABLE `opportunities` ADD COLUMN `notes` TEXT NULL AFTER `expected_close_date`;",
+        },
+        {
+          table: "opportunities",
+          col: "assigned_to",
+          query:
+            "ALTER TABLE `opportunities` ADD COLUMN `assigned_to` VARCHAR(36) NULL AFTER `notes`;",
+        },
+        {
+          table: "opportunities",
+          col: "updated_at",
+          query:
+            "ALTER TABLE `opportunities` ADD COLUMN `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`;",
+        },
+        {
+          table: "meetings",
+          col: "phone",
+          query: "ALTER TABLE `meetings` ADD COLUMN `phone` VARCHAR(50) NULL AFTER `notes`;",
+        },
+        {
+          table: "meetings",
+          col: "location",
+          query: "ALTER TABLE `meetings` ADD COLUMN `location` VARCHAR(255) NULL AFTER `phone`;",
+        },
+        {
+          table: "meetings",
+          col: "meeting_type",
+          query:
+            "ALTER TABLE `meetings` ADD COLUMN `meeting_type` VARCHAR(50) NULL AFTER `location`;",
+        },
+        {
+          table: "meetings",
+          col: "meeting_date",
+          query:
+            "ALTER TABLE `meetings` ADD COLUMN `meeting_date` VARCHAR(20) NULL AFTER `meeting_type`;",
+        },
+        {
+          table: "meetings",
+          col: "meeting_time",
+          query:
+            "ALTER TABLE `meetings` ADD COLUMN `meeting_time` VARCHAR(20) NULL AFTER `meeting_date`;",
+        },
+        {
+          table: "meetings",
+          col: "updated_at",
+          query:
+            "ALTER TABLE `meetings` ADD COLUMN `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`;",
+        },
+        {
+          table: "payments",
+          col: "transaction_reference",
+          query:
+            "ALTER TABLE `payments` ADD COLUMN `transaction_reference` VARCHAR(255) NULL AFTER `payment_method`;",
+        },
+        {
+          table: "payments",
+          col: "notes",
+          query:
+            "ALTER TABLE `payments` ADD COLUMN `notes` TEXT NULL AFTER `transaction_reference`;",
+        },
+        {
+          table: "services",
+          col: "price",
+          query:
+            "ALTER TABLE `services` ADD COLUMN `price` DECIMAL(12, 2) NOT NULL DEFAULT 0.00 AFTER `description`;",
+        },
+        {
+          table: "services",
+          col: "category",
+          query: "ALTER TABLE `services` ADD COLUMN `category` VARCHAR(100) NULL AFTER `price`;",
+        },
+        {
+          table: "services",
+          col: "icon",
+          query: "ALTER TABLE `services` ADD COLUMN `icon` VARCHAR(100) NULL AFTER `category`;",
+        },
+        {
+          table: "prospects",
+          col: "assigned_artist_id",
+          query:
+            "ALTER TABLE `prospects` ADD COLUMN `assigned_artist_id` VARCHAR(36) NULL AFTER `assigned_to`;",
+        },
+        {
+          table: "prospects",
+          col: "budget",
+          query:
+            "ALTER TABLE `prospects` ADD COLUMN `budget` DECIMAL(12, 2) NOT NULL DEFAULT 0.00 AFTER `assigned_artist_id`;",
+        },
+        {
+          table: "prospects",
+          col: "paid_amount",
+          query:
+            "ALTER TABLE `prospects` ADD COLUMN `paid_amount` DECIMAL(12, 2) NOT NULL DEFAULT 0.00 AFTER `budget`;",
+        },
+        {
+          table: "prospects",
+          col: "progress",
+          query:
+            "ALTER TABLE `prospects` ADD COLUMN `progress` INT NOT NULL DEFAULT 0 AFTER `paid_amount`;",
+        },
+        {
+          table: "prospects",
+          col: "website_url",
+          query: "ALTER TABLE `prospects` ADD COLUMN `website_url` VARCHAR(500) NULL AFTER `address`;",
+        },
+        {
+          table: "prospects",
+          col: "logo_url",
+          query: "ALTER TABLE `prospects` ADD COLUMN `logo_url` VARCHAR(500) NULL AFTER `website_url`;",
+        },
+        {
+          table: "prospects",
+          col: "deadline",
+          query: "ALTER TABLE `prospects` ADD COLUMN `deadline` DATE NULL AFTER `progress`;",
+        },
+      ];
 
-    // Seed default admin accounts into \`users\` if table is empty
-    const [countRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`users\`;`);
-    if (Number((countRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
-      const hashAdmin = bcrypt.hashSync("Admin@12345", 10);
-      const hashAgent = bcrypt.hashSync("Agent@12345", 10);
-      const now = getMySQLTimestamp();
+      for (const c of autoColumns) {
+        try {
+          const [colCheck] = await conn.query(
+            `SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+            [dbName, c.table, c.col],
+          );
+          if (Number((colCheck as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
+            await conn.query(c.query);
+          }
+        } catch {
+          // Ignore if column already exists
+        }
+      }
 
-      await conn.query(
-        `
+      // Re-enable foreign key checks
+      await conn.query("SET FOREIGN_KEY_CHECKS = 1;");
+
+      // Seed default admin accounts into \`users\` if table is empty
+      const [countRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`users\`;`);
+      if (Number((countRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
+        const hashAdmin = bcrypt.hashSync("Admin@12345", 10);
+        const hashAgent = bcrypt.hashSync("Agent@12345", 10);
+        const now = getMySQLTimestamp();
+
+        await conn.query(
+          `
         INSERT INTO \`users\` (\`id\`, \`name\`, \`email\`, \`password_hash\`, \`role\`, \`status\`, \`avatar_url\`, \`is_deleted\`, \`created_at\`, \`updated_at\`)
         VALUES
         ('usr-admin-1', 'Mehan Ahmed (System Admin)', 'admin@example.com', ?, 'ADMIN', 'Active', NULL, 0, ?, ?),
         ('usr-admin-2', 'Mehan Ahmed', 'mehan.ahmed.official@gmail.com', ?, 'ADMIN', 'Active', NULL, 0, ?, ?),
-        ('usr-agent-0', 'Agent User', 'agent@brandium.com', ?, 'AGENT', 'Active', NULL, 0, ?, ?);
+        ('usr-agent-0', 'Agent User', 'agent@brandium.com', ?, 'AGENT', 'Active', NULL, 0, ?, ?),
+        ('usr-artist-1', 'Sabbir Hossain (Artist)', 'sabbir.artist@brandium.com', ?, 'ARTIST', 'Active', NULL, 0, ?, ?),
+        ('usr-artist-2', 'Arefin Shuvo (Artist)', 'arefin.artist@brandium.com', ?, 'ARTIST', 'Active', NULL, 0, ?, ?);
       `,
-        [hashAdmin, now, now, hashAdmin, now, now, hashAgent, now, now],
-      );
-    }
+          [
+            hashAdmin,
+            now,
+            now,
+            hashAdmin,
+            now,
+            now,
+            hashAgent,
+            now,
+            now,
+            hashAgent,
+            now,
+            now,
+            hashAgent,
+            now,
+            now,
+          ],
+        );
+      }
 
-    // Always sync users into profiles table
-    try {
-      await conn.query(`
+      // Ensure default artist accounts exist if missing
+      try {
+        const [artCountRows] = await conn.query(
+          `SELECT COUNT(*) as cnt FROM \`users\` WHERE UPPER(role) = 'ARTIST' AND is_deleted = 0;`,
+        );
+        if (Number((artCountRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
+          const hashArtist = bcrypt.hashSync("Artist@12345", 10);
+          const now = getMySQLTimestamp();
+          await conn.query(
+            `
+            INSERT INTO \`users\` (\`id\`, \`name\`, \`email\`, \`password_hash\`, \`role\`, \`status\`, \`avatar_url\`, \`is_deleted\`, \`created_at\`, \`updated_at\`)
+            VALUES
+            ('usr-artist-1', 'Sabbir Hossain', 'sabbir.artist@brandium.com', ?, 'ARTIST', 'Active', NULL, 0, ?, ?),
+            ('usr-artist-2', 'Arefin Shuvo', 'arefin.artist@brandium.com', ?, 'ARTIST', 'Active', NULL, 0, ?, ?)
+            ON DUPLICATE KEY UPDATE \`role\` = 'ARTIST', \`status\` = 'Active';
+          `,
+            [hashArtist, now, now, hashArtist, now, now],
+          );
+        }
+      } catch {
+        // Ignore
+      }
+
+      // Always sync users into profiles table
+      try {
+        await conn.query(`
         INSERT INTO \`profiles\` (\`id\`, \`full_name\`, \`email\`, \`created_at\`, \`updated_at\`)
         SELECT \`id\`, \`name\`, \`email\`, \`created_at\`, \`updated_at\` FROM \`users\`
         ON DUPLICATE KEY UPDATE \`full_name\` = VALUES(\`full_name\`), \`email\` = VALUES(\`email\`);
       `);
-    } catch {
-      // Ignore
-    }
+      } catch {
+        // Ignore
+      }
 
-    // Seed default stages into \`stages\` if table is empty
-    const [stageRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`stages\`;`);
-    if (Number((stageRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
-      await conn.query(`
+      // Seed default stages into \`stages\` if table is empty
+      const [stageRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`stages\`;`);
+      if (Number((stageRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
+        await conn.query(`
         INSERT INTO \`stages\` (\`id\`, \`name\`, \`stage_group\`, \`sort_order\`, \`is_follow_up\`, \`is_active\`, \`is_system\`)
         VALUES
         ('prospect', 'Prospect', 'new', 1, 0, 1, 1),
@@ -687,12 +849,12 @@ export async function ensureMySQLTablesExist(
         ('meeting-scheduled', 'Meeting Scheduled', 'in_progress', 8, 1, 1, 1),
         ('quotation-sent', 'Quotation Sent', 'in_progress', 9, 0, 1, 1);
       `);
-    }
+      }
 
-    // Seed default services into \`services\` if table is empty
-    const [serviceRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`services\`;`);
-    if (Number((serviceRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
-      await conn.query(`
+      // Seed default services into \`services\` if table is empty
+      const [serviceRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`services\`;`);
+      if (Number((serviceRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
+        await conn.query(`
         INSERT INTO \`services\` (\`id\`, \`name\`, \`description\`, \`is_active\`)
         VALUES
         ('srv-1', 'Product Photography', 'High-end studio & e-commerce product catalog shoot.', 1),
@@ -708,10 +870,41 @@ export async function ensureMySQLTablesExist(
         ('srv-11', 'Motion Video Ads', '2D/3D motion graphics animation and visual FX.', 1),
         ('srv-12', 'Logo Design', 'Custom brand identity, vector logos, and brand guidelines.', 1);
       `);
+      }
+
+      // Seed default projects into `projects` if table is empty
+      const [projectRows] = await conn.query(`SELECT COUNT(*) as cnt FROM \`projects\`;`);
+      if (Number((projectRows as Array<{ cnt: number }>)?.[0]?.cnt ?? 0) === 0) {
+        await conn.query(`
+          INSERT INTO \`projects\` (
+            \`id\`, \`project_code\`, \`title\`, \`client_name\`, \`service_id\`, \`status\`, 
+            \`budget\`, \`paid_amount\`, \`progress\`, \`deadline\`, \`notes\`
+          )
+          VALUES
+          ('prj-1001', 'PRJ-1001', 'Apex Footwear E-Commerce Commercial Ads', 'Apex Footwear Ltd.', 'srv-5', 'On Design', 45000.00, 25000.00, 60, DATE_ADD(CURRENT_DATE, INTERVAL 7 DAY), 'High-priority celebrity video ad production for seasonal footwear launch.'),
+          ('prj-1002', 'PRJ-1002', 'Navana Real Estate Brand Identity & Logo Suite', 'Navana Group', 'srv-12', 'CR Clearance', 30000.00, 15000.00, 20, DATE_ADD(CURRENT_DATE, INTERVAL 14 DAY), 'Vector logo design with brand guidelines and corporate stationery.'),
+          ('prj-1003', 'PRJ-1003', 'Shwapno Supermarket 3D Motion Promo Video', 'ACI Logistics / Shwapno', 'srv-11', 'CO Clearance', 55000.00, 30000.00, 35, DATE_ADD(CURRENT_DATE, INTERVAL 10 DAY), '2D/3D motion graphics animation for Facebook & YouTube campaigns.'),
+          ('prj-1004', 'PRJ-1004', 'Beximco Pharma Medical Product Catalog Shoot', 'Beximco Pharma', 'srv-1', 'Logistics', 40000.00, 40000.00, 85, DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY), 'High-resolution studio product photography and color grading.'),
+          ('prj-1005', 'PRJ-1005', 'Chaldal Monthly Social Media & Ad Campaigns', 'Chaldal.com', 'srv-3', 'Delivered', 75000.00, 75000.00, 100, CURRENT_DATE, 'Monthly digital marketing plan, ad copy, and video production completed.'),
+          ('prj-1006', 'PRJ-1006', 'Aarong Handcraft Artisans Video Docu-Series', 'BRAC Aarong', 'srv-6', 'On Hold', 60000.00, 20000.00, 40, DATE_ADD(CURRENT_DATE, INTERVAL 21 DAY), 'Waiting for client script approval and location clearances.');
+        `);
+      }
+
+      // Mark as initialized in memory for lightning fast 0ms subsequent queries
+      isSchemaInitialized = true;
+    } catch (e) {
+      console.error("ERP Auto Database Init Error:", e);
+      initSchemaPromise = null;
+    } finally {
+      try {
+        await conn.query("SET FOREIGN_KEY_CHECKS = 1;");
+      } catch {
+        // Ignore
+      }
     }
-  } catch (e) {
-    console.error("ERP Auto Database Init Error:", e);
-  }
+  })();
+
+  return initSchemaPromise;
 }
 
 export const authenticateXamppUser = createServerFn({ method: "POST" })

@@ -157,7 +157,7 @@ export const opportunitiesQuery = (filters: OpportunityFilters, userId: string, 
       }
 
       if (!isAdmin && userId) {
-        rows = rows.filter((r) => r.assigned_to === userId);
+        rows = rows.filter((r) => r.assigned_to === userId || r.created_by === userId);
       }
       if (filters.agent && filters.agent !== "all") {
         rows = rows.filter((r) => r.assigned_to === filters.agent);
@@ -198,16 +198,27 @@ export const opportunitySummaryQuery = (userId: string, isAdmin: boolean) =>
   queryOptions({
     queryKey: ["opportunity-summary", userId, isAdmin],
     queryFn: async () => {
-      let rows: { status: string; estimated_value: number; assigned_to: string | null }[] = [];
+      let rows: {
+        status: string;
+        estimated_value: number;
+        assigned_to: string | null;
+        created_by: string | null;
+      }[] = [];
       try {
         const res = await runMySQLQuery<Record<string, unknown>[]>(
-          "SELECT status, estimated_value, assigned_to FROM `opportunities` WHERE is_active = 1;",
+          `SELECT 
+            status, 
+            estimated_value, 
+            assigned_to,
+            created_by 
+          FROM \`opportunities\` WHERE is_active = 1;`,
         );
         if (res.success && Array.isArray(res.data)) {
           rows = res.data.map((r) => ({
             status: String(r["status"] || "Opportunity Created"),
             estimated_value: Number(r["estimated_value"] || 0),
             assigned_to: (r["assigned_to"] as string) || null,
+            created_by: (r["created_by"] as string) || null,
           }));
         }
       } catch {
@@ -215,7 +226,7 @@ export const opportunitySummaryQuery = (userId: string, isAdmin: boolean) =>
       }
 
       if (!isAdmin && userId) {
-        rows = rows.filter((r) => r.assigned_to === userId);
+        rows = rows.filter((r) => r.assigned_to === userId || r.created_by === userId);
       }
 
       const totalCount = rows.length;

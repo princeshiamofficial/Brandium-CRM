@@ -26,6 +26,7 @@ import {
   UserCheck,
   Calendar,
   X,
+  Sparkles,
   MoreVertical,
 } from "lucide-react";
 
@@ -178,7 +179,8 @@ function AdminUsersPage() {
   });
 
   const getRoleBadge = (role: string) => {
-    switch (role) {
+    const r = (role || "").toUpperCase();
+    switch (r) {
       case "ADMIN":
         return (
           <Badge
@@ -195,6 +197,15 @@ function AdminUsersPage() {
             className="bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30 text-xs font-semibold px-2.5 py-0.5 rounded-full gap-1"
           >
             <UserCheck className="size-3 text-blue-600 dark:text-blue-400" /> AGENT
+          </Badge>
+        );
+      case "ARTIST":
+        return (
+          <Badge
+            variant="outline"
+            className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-xs font-semibold px-2.5 py-0.5 rounded-full gap-1"
+          >
+            <Sparkles className="size-3 text-amber-600 dark:text-amber-400" /> ARTIST
           </Badge>
         );
       default:

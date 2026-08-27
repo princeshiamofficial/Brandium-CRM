@@ -12,6 +12,8 @@ import mysql from "mysql2/promise";
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 
+import fs from "node:fs/promises";
+import path from "node:path";
 import { getMySQLConfig } from "./src/lib/mysql-client.ts";
 
 type MySQLRequestPayload = {
@@ -20,7 +22,7 @@ type MySQLRequestPayload = {
   params?: unknown;
 };
 
-const maxBodyBytes = 512 * 1024;
+const maxBodyBytes = 10 * 1024 * 1024; // Allow up to 10MB for file uploads
 
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
   res.statusCode = statusCode;
@@ -33,7 +35,7 @@ function isDevSqlBridgeEnabled(): boolean {
   return process.env["NODE_ENV"] !== "production" || process.env["ENABLE_DEV_SQL_API"] === "true";
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<MySQLRequestPayload> {
+async function readJsonBody<T = MySQLRequestPayload>(req: IncomingMessage): Promise<T> {
   let body = "";
 
   for await (const chunk of req) {
@@ -44,7 +46,7 @@ async function readJsonBody(req: IncomingMessage): Promise<MySQLRequestPayload> 
     }
   }
 
-  return JSON.parse(body) as MySQLRequestPayload;
+  return JSON.parse(body) as T;
 }
 
 function viteMySQLPlugin(): Plugin {
@@ -92,6 +94,74 @@ function viteMySQLPlugin(): Plugin {
           });
         }
       });
+
+      server.middlewares.use("/api/upload", async (req: IncomingMessage, res: ServerResponse) => {
+        if (req.method !== "POST") {
+          sendJson(res, 405, { success: false, error: "Method not allowed" });
+          return;
+        }
+
+        try {
+          const { filename, base64 } = await readJsonBody<{ filename?: string; base64?: string }>(
+            req,
+          );
+
+          if (!filename || !base64) {
+            sendJson(res, 400, { success: false, error: "No image file provided" });
+            return;
+          }
+
+          const cleanBase64 = base64.replace(/^data:[^;]+;base64,/, "");
+          const buffer = Buffer.from(cleanBase64, "base64");
+
+          const uploadDir = path.join(process.cwd(), "public", "uploads");
+          await fs.mkdir(uploadDir, { recursive: true });
+
+          const safeFilename = `${Date.now()}-${filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+          const filePath = path.join(uploadDir, safeFilename);
+
+          await fs.writeFile(filePath, buffer);
+
+          sendJson(res, 200, {
+            success: true,
+            url: `/uploads/${safeFilename}`,
+          });
+        } catch (err: unknown) {
+          const errObj = err as { message?: string };
+          console.error("Vite Upload Plugin Error:", errObj?.message || err);
+          sendJson(res, 500, {
+            success: false,
+            error: errObj?.message || "Failed to upload image to local disk.",
+          });
+        }
+      });
+
+      server.middlewares.use(
+        "/uploads",
+        async (req: IncomingMessage, res: ServerResponse, next) => {
+          try {
+            const cleanUrl = ((req.url || "").split("?")[0] || "").replace(/^\//, "");
+            const filePath = path.join(process.cwd(), "public", "uploads", cleanUrl);
+            const fileData = await fs.readFile(filePath);
+            const ext = path.extname(filePath).toLowerCase();
+            const mimeTypes: Record<string, string> = {
+              ".png": "image/png",
+              ".jpg": "image/jpeg",
+              ".jpeg": "image/jpeg",
+              ".webp": "image/webp",
+              ".svg": "image/svg+xml",
+              ".gif": "image/gif",
+              ".ico": "image/x-icon",
+            };
+            const contentType = mimeTypes[ext] || "application/octet-stream";
+            res.setHeader("Content-Type", contentType);
+            res.setHeader("Cache-Control", "public, max-age=3600");
+            res.end(fileData);
+          } catch {
+            next();
+          }
+        },
+      );
 
       server.middlewares.use("/api/mysql", async (req: IncomingMessage, res: ServerResponse) => {
         if (req.method !== "POST") {

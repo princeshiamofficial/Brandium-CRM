@@ -1,30 +1,35 @@
 import { queryOptions } from "@tanstack/react-query";
-import { runMySQLQuery } from "@/lib/mysql-api";
+import { runMySQLQuery } from "./mysql-api";
 
-export type WonSale = {
+export type WonSaleItem = {
   id: string;
-  opportunity_id: string;
   prospect_id: string;
   client_name: string;
-  business_name?: string | undefined;
+  business_name: string | null;
   client_designation: string;
   phone: string;
   email: string;
-  sale_amount: number;
-  assigned_agent_id: string | null;
+  assigned_agent_id: string;
   assigned_agent_name: string;
-  created_by_id: string | null;
+  deal_value: number;
+  sale_amount: number;
+  paid_amount: number;
+  due_amount: number;
+  service_id: string | null;
+  service_name: string;
+  created_by_id: string;
   created_by_name: string;
   billing_invoice_id: string;
   notes: string;
   won_at: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string | undefined;
 };
 
 export type WonSaleFilters = {
+  agent_id?: string | undefined;
+  service_id?: string | undefined;
   search?: string | undefined;
-  agent_id?: string | "all" | undefined;
   from_date?: string | undefined;
   to_date?: string | undefined;
 };
@@ -32,90 +37,113 @@ export type WonSaleFilters = {
 export type AgentOption = {
   id: string;
   name: string;
+  role?: string;
 };
 
-export async function fetchWonSales(filters: WonSaleFilters = {}): Promise<WonSale[]> {
+export type ArtistOption = {
+  id: string;
+  name: string;
+  role?: string;
+};
+
+export async function fetchWonSales(
+  filters: WonSaleFilters = {},
+  userId?: string,
+  isAdmin: boolean = false,
+): Promise<WonSaleItem[]> {
   try {
     const res = await runMySQLQuery<Record<string, unknown>[]>(
       `SELECT 
-        o.id AS opportunity_id,
-        o.id AS id,
-        p.id AS prospect_id,
-        p.contact_name AS client_name,
+        s.id,
+        s.prospect_id,
+        COALESCE(p.contact_name, 'Client') AS client_name,
         p.business_name,
-        COALESCE(p.designation, 'Managing Director') AS client_designation,
-        p.phone,
-        p.email,
-        o.estimated_value AS sale_amount,
-        o.assigned_to AS assigned_agent_id,
-        COALESCE(u_assign.name, 'Agent') AS assigned_agent_name,
-        o.created_by AS created_by_id,
-        COALESCE(u_create.name, 'Admin') AS created_by_name,
-        COALESCE(i.invoice_number, CONCAT('INV-2026-', SUBSTRING(o.id, 1, 4))) AS billing_invoice_id,
-        COALESCE(o.notes, 'Sales Closed agreement.') AS notes,
-        o.updated_at AS won_at,
-        o.created_at,
-        o.updated_at
-      FROM \`opportunities\` o
-      JOIN \`prospects\` p ON o.prospect_id = p.id
-      LEFT JOIN \`users\` u_assign ON o.assigned_to = u_assign.id
-      LEFT JOIN \`users\` u_create ON o.created_by = u_create.id
-      LEFT JOIN \`invoices\` i ON p.id = i.prospect_id
-      WHERE (o.status = 'Sales Won' OR o.status = 'Won' OR LOWER(o.status) LIKE '%won%')
-        AND o.is_active = 1
-      ORDER BY o.updated_at DESC;`,
+        COALESCE(p.designation, '') AS client_designation,
+        COALESCE(p.phone, '') AS phone,
+        COALESCE(p.email, '') AS email,
+        COALESCE(s.agent_id, p.assigned_to, '') AS assigned_agent_id,
+        COALESCE(u_agent.name, 'Unassigned') AS assigned_agent_name,
+        COALESCE(s.deal_value, 0) AS deal_value,
+        COALESCE(s.paid_amount, 0) AS paid_amount,
+        COALESCE(s.due_amount, 0) AS due_amount,
+        s.service_id,
+        COALESCE(srv.name, 'Custom Package') AS service_name,
+        COALESCE(s.created_by, '') AS created_by_id,
+        COALESCE(u_creator.name, 'Admin') AS created_by_name,
+        COALESCE(s.billing_invoice_id, '') AS billing_invoice_id,
+        COALESCE(s.notes, '') AS notes,
+        COALESCE(s.won_at, s.created_at, NOW()) AS won_at,
+        COALESCE(s.created_at, NOW()) AS created_at
+      FROM \`sales\` s
+      LEFT JOIN \`prospects\` p ON s.prospect_id = p.id
+      LEFT JOIN \`services\` srv ON s.service_id = srv.id
+      LEFT JOIN \`users\` u_agent ON (s.agent_id = u_agent.id OR p.assigned_to = u_agent.id)
+      LEFT JOIN \`users\` u_creator ON s.created_by = u_creator.id
+      WHERE (s.is_deleted = 0 OR s.is_deleted IS NULL)
+      ORDER BY s.created_at DESC;`,
     );
 
     if (!res.success || !Array.isArray(res.data)) {
       return [];
     }
 
-    const mapped: WonSale[] = res.data.map((item) => ({
-      id: String(item["id"]),
-      opportunity_id: String(item["opportunity_id"]),
-      prospect_id: String(item["prospect_id"] || ""),
-      client_name: String(item["client_name"] || "Client"),
-      business_name: (item["business_name"] as string) || undefined,
-      client_designation: String(item["client_designation"] || "Managing Director"),
-      phone: String(item["phone"] || ""),
-      email: String(item["email"] || ""),
-      sale_amount: Number(item["sale_amount"] || 0),
-      assigned_agent_id: (item["assigned_agent_id"] as string) || null,
-      assigned_agent_name: String(item["assigned_agent_name"] || "Agent"),
-      created_by_id: (item["created_by_id"] as string) || null,
-      created_by_name: String(item["created_by_name"] || "Admin"),
-      billing_invoice_id: String(item["billing_invoice_id"] || "INV-2026-001"),
-      notes: String(item["notes"] || ""),
-      won_at: String(item["won_at"] || new Date().toISOString()),
-      created_at: String(item["created_at"] || new Date().toISOString()),
-      updated_at: String(item["updated_at"] || new Date().toISOString()),
-    }));
+    let items: WonSaleItem[] = res.data.map((r) => {
+      const dealValue = Number(r["deal_value"] || 0);
+      const paidAmount = Number(r["paid_amount"] || 0);
+      const dueAmount = Number(r["due_amount"] || Math.max(0, dealValue - paidAmount));
 
-    return applyClientFilters(mapped, filters);
+      return {
+        id: String(r["id"]),
+        prospect_id: String(r["prospect_id"] || ""),
+        client_name: String(r["client_name"] || "Client"),
+        business_name: r["business_name"] ? String(r["business_name"]) : null,
+        client_designation: String(r["client_designation"] || ""),
+        phone: String(r["phone"] || ""),
+        email: String(r["email"] || ""),
+        assigned_agent_id: String(r["assigned_agent_id"] || ""),
+        assigned_agent_name: String(r["assigned_agent_name"] || "Unassigned"),
+        deal_value: dealValue,
+        sale_amount: dealValue,
+        paid_amount: paidAmount,
+        due_amount: dueAmount,
+        service_id: r["service_id"] ? String(r["service_id"]) : null,
+        service_name: String(r["service_name"] || "General Service"),
+        created_by_id: String(r["created_by_id"] || ""),
+        created_by_name: String(r["created_by_name"] || "Admin"),
+        billing_invoice_id: String(r["billing_invoice_id"] || ""),
+        notes: String(r["notes"] || ""),
+        won_at: String(r["won_at"] || new Date().toISOString()),
+        created_at: String(r["created_at"] || new Date().toISOString()),
+        updated_at: r["updated_at"] ? String(r["updated_at"]) : undefined,
+      };
+    });
+
+    if (!isAdmin && userId) {
+      items = items.filter((s) => s.assigned_agent_id === userId || s.created_by_id === userId);
+    }
+
+    return applyFilters(items, filters);
   } catch (err) {
     console.warn("fetchWonSales MySQL error:", err);
     return [];
   }
 }
 
-function applyClientFilters(list: WonSale[], filters: WonSaleFilters): WonSale[] {
-  let result = list;
+function applyFilters(items: WonSaleItem[], filters: WonSaleFilters): WonSaleItem[] {
+  let result = [...items];
 
   if (filters.agent_id && filters.agent_id !== "all") {
-    result = result.filter((item) => item.assigned_agent_id === filters.agent_id);
+    result = result.filter(
+      (item) =>
+        item.assigned_agent_id === filters.agent_id || item.created_by_id === filters.agent_id,
+    );
   }
 
-  if (filters.from_date) {
-    const fromStr = filters.from_date;
-    result = result.filter((item) => item.won_at.split("T")[0]! >= fromStr);
+  if (filters.service_id && filters.service_id !== "all") {
+    result = result.filter((item) => item.service_id === filters.service_id);
   }
 
-  if (filters.to_date) {
-    const toStr = filters.to_date;
-    result = result.filter((item) => item.won_at.split("T")[0]! <= toStr);
-  }
-
-  if (filters.search && filters.search.trim() !== "") {
+  if (filters.search) {
     const q = filters.search.toLowerCase().trim();
     result = result.filter(
       (item) =>
@@ -137,7 +165,13 @@ function applyClientFilters(list: WonSale[], filters: WonSaleFilters): WonSale[]
 export async function fetchAgentOptions(): Promise<AgentOption[]> {
   try {
     const res = await runMySQLQuery<Record<string, unknown>[]>(
-      "SELECT id, name FROM `users` WHERE (is_deleted = 0 OR is_deleted IS NULL) AND (status = 'Active' OR status IS NULL) ORDER BY name ASC;",
+      `SELECT u.id, COALESCE(p.full_name, u.name, u.email) AS name, u.role 
+       FROM \`users\` u 
+       LEFT JOIN \`profiles\` p ON u.id = p.id 
+       WHERE (u.is_deleted = 0 OR u.is_deleted IS NULL) 
+         AND (u.status = 'Active' OR u.status IS NULL)
+         AND (UPPER(u.role) = 'AGENT' OR UPPER(u.role) LIKE '%AGENT%')
+       ORDER BY name ASC;`,
     );
     if (!res.success || !Array.isArray(res.data)) {
       return [];
@@ -145,6 +179,7 @@ export async function fetchAgentOptions(): Promise<AgentOption[]> {
     return res.data.map((u) => ({
       id: String(u["id"]),
       name: String(u["name"] || "Agent"),
+      role: String(u["role"] || "AGENT"),
     }));
   } catch (err) {
     console.warn("fetchAgentOptions MySQL error:", err);
@@ -152,14 +187,49 @@ export async function fetchAgentOptions(): Promise<AgentOption[]> {
   }
 }
 
-export const wonSalesQueryOptions = (filters: WonSaleFilters = {}) =>
+export async function fetchArtistOptions(): Promise<ArtistOption[]> {
+  try {
+    const res = await runMySQLQuery<Record<string, unknown>[]>(
+      `SELECT u.id, COALESCE(p.full_name, u.name, u.email) AS name, u.role 
+       FROM \`users\` u 
+       LEFT JOIN \`profiles\` p ON u.id = p.id 
+       WHERE (u.is_deleted = 0 OR u.is_deleted IS NULL) 
+         AND (u.status = 'Active' OR u.status IS NULL)
+         AND (UPPER(u.role) = 'ARTIST' OR UPPER(u.role) LIKE '%ARTIST%')
+       ORDER BY name ASC;`,
+    );
+    if (!res.success || !Array.isArray(res.data)) {
+      return [];
+    }
+    return res.data.map((u) => ({
+      id: String(u["id"]),
+      name: String(u["name"] || "Artist"),
+      role: String(u["role"] || "ARTIST"),
+    }));
+  } catch (err) {
+    console.warn("fetchArtistOptions MySQL error:", err);
+    return [];
+  }
+}
+
+export const wonSalesQueryOptions = (
+  filters: WonSaleFilters = {},
+  userId?: string,
+  isAdmin: boolean = false,
+) =>
   queryOptions({
-    queryKey: ["won-sales", filters],
-    queryFn: () => fetchWonSales(filters),
+    queryKey: ["won-sales", filters, userId, isAdmin],
+    queryFn: () => fetchWonSales(filters, userId, isAdmin),
   });
 
 export const agentOptionsQueryOptions = () =>
   queryOptions({
     queryKey: ["agents", "options"],
     queryFn: () => fetchAgentOptions(),
+  });
+
+export const artistOptionsQueryOptions = () =>
+  queryOptions({
+    queryKey: ["artists", "options"],
+    queryFn: () => fetchArtistOptions(),
   });

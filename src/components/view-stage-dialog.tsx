@@ -13,6 +13,7 @@ import {
   Star,
   TriangleAlert,
   Trash2,
+  Globe,
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -230,15 +231,29 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
           {/* Modern Header */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className="size-10 rounded-2xl bg-orange-100/90 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 font-bold flex items-center justify-center shrink-0 border border-orange-200/70 shadow-2xs mt-0.5">
-                <User className="size-4.5" />
+              <div className="size-11 rounded-full bg-slate-100 dark:bg-slate-800 text-orange-600 dark:text-orange-400 font-bold flex items-center justify-center shrink-0 border border-slate-200/90 dark:border-slate-700 shadow-2xs mt-0.5 overflow-hidden">
+                {prospect.logo_url ? (
+                  <img
+                    src={prospect.logo_url}
+                    alt={prospect.business_name || prospect.contact_name}
+                    className="size-full object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div className="size-full bg-orange-100/90 dark:bg-orange-950/50 flex items-center justify-center">
+                    <User className="size-5" />
+                  </div>
+                )}
               </div>
               <div>
                 <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">
                   {prospect.contact_name || "N/A"}
                 </h2>
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
-                  {prospect.designation || "N/A"}
+                  {prospect.designation ? `${prospect.designation} • ` : ""}
+                  {prospect.business_name || "Prospect Lead"}
                 </p>
               </div>
             </div>
@@ -256,8 +271,8 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
             </Button>
           </div>
 
-          {/* Minimal Meta Card: Phone, Service, Artist */}
-          <div className="mt-2.5 bg-slate-50/80 dark:bg-slate-900/50 rounded-xl p-2.5 border border-slate-200/70 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+          {/* Minimal Meta Card: Phone, Service, Artist, Website */}
+          <div className="mt-2.5 bg-slate-50/80 dark:bg-slate-900/50 rounded-xl p-2.5 border border-slate-200/70 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
             <div className="flex items-center gap-2">
               <Phone className="size-3.5 text-slate-400 shrink-0" />
               <span className="font-mono text-xs text-slate-800 dark:text-slate-200 truncate">
@@ -276,6 +291,24 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
                 Artist: {getProspectArtistName(prospect)}
               </span>
             </div>
+            {prospect.website_url ? (
+              <div className="flex items-center gap-2 truncate">
+                <Globe className="size-3.5 text-blue-500 shrink-0" />
+                <a
+                  href={
+                    prospect.website_url.startsWith("http://") ||
+                    prospect.website_url.startsWith("https://")
+                      ? prospect.website_url
+                      : `https://${prospect.website_url}`
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate"
+                >
+                  {prospect.website_url.replace(/^https?:\/\//, "")}
+                </a>
+              </div>
+            ) : null}
           </div>
 
           <div className="my-2.5 border-t border-slate-200/80 dark:border-slate-800" />

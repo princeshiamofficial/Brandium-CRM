@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -14,6 +14,10 @@ import {
   Loader2,
   Save,
   Palette,
+  Globe,
+  Image as ImageIcon,
+  Upload,
+  Trash2,
 } from "lucide-react";
 
 import {
@@ -35,18 +39,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { runMySQLQuery } from "@/lib/mysql-api";
-import { getMySQLTimestamp } from "@/lib/mysql-client";
 import { type Prospect } from "@/lib/prospects";
 import { servicesQueryOptions } from "@/lib/services";
-import { agentOptionsQueryOptions } from "@/lib/won-sales";
+import { agentOptionsQueryOptions, artistOptionsQueryOptions } from "@/lib/won-sales";
+import { useAuth } from "@/lib/auth";
+import { runMySQLQuery } from "@/lib/mysql-api";
+import { getMySQLTimestamp } from "@/lib/mysql-client";
+import { uploadImageFile } from "@/lib/upload";
 
-export type EditProspectDialogProps = {
+interface EditProspectDialogProps {
   prospectId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
-};
+}
 
 export function EditProspectDialog({
   prospectId,
@@ -55,6 +61,9 @@ export function EditProspectDialog({
   onSuccess,
 }: EditProspectDialogProps) {
   const queryClient = useQueryClient();
+  const { user, role } = useAuth();
+  const isCurrentUserAgent =
+    role === "agent" || user?.user_metadata?.role?.toLowerCase() === "agent";
 
   // Form fields state
   const [contactName, setContactName] = useState("");
@@ -63,24 +72,72 @@ export function EditProspectDialog({
   const [phone, setPhone] = useState("");
   const [altPhone, setAltPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [imgError, setImgError] = useState(false);
   const [address, setAddress] = useState("");
   const [serviceId, setServiceId] = useState<string>("none");
   const [artist, setArtist] = useState<string>("none");
   const [assignedTo, setAssignedTo] = useState<string>("none");
   const [notes, setNotes] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Synchronize previewUrl and clear error whenever logoUrl changes
+  useEffect(() => {
+    setPreviewUrl(logoUrl);
+    setImgError(false);
+  }, [logoUrl]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Instant 0ms local preview before network upload completes
+    const instantBlobUrl = URL.createObjectURL(file);
+    setPreviewUrl(instantBlobUrl);
+    setImgError(false);
+
+    try {
+      setIsUploading(true);
+      const res = await uploadImageFile(file);
+      if (res.success && res.url) {
+        setLogoUrl(res.url);
+        setPreviewUrl(res.url);
+        toast.success("Logo uploaded successfully!");
+      } else {
+        toast.error(res.error || "Failed to upload logo.");
+      }
+    } catch {
+      toast.error("Upload failed.");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   // Queries for dropdown options
   const { data: rawServices = [] } = useQuery(servicesQueryOptions());
   const { data: rawAgents = [] } = useQuery(agentOptionsQueryOptions());
+  const { data: rawArtists = [] } = useQuery(artistOptionsQueryOptions());
 
-  const services = Array.isArray(rawServices) ? rawServices : [];
-  const agents = Array.isArray(rawAgents) ? rawAgents : [];
+  const services = useMemo(() => (Array.isArray(rawServices) ? rawServices : []), [rawServices]);
+  const agents = useMemo(() => (Array.isArray(rawAgents) ? rawAgents : []), [rawAgents]);
+  const artists = useMemo(() => (Array.isArray(rawArtists) ? rawArtists : []), [rawArtists]);
 
   // Fetch prospect data for editing from MySQL database brandium_crm
   const prospectQuery = useQuery({
     queryKey: ["prospect-edit-dialog", prospectId],
     enabled: Boolean(prospectId && open),
-    queryFn: async (): Promise<Prospect | null> => {
+    queryFn: async (): Promise<
+      | (Prospect & {
+          assigned_artist_id?: string | null;
+          website_url?: string | null;
+          logo_url?: string | null;
+        })
+      | null
+    > => {
       if (!prospectId) return null;
 
       // Try MySQL first
@@ -99,9 +156,12 @@ export function EditProspectDialog({
           alternative_phone: (p["alternative_phone"] as string) || null,
           email: (p["email"] as string) || null,
           address: (p["address"] as string) || null,
+          website_url: (p["website_url"] as string) || null,
+          logo_url: (p["logo_url"] as string) || null,
           service_id: (p["service_id"] as string) || null,
           stage_id: (p["stage_id"] as string) || null,
           assigned_to: (p["assigned_to"] as string) || null,
+          assigned_artist_id: (p["assigned_artist_id"] as string) || null,
           created_by: (p["created_by"] as string) || null,
           notes: (p["notes"] as string) || null,
           created_at: String(p["created_at"] || new Date().toISOString()),
@@ -123,39 +183,80 @@ export function EditProspectDialog({
       setPhone(p.phone || "");
       setAltPhone(p.alternative_phone || "");
       setEmail(p.email || "");
+      setWebsiteUrl(p.website_url || "");
+      setLogoUrl(p.logo_url || "");
       setAddress(p.address || "");
       setServiceId(p.service_id || "none");
-      setAssignedTo(p.assigned_to || "none");
 
-      // Extract artist tag from notes if present
       let rawNotes = p.notes || "";
-      const artistMatch = rawNotes.match(/\[Artist:\s*([^\]]+)\]/i);
-      if (artistMatch && artistMatch[1]) {
-        setArtist(artistMatch[1].trim());
-        rawNotes = rawNotes.replace(/\[Artist:\s*([^\]]+)\]/gi, "").trim();
-      } else {
-        setArtist("none");
+
+      // 1. Resolve Assigned Agent
+      let agentId = p.assigned_to && p.assigned_to !== "none" ? p.assigned_to : "";
+      const agentMatch = rawNotes.match(/\[Agent:\s*([^\]]+)\]/i);
+      if (!agentId && agentMatch && agentMatch[1]) {
+        agentId = agentMatch[1].trim();
       }
-      // Also strip agent tag from displayed notes
+      if (agentId && agents.length > 0) {
+        const matchedAg = agents.find(
+          (a) => a.id === agentId || a.name.toLowerCase() === agentId.toLowerCase(),
+        );
+        if (matchedAg) agentId = matchedAg.id;
+      }
+      if (!agentId && isCurrentUserAgent && user?.id) {
+        agentId = user.id;
+      }
+
+      // 2. Resolve Selected Artist
+      let artistId =
+        p.assigned_artist_id && p.assigned_artist_id !== "none" ? p.assigned_artist_id : "";
+      const artistMatch = rawNotes.match(/\[Artist:\s*([^\]]+)\]/i);
+      if (!artistId && artistMatch && artistMatch[1]) {
+        artistId = artistMatch[1].trim();
+      }
+      if (artistId && artists.length > 0) {
+        const matchedArt = artists.find(
+          (a) => a.id === artistId || a.name.toLowerCase() === artistId.toLowerCase(),
+        );
+        if (matchedArt) artistId = matchedArt.id;
+      }
+
+      rawNotes = rawNotes.replace(/\[Artist:\s*([^\]]+)\]/gi, "").trim();
       rawNotes = rawNotes.replace(/\[Agent:\s*([^\]]+)\]/gi, "").trim();
+
+      setAssignedTo(agentId || "none");
+      setArtist(artistId || "none");
       setNotes(rawNotes);
     }
-  }, [prospectQuery.data]);
+  }, [prospectQuery.data, agents, artists, isCurrentUserAgent, user?.id]);
+
+  // Normalize artist ID whenever artists options finish loading
+  useEffect(() => {
+    if (artist && artist !== "none" && artists.length > 0) {
+      const matched = artists.find(
+        (a) => a.id === artist || a.name.toLowerCase() === artist.toLowerCase(),
+      );
+      if (matched && artist !== matched.id) {
+        setArtist(matched.id);
+      }
+    }
+  }, [artists, artist]);
+
+  // Normalize agent ID whenever agents options finish loading
+  useEffect(() => {
+    if (assignedTo && assignedTo !== "none" && agents.length > 0) {
+      const matched = agents.find(
+        (a) => a.id === assignedTo || a.name.toLowerCase() === assignedTo.toLowerCase(),
+      );
+      if (matched && assignedTo !== matched.id) {
+        setAssignedTo(matched.id);
+      }
+    }
+  }, [agents, assignedTo]);
 
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (!prospectId) throw new Error("No prospect selected.");
       if (!contactName.trim()) throw new Error("Contact Name is required.");
-
-      const selectedAgent = agents.find((ag) => ag.id === assignedTo);
-      const agentTag = selectedAgent ? `[Agent: ${selectedAgent.name}]` : "";
-
-      const notesParts: string[] = [];
-      if (artist !== "none") notesParts.push(`[Artist: ${artist}]`);
-      if (agentTag) notesParts.push(agentTag);
-      if (notes.trim()) notesParts.push(notes.trim());
-
-      const finalNotes = notesParts.length > 0 ? notesParts.join(" ") : null;
 
       const updateData = {
         contact_name: contactName.trim(),
@@ -165,9 +266,12 @@ export function EditProspectDialog({
         alternative_phone: altPhone.trim() || null,
         email: email.trim() || null,
         address: address.trim() || null,
+        website_url: websiteUrl.trim() || null,
+        logo_url: logoUrl.trim() || null,
         service_id: serviceId !== "none" ? serviceId : null,
         assigned_to: assignedTo !== "none" ? assignedTo : null,
-        notes: finalNotes,
+        assigned_artist_id: artist !== "none" ? artist : null,
+        notes: notes.trim() || null,
       };
 
       // Direct UPDATE to MySQL database brandium_crm.prospects
@@ -181,8 +285,11 @@ export function EditProspectDialog({
           \`alternative_phone\` = ?,
           \`email\` = ?,
           \`address\` = ?,
+          \`website_url\` = ?,
+          \`logo_url\` = ?,
           \`service_id\` = ?,
           \`assigned_to\` = ?,
+          \`assigned_artist_id\` = ?,
           \`notes\` = ?,
           \`updated_at\` = ?
         WHERE \`id\` = ?`,
@@ -194,8 +301,11 @@ export function EditProspectDialog({
           updateData.alternative_phone,
           updateData.email,
           updateData.address,
+          updateData.website_url,
+          updateData.logo_url,
           updateData.service_id,
           updateData.assigned_to,
+          updateData.assigned_artist_id,
           updateData.notes,
           now,
           prospectId,
@@ -301,7 +411,7 @@ export function EditProspectDialog({
               </div>
             </div>
 
-            {/* Section 2: Contact Details */}
+            {/* Section 2: Contact & Web Presence Details */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Phone */}
               <div className="space-y-1.5">
@@ -313,6 +423,20 @@ export function EditProspectDialog({
                   placeholder="+8801711002233"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"
+                />
+              </div>
+
+              {/* Alternative Phone */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Phone className="size-3.5 text-teal-500" />
+                  Alternative Phone
+                </Label>
+                <Input
+                  placeholder="+8801987654321"
+                  value={altPhone}
+                  onChange={(e) => setAltPhone(e.target.value)}
                   className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"
                 />
               </div>
@@ -332,6 +456,90 @@ export function EditProspectDialog({
                 />
               </div>
 
+              {/* Website / Social URL */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Globe className="size-3.5 text-indigo-500" />
+                  Website / Social URL
+                </Label>
+                <Input
+                  placeholder="https://brandiumtech.com"
+                  value={websiteUrl}
+                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"
+                />
+              </div>
+
+              {/* Company Logo / Image Upload */}
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <ImageIcon className="size-3.5 text-pink-500" />
+                  Company Logo / Image
+                </Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50/50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800">
+                  <div className="relative size-12 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                    {(previewUrl || logoUrl) && !imgError ? (
+                      <img
+                        key={previewUrl || logoUrl}
+                        src={previewUrl || logoUrl}
+                        alt="Logo Preview"
+                        className="size-full object-cover"
+                        onError={() => setImgError(true)}
+                      />
+                    ) : (
+                      <ImageIcon className="size-5 text-slate-400" />
+                    )}
+                  </div>
+
+                  <div className="flex-1 flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isUploading}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="h-8 text-xs font-semibold gap-1.5 px-3 rounded-lg border border-pink-200 dark:border-pink-900/60 text-pink-600 dark:text-pink-400 bg-pink-50/60 dark:bg-pink-950/40 hover:bg-pink-100 dark:hover:bg-pink-900/40 transition-all cursor-pointer"
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="size-3.5 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="size-3.5" />
+                          {logoUrl ? "Change Logo" : "Upload Logo"}
+                        </>
+                      )}
+                    </Button>
+
+                    {logoUrl && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setLogoUrl("");
+                          setPreviewUrl("");
+                          setImgError(false);
+                        }}
+                        className="h-8 text-xs font-semibold gap-1 px-2.5 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
+                      >
+                        <Trash2 className="size-3.5" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Address */}
               <div className="space-y-1.5 sm:col-span-2">
                 <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
@@ -343,7 +551,7 @@ export function EditProspectDialog({
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   className="bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 min-h-18.75 resize-y text-xs sm:text-sm rounded-xl focus:bg-white dark:focus:bg-card transition-all"
-                  rows={3}
+                  rows={2}
                 />
               </div>
             </div>
@@ -383,11 +591,14 @@ export function EditProspectDialog({
                   </SelectTrigger>
                   <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800">
                     <SelectItem value="none">No Artist Selected</SelectItem>
-                    {agents.map((ag) => (
-                      <SelectItem key={ag.id} value={ag.name}>
-                        {ag.name}
+                    {artists.map((art) => (
+                      <SelectItem key={art.id} value={art.id}>
+                        {art.name}
                       </SelectItem>
                     ))}
+                    {artist !== "none" && !artists.some((art) => art.id === artist) && (
+                      <SelectItem value={artist}>{artist}</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -409,6 +620,9 @@ export function EditProspectDialog({
                         {ag.name}
                       </SelectItem>
                     ))}
+                    {assignedTo !== "none" && !agents.some((ag) => ag.id === assignedTo) && (
+                      <SelectItem value={assignedTo}>{assignedTo}</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

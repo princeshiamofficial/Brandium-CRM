@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import mysql from "mysql2/promise";
-import { getMySQLConfig, generateUUID, getMySQLTimestamp, createSingleMySQLConnection } from "./mysql-client";
+import {
+  getMySQLConfig,
+  generateUUID,
+  getMySQLTimestamp,
+  createSingleMySQLConnection,
+} from "./mysql-client";
 import { ensureMySQLTablesExist } from "./auth.functions";
 
 async function getMySQLConn() {
@@ -19,9 +24,12 @@ export type MySQLProspectInput = {
   alternative_phone?: string | null;
   email?: string | null;
   address?: string | null;
+  website_url?: string | null;
+  logo_url?: string | null;
   service_id?: string | null;
   stage_id?: string | null;
   assigned_to?: string | null;
+  assigned_artist_id?: string | null;
   created_by?: string | null;
   notes?: string | null;
 };
@@ -97,9 +105,10 @@ export const saveMySQLProspect = createServerFn({ method: "POST" })
       await conn.query(
         `INSERT INTO \`prospects\` (
           \`id\`, \`contact_name\`, \`business_name\`, \`designation\`, \`phone\`,
-          \`alternative_phone\`, \`email\`, \`address\`, \`service_id\`, \`stage_id\`,
-          \`assigned_to\`, \`created_by\`, \`notes\`, \`is_active\`, \`created_at\`, \`updated_at\`
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+          \`alternative_phone\`, \`email\`, \`address\`, \`website_url\`, \`logo_url\`,
+          \`service_id\`, \`stage_id\`, \`assigned_to\`, \`assigned_artist_id\`,
+          \`created_by\`, \`notes\`, \`is_active\`, \`created_at\`, \`updated_at\`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
         ON DUPLICATE KEY UPDATE
           \`contact_name\` = VALUES(\`contact_name\`),
           \`business_name\` = VALUES(\`business_name\`),
@@ -108,9 +117,12 @@ export const saveMySQLProspect = createServerFn({ method: "POST" })
           \`alternative_phone\` = VALUES(\`alternative_phone\`),
           \`email\` = VALUES(\`email\`),
           \`address\` = VALUES(\`address\`),
+          \`website_url\` = VALUES(\`website_url\`),
+          \`logo_url\` = VALUES(\`logo_url\`),
           \`service_id\` = VALUES(\`service_id\`),
           \`stage_id\` = VALUES(\`stage_id\`),
           \`assigned_to\` = VALUES(\`assigned_to\`),
+          \`assigned_artist_id\` = VALUES(\`assigned_artist_id\`),
           \`created_by\` = VALUES(\`created_by\`),
           \`notes\` = VALUES(\`notes\`),
           \`updated_at\` = VALUES(\`updated_at\`);`,
@@ -123,9 +135,12 @@ export const saveMySQLProspect = createServerFn({ method: "POST" })
           data.alternative_phone || null,
           data.email || null,
           data.address || null,
+          data.website_url || null,
+          data.logo_url || null,
           data.service_id || null,
           resolvedStageId,
           data.assigned_to || null,
+          data.assigned_artist_id || null,
           data.created_by || null,
           data.notes || null,
           now,
@@ -169,7 +184,7 @@ export const fetchMySQLProspects = createServerFn({ method: "GET" }).handler(
       const [rows] = await conn.query(
         `SELECT 
           p.*,
-          s.name AS service_name,
+          COALESCE(s.name, p.service_id) AS service_name,
           COALESCE(st.name, p.stage_id, 'Prospect') AS stage_name,
           st.stage_group AS stage_group,
           st.color AS stage_color,
@@ -177,7 +192,7 @@ export const fetchMySQLProspects = createServerFn({ method: "GET" }).handler(
           u_assign.name AS assigned_agent_name,
           u_create.name AS creator_name
         FROM \`prospects\` p
-        LEFT JOIN \`services\` s ON p.service_id = s.id
+        LEFT JOIN \`services\` s ON (p.service_id = s.id OR p.service_id = s.name OR p.service_id = REPLACE(s.id, '-', '_'))
         LEFT JOIN \`stages\` st ON (p.stage_id = st.id OR p.stage_id = REPLACE(st.id, '-', '_') OR p.stage_id = st.name)
         LEFT JOIN \`users\` u_assign ON p.assigned_to = u_assign.id
         LEFT JOIN \`users\` u_create ON p.created_by = u_create.id
@@ -331,9 +346,12 @@ export const updateMySQLProspect = createServerFn({ method: "POST" })
           \`alternative_phone\` = ?,
           \`email\` = ?,
           \`address\` = ?,
+          \`website_url\` = ?,
+          \`logo_url\` = ?,
           \`service_id\` = ?,
           \`stage_id\` = ?,
           \`assigned_to\` = ?,
+          \`assigned_artist_id\` = ?,
           \`created_by\` = ?,
           \`notes\` = ?,
           \`updated_at\` = ?
@@ -346,9 +364,12 @@ export const updateMySQLProspect = createServerFn({ method: "POST" })
           data.alternative_phone || null,
           data.email || null,
           data.address || null,
+          data.website_url || null,
+          data.logo_url || null,
           data.service_id || null,
           data.stage_id || null,
           data.assigned_to || null,
+          data.assigned_artist_id || null,
           data.created_by || null,
           data.notes || null,
           now,

@@ -61,6 +61,7 @@ import {
   cancelInvoice,
   deleteInvoice,
 } from "@/lib/billing";
+import { useAuth } from "@/lib/auth";
 import { BillingRecordPaymentModal } from "@/components/billing-record-payment-modal";
 import { AddInvoiceDialog } from "@/components/add-invoice-dialog";
 
@@ -90,6 +91,7 @@ function formatCurrency(amount: number): string {
 }
 
 function BillingPage() {
+  const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | "all">("all");
@@ -111,7 +113,9 @@ function BillingPage() {
     to_date: dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : undefined,
   };
 
-  const { data: rawInvoices = [], isLoading } = useQuery(invoicesQueryOptions(filters));
+  const { data: rawInvoices = [], isLoading } = useQuery(
+    invoicesQueryOptions(filters, user?.id, isAdmin),
+  );
   const invoices = Array.isArray(rawInvoices) ? rawInvoices : [];
 
   const totalInvoiceCount = invoices.length;

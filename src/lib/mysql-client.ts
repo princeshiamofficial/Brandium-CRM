@@ -40,7 +40,7 @@ function loadEnvFromFile(): void {
             ) {
               val = val.slice(1, -1);
             }
-            if (!process.env[key]) {
+            if (process.env[key] === undefined) {
               process.env[key] = val;
             }
           }
@@ -68,15 +68,18 @@ export function getMySQLConfig(): MySQLConfig {
   const rawHost = serverEnv?.["MYSQL_HOST"] || clientEnv?.["VITE_MYSQL_HOST"] || "127.0.0.1";
   const host = rawHost === "localhost" ? "127.0.0.1" : rawHost;
   const port = parseInt(serverEnv?.["MYSQL_PORT"] || clientEnv?.["VITE_MYSQL_PORT"] || "3306", 10);
-  const user = serverEnv?.["MYSQL_USER"] || clientEnv?.["VITE_MYSQL_USER"] || "crm_brandium";
+  const user =
+    serverEnv?.["MYSQL_USER"] !== undefined
+      ? serverEnv["MYSQL_USER"]
+      : clientEnv?.["VITE_MYSQL_USER"] || "root";
   const password =
-    serverEnv?.["MYSQL_PASSWORD"] !== undefined && serverEnv["MYSQL_PASSWORD"] !== ""
-      ? (serverEnv["MYSQL_PASSWORD"] as string)
-      : clientEnv?.["VITE_MYSQL_PASSWORD"] !== undefined && clientEnv["VITE_MYSQL_PASSWORD"] !== ""
-        ? (clientEnv["VITE_MYSQL_PASSWORD"] as string)
-        : "Brandium456";
+    serverEnv?.["MYSQL_PASSWORD"] !== undefined
+      ? serverEnv["MYSQL_PASSWORD"]
+      : clientEnv?.["VITE_MYSQL_PASSWORD"] !== undefined
+        ? clientEnv["VITE_MYSQL_PASSWORD"]
+        : "";
   const database =
-    serverEnv?.["MYSQL_DATABASE"] || clientEnv?.["VITE_MYSQL_DATABASE"] || "crm_brandium";
+    serverEnv?.["MYSQL_DATABASE"] || clientEnv?.["VITE_MYSQL_DATABASE"] || "brandium_crm";
   const connectionLimit = parseInt(serverEnv?.["MYSQL_CONNECTION_LIMIT"] || "20", 10);
   const timezone = serverEnv?.["MYSQL_TIMEZONE"] || clientEnv?.["VITE_MYSQL_TIMEZONE"] || "+06:00";
 
@@ -232,7 +235,7 @@ export function parseCrmDate(input: string | Date | null | undefined): Date {
   if (input instanceof Date) return isNaN(input.getTime()) ? new Date() : input;
   const str = String(input).trim();
   const match = str.match(
-    /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T ](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/
+    /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T ](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/,
   );
   if (match) {
     const year = parseInt(match[1]!, 10);
@@ -253,7 +256,7 @@ export function parseCrmDate(input: string | Date | null | undefined): Date {
  */
 export function formatCrmDate(
   dateInput: string | Date | null | undefined,
-  fallback = "N/A"
+  fallback = "N/A",
 ): string {
   if (!dateInput) return fallback;
   try {
@@ -273,7 +276,7 @@ export function formatCrmDate(
  */
 export function formatCrmTime(
   dateInput: string | Date | null | undefined,
-  fallback = "12:00 AM"
+  fallback = "12:00 AM",
 ): string {
   if (!dateInput) return fallback;
   try {
@@ -293,7 +296,7 @@ export function formatCrmTime(
  */
 export function formatCrmDateTime(
   dateInput: string | Date | null | undefined,
-  fallback = "N/A"
+  fallback = "N/A",
 ): string {
   if (!dateInput) return fallback;
   try {
@@ -313,5 +316,3 @@ export function formatCrmDateTime(
     return fallback;
   }
 }
-
-

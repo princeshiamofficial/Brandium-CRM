@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -47,11 +48,19 @@ const stageBadgeVariant = (group: string) =>
         : "secondary";
 
 function Dashboard() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const userId = user?.id ?? "";
+  const [selectedAgent, setSelectedAgent] = useState<string | undefined>(undefined);
+  const [selectedDateRange, setSelectedDateRange] = useState<string>("This Month");
 
-  const metrics = useQuery({ ...dashboardMetricsQuery(userId), enabled: Boolean(userId) });
-  const prospects = useQuery({ ...recentProspectsQuery(userId), enabled: Boolean(userId) });
+  const metrics = useQuery({
+    ...dashboardMetricsQuery(userId, isAdmin, selectedAgent, selectedDateRange),
+    enabled: Boolean(userId),
+  });
+  const prospects = useQuery({
+    ...recentProspectsQuery(userId, isAdmin, selectedAgent, selectedDateRange),
+    enabled: Boolean(userId),
+  });
 
   const m = metrics.data;
   const loading = metrics.isPending || !userId;
@@ -117,7 +126,12 @@ function Dashboard() {
 
   return (
     <div className="w-full space-y-6">
-      <DashboardGreetingBanner />
+      <DashboardGreetingBanner
+        selectedAgent={selectedAgent}
+        onAgentChange={setSelectedAgent}
+        selectedDateRange={selectedDateRange}
+        onDateRangeChange={setSelectedDateRange}
+      />
 
       {/* Row 1: Primary Activity Metrics (5 Column Grid - Matching Pastel Fills) */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">

@@ -16,6 +16,7 @@ import {
   Phone,
   Clock,
   User,
+  Briefcase,
   ArrowUpRight,
   ChevronLeft,
   ChevronRight,
@@ -58,6 +59,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { useAuth } from "@/lib/auth";
 import { formatCrmDate, formatCrmTime } from "@/lib/mysql-client";
+import { agentsQuery } from "@/lib/follow-ups";
+import { servicesQueryOptions } from "@/lib/services";
 import {
   prospectsQuery,
   prospectsStatsQuery,
@@ -239,6 +242,8 @@ function ProspectsPage() {
   const stats = useQuery(prospectsStatsQuery(user?.id || "", isAdmin));
   const prospects = useQuery(prospectsQuery(searchParams, user?.id || "", isAdmin));
   const stages = useQuery(stagesQuery());
+  const agents = useQuery(agentsQuery());
+  const services = useQuery(servicesQueryOptions());
 
   const displayStages =
     stages.data && stages.data.length > 0
@@ -402,6 +407,25 @@ function ProspectsPage() {
             </SelectContent>
           </Select>
 
+          {isAdmin && (
+            <Select
+              value={searchParams.agent ?? "all"}
+              onValueChange={(v: string) => updateFilter("agent", v === "all" ? undefined : v)}
+            >
+              <SelectTrigger className="w-40 bg-white">
+                <SelectValue placeholder="Agent" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Agents</SelectItem>
+                {(agents.data ?? []).map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           {/* Date Range Picker */}
           <Popover open={calOpen} onOpenChange={setCalOpen}>
             <PopoverTrigger asChild>
@@ -535,6 +559,15 @@ function ProspectsPage() {
             const IconComponent =
               (Icons as unknown as Record<string, LucideIcon>)[iconName] || Icons.Circle;
 
+            const resolvedServiceName =
+              (p.service_name && p.service_name.trim() !== "" && p.service_name !== "N/A"
+                ? p.service_name
+                : (services.data ?? []).find(
+                    (s) => s.id === p.service_id || s.name === p.service_id,
+                  )?.name) ||
+              p.service_id ||
+              "Graphics Design";
+
             return (
               <div
                 key={p.id}
@@ -549,15 +582,35 @@ function ProspectsPage() {
                   {/* Header: Avatar, Name, Designation & Edit Icon */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-2.5 min-w-0">
-                      <div className="size-9 rounded-full bg-orange-100/80 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-bold flex items-center justify-center shrink-0 border border-orange-200/60 shadow-2xs mt-0.5">
-                        <User className="size-4.5" />
+                      <div className="size-10 rounded-full bg-slate-100 dark:bg-slate-800 text-orange-600 dark:text-orange-400 font-bold flex items-center justify-center shrink-0 border border-slate-200/90 dark:border-slate-700 shadow-2xs mt-0.5 overflow-hidden">
+                        {p.logo_url ? (
+                          <img
+                            src={p.logo_url}
+                            alt={p.business_name || p.contact_name}
+                            className="size-full object-cover"
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              target.style.display = "none";
+                              if (target.parentElement) {
+                                target.parentElement.className =
+                                  "size-10 rounded-full bg-orange-100/80 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-bold flex items-center justify-center shrink-0 border border-orange-200/60 shadow-2xs mt-0.5";
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div className="size-full bg-orange-100/80 dark:bg-orange-950/40 flex items-center justify-center">
+                            <User className="size-5" />
+                          </div>
+                        )}
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 leading-tight truncate group-hover:text-[#0A2E5C] transition-colors">
                           {p.contact_name}
                         </p>
                         <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold truncate mt-0.5">
-                          {p.designation || p.business_name || "Prospect Lead"}
+                          {p.business_name
+                            ? `${p.business_name}`
+                            : p.designation || "Prospect Lead"}
                         </p>
                       </div>
                     </div>
@@ -642,9 +695,9 @@ function ProspectsPage() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <User className="size-3.5 text-slate-400 shrink-0" />
+                      <Briefcase className="size-3.5 text-slate-400 shrink-0" />
                       <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                        {p.service_name || p.business_name || "General Service"}
+                        {resolvedServiceName}
                       </span>
                     </div>
                   </div>

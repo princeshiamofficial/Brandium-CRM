@@ -14,7 +14,15 @@ dist-ssr
 .vinxi
 .tanstack/**
 .nitro
-*.local
+# Environment variables
+.env
+.env*.local
+.env.production
+.env.development
+
+# Uploaded Files
+public/uploads/*
+!public/uploads/.gitkeep
 
 # Wrangler / Cloudflare
 .wrangler/

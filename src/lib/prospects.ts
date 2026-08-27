@@ -31,9 +31,12 @@ export type Prospect = {
   alternative_phone: string | null;
   email: string | null;
   address: string | null;
+  website_url?: string | null;
+  logo_url?: string | null;
   service_id: string | null;
   stage_id: string | null;
   assigned_to: string | null;
+  assigned_artist_id?: string | null;
   created_by: string | null;
   notes: string | null;
   artist?: string | null | undefined;
@@ -108,9 +111,9 @@ export function getProspectAgentName(prospect: {
   return "Mehan Ahmed";
 }
 
-export const prospectsQuery = (filters: ProspectFilters, _userId: string, _isAdmin: boolean) =>
+export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin: boolean) =>
   queryOptions({
-    queryKey: ["prospects", filters],
+    queryKey: ["prospects", filters, userId, isAdmin],
     queryFn: async () => {
       const pageSize = 10;
       const from = (filters.page - 1) * pageSize;
@@ -151,9 +154,12 @@ export const prospectsQuery = (filters: ProspectFilters, _userId: string, _isAdm
               alternative_phone: (p["alternative_phone"] as string) || null,
               email: (p["email"] as string) || null,
               address: (p["address"] as string) || null,
+              website_url: (p["website_url"] as string) || null,
+              logo_url: (p["logo_url"] as string) || null,
               service_id: (p["service_id"] as string) || null,
               stage_id: stId || null,
               assigned_to: (p["assigned_to"] as string) || null,
+              assigned_artist_id: (p["assigned_artist_id"] as string) || null,
               created_by: (p["created_by"] as string) || null,
               notes: (p["notes"] as string) || null,
               created_at: String(p["created_at"] || new Date().toISOString()),
@@ -189,9 +195,12 @@ export const prospectsQuery = (filters: ProspectFilters, _userId: string, _isAdm
                 alternative_phone: (p["alternative_phone"] as string) || null,
                 email: (p["email"] as string) || null,
                 address: (p["address"] as string) || null,
+                website_url: (p["website_url"] as string) || null,
+                logo_url: (p["logo_url"] as string) || null,
                 service_id: (p["service_id"] as string) || null,
                 stage_id: stId || null,
                 assigned_to: (p["assigned_to"] as string) || null,
+                assigned_artist_id: (p["assigned_artist_id"] as string) || null,
                 created_by: (p["created_by"] as string) || null,
                 notes: (p["notes"] as string) || null,
                 created_at: String(p["created_at"] || new Date().toISOString()),
@@ -211,8 +220,16 @@ export const prospectsQuery = (filters: ProspectFilters, _userId: string, _isAdm
         }
       }
 
-      // Apply in-memory filtering
+      // User data scoping: regular user sees only their own assigned/created prospects; admin sees all
       let rows = fetchedRows;
+      if (!isAdmin && userId) {
+        rows = rows.filter(
+          (p) =>
+            p.assigned_to === userId || p.assigned_artist_id === userId || p.created_by === userId,
+        );
+      }
+
+      // Apply in-memory filtering
       if (filters.search) {
         const q = filters.search.toLowerCase().trim();
         rows = rows.filter(
@@ -248,7 +265,12 @@ export const prospectsQuery = (filters: ProspectFilters, _userId: string, _isAdm
         });
       }
       if (filters.agent && filters.agent !== "all") {
-        rows = rows.filter((p) => p.assigned_to === filters.agent);
+        rows = rows.filter(
+          (p) =>
+            p.assigned_to === filters.agent ||
+            p.assigned_artist_id === filters.agent ||
+            p.created_by === filters.agent,
+        );
       }
       if (filters.service && filters.service !== "all") {
         rows = rows.filter((p) => p.service_id === filters.service);
@@ -270,9 +292,9 @@ export const prospectsQuery = (filters: ProspectFilters, _userId: string, _isAdm
     },
   });
 
-export const prospectsStatsQuery = (_userId: string, _isAdmin: boolean) =>
+export const prospectsStatsQuery = (userId: string, isAdmin: boolean) =>
   queryOptions({
-    queryKey: ["prospects-stats"],
+    queryKey: ["prospects-stats", userId, isAdmin],
     queryFn: async () => {
       let allProspects: Record<string, unknown>[] = [];
       try {
@@ -280,6 +302,9 @@ export const prospectsStatsQuery = (_userId: string, _isAdmin: boolean) =>
           `SELECT 
             p.id,
             p.stage_id,
+            p.assigned_to,
+            p.assigned_artist_id,
+            p.created_by,
             COALESCE(st.name, p.stage_id, 'Prospect') AS stage_name
           FROM \`prospects\` p
           LEFT JOIN \`stages\` st ON (p.stage_id = st.id OR p.stage_id = REPLACE(st.id, '-', '_') OR p.stage_id = st.name)
@@ -306,6 +331,16 @@ export const prospectsStatsQuery = (_userId: string, _isAdmin: boolean) =>
         } catch {
           // Fallback
         }
+      }
+
+      // User data scoping: regular user sees only their own assigned/created prospects stats; admin sees all
+      if (!isAdmin && userId) {
+        allProspects = allProspects.filter(
+          (p) =>
+            p["assigned_to"] === userId ||
+            p["assigned_artist_id"] === userId ||
+            p["created_by"] === userId,
+        );
       }
 
       const totalProspects = allProspects.length;
@@ -361,9 +396,12 @@ export type CreateProspectInput = {
   alternative_phone?: string | null | undefined;
   email?: string | null | undefined;
   address?: string | null | undefined;
+  website_url?: string | null | undefined;
+  logo_url?: string | null | undefined;
   service_id?: string | null | undefined;
   stage_id?: string | null | undefined;
   assigned_to?: string | null | undefined;
+  assigned_artist_id?: string | null | undefined;
   created_by?: string | null | undefined;
   notes?: string | null | undefined;
 };
@@ -430,6 +468,8 @@ export async function createProspect(input: CreateProspectInput): Promise<Prospe
     alternative_phone: input.alternative_phone || null,
     email: input.email || null,
     address: input.address || null,
+    website_url: input.website_url || null,
+    logo_url: input.logo_url || null,
     service_id: input.service_id || null,
     stage_id: input.stage_id || null,
     assigned_to: input.assigned_to || null,
@@ -448,9 +488,10 @@ export async function createProspect(input: CreateProspectInput): Promise<Prospe
   const insertSql = `
     INSERT INTO \`prospects\` (
       \`id\`, \`contact_name\`, \`business_name\`, \`designation\`, \`phone\`,
-      \`alternative_phone\`, \`email\`, \`address\`, \`service_id\`, \`stage_id\`,
-      \`assigned_to\`, \`created_by\`, \`notes\`, \`is_active\`, \`created_at\`, \`updated_at\`
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      \`alternative_phone\`, \`email\`, \`address\`, \`website_url\`, \`logo_url\`,
+      \`service_id\`, \`stage_id\`, \`assigned_to\`, \`assigned_artist_id\`,
+      \`created_by\`, \`notes\`, \`is_active\`, \`created_at\`, \`updated_at\`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     ON DUPLICATE KEY UPDATE
       \`contact_name\` = VALUES(\`contact_name\`),
       \`business_name\` = VALUES(\`business_name\`),
@@ -459,9 +500,12 @@ export async function createProspect(input: CreateProspectInput): Promise<Prospe
       \`alternative_phone\` = VALUES(\`alternative_phone\`),
       \`email\` = VALUES(\`email\`),
       \`address\` = VALUES(\`address\`),
+      \`website_url\` = VALUES(\`website_url\`),
+      \`logo_url\` = VALUES(\`logo_url\`),
       \`service_id\` = VALUES(\`service_id\`),
       \`stage_id\` = VALUES(\`stage_id\`),
       \`assigned_to\` = VALUES(\`assigned_to\`),
+      \`assigned_artist_id\` = VALUES(\`assigned_artist_id\`),
       \`created_by\` = VALUES(\`created_by\`),
       \`notes\` = VALUES(\`notes\`),
       \`updated_at\` = VALUES(\`updated_at\`);
@@ -476,9 +520,12 @@ export async function createProspect(input: CreateProspectInput): Promise<Prospe
     input.alternative_phone || null,
     input.email || null,
     input.address || null,
+    input.website_url || null,
+    input.logo_url || null,
     input.service_id || null,
     input.stage_id || null,
     input.assigned_to || null,
+    input.assigned_artist_id || null,
     input.created_by || null,
     input.notes || null,
     now,
@@ -501,9 +548,12 @@ export async function createProspect(input: CreateProspectInput): Promise<Prospe
       alternative_phone: input.alternative_phone || null,
       email: input.email || null,
       address: input.address || null,
+      website_url: input.website_url || null,
+      logo_url: input.logo_url || null,
       service_id: input.service_id || null,
       stage_id: input.stage_id || null,
       assigned_to: input.assigned_to || null,
+      assigned_artist_id: input.assigned_artist_id || null,
       created_by: input.created_by || null,
       notes: input.notes || null,
     },
@@ -537,9 +587,12 @@ export async function updateProspect(
       \`alternative_phone\` = ?,
       \`email\` = ?,
       \`address\` = ?,
+      \`website_url\` = ?,
+      \`logo_url\` = ?,
       \`service_id\` = ?,
       \`stage_id\` = ?,
       \`assigned_to\` = ?,
+      \`assigned_artist_id\` = ?,
       \`created_by\` = ?,
       \`notes\` = ?,
       \`updated_at\` = ?
@@ -554,9 +607,12 @@ export async function updateProspect(
     input.alternative_phone || null,
     input.email || null,
     input.address || null,
+    input.website_url || null,
+    input.logo_url || null,
     input.service_id || null,
     input.stage_id || null,
     input.assigned_to || null,
+    input.assigned_artist_id || null,
     input.created_by || null,
     input.notes || null,
     now,
@@ -574,6 +630,8 @@ export async function updateProspect(
       alternative_phone: input.alternative_phone || null,
       email: input.email || null,
       address: input.address || null,
+      website_url: input.website_url || null,
+      logo_url: input.logo_url || null,
       service_id: input.service_id || null,
       stage_id: input.stage_id || null,
       assigned_to: input.assigned_to || null,

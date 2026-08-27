@@ -22,6 +22,7 @@ import { Route as AuthenticatedDeniedPaymentsRouteImport } from './routes/_authe
 import { Route as AuthenticatedFollowUpsRouteImport } from './routes/_authenticated/follow-ups'
 import { Route as AuthenticatedMeetingsRouteImport } from './routes/_authenticated/meetings'
 import { Route as AuthenticatedOpportunitiesRouteImport } from './routes/_authenticated/opportunities'
+import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedProspectsRouteImport } from './routes/_authenticated/prospects'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedSendSmsRouteImport } from './routes/_authenticated/send-sms'
@@ -29,6 +30,7 @@ import { Route as AuthenticatedWonSalesRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedAdminAgentReportsRouteImport } from './routes/_authenticated/admin/agent-reports'
 import { Route as AuthenticatedAdminBackupRouteImport } from './routes/_authenticated/admin/backup'
 import { Route as AuthenticatedAdminDataBackupRouteImport } from './routes/_authenticated/admin/data-backup'
+import { Route as AuthenticatedAdminRolesRouteImport } from './routes/_authenticated/admin/roles'
 import { Route as AuthenticatedAdminServicesRouteImport } from './routes/_authenticated/admin/services'
 import { Route as AuthenticatedAdminStageHistoryRouteImport } from './routes/_authenticated/admin/stage-history'
 import { Route as AuthenticatedAdminStagesRouteImport } from './routes/_authenticated/admin/stages'
@@ -105,6 +107,11 @@ const AuthenticatedOpportunitiesRoute =
     path: '/opportunities',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedProspectsRoute = AuthenticatedProspectsRouteImport.update({
   id: '/prospects',
   path: '/prospects',
@@ -143,6 +150,11 @@ const AuthenticatedAdminDataBackupRoute =
     path: '/data-backup',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminRolesRoute = AuthenticatedAdminRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
 const AuthenticatedAdminServicesRoute =
   AuthenticatedAdminServicesRouteImport.update({
     id: '/services',
@@ -190,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/follow-ups': typeof AuthenticatedFollowUpsRoute
   '/meetings': typeof AuthenticatedMeetingsRoute
   '/opportunities': typeof AuthenticatedOpportunitiesRoute
+  '/projects': typeof AuthenticatedProjectsRoute
   '/prospects': typeof AuthenticatedProspectsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/send-sms': typeof AuthenticatedSendSmsRoute
@@ -197,6 +210,7 @@ export interface FileRoutesByFullPath {
   '/admin/agent-reports': typeof AuthenticatedAdminAgentReportsRoute
   '/admin/backup': typeof AuthenticatedAdminBackupRoute
   '/admin/data-backup': typeof AuthenticatedAdminDataBackupRoute
+  '/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/admin/services': typeof AuthenticatedAdminServicesRoute
   '/admin/stage-history': typeof AuthenticatedAdminStageHistoryRoute
   '/admin/stages': typeof AuthenticatedAdminStagesRoute
@@ -217,6 +231,7 @@ export interface FileRoutesByTo {
   '/follow-ups': typeof AuthenticatedFollowUpsRoute
   '/meetings': typeof AuthenticatedMeetingsRoute
   '/opportunities': typeof AuthenticatedOpportunitiesRoute
+  '/projects': typeof AuthenticatedProjectsRoute
   '/prospects': typeof AuthenticatedProspectsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/send-sms': typeof AuthenticatedSendSmsRoute
@@ -224,6 +239,7 @@ export interface FileRoutesByTo {
   '/admin/agent-reports': typeof AuthenticatedAdminAgentReportsRoute
   '/admin/backup': typeof AuthenticatedAdminBackupRoute
   '/admin/data-backup': typeof AuthenticatedAdminDataBackupRoute
+  '/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/admin/services': typeof AuthenticatedAdminServicesRoute
   '/admin/stage-history': typeof AuthenticatedAdminStageHistoryRoute
   '/admin/stages': typeof AuthenticatedAdminStagesRoute
@@ -246,6 +262,7 @@ export interface FileRoutesById {
   '/_authenticated/follow-ups': typeof AuthenticatedFollowUpsRoute
   '/_authenticated/meetings': typeof AuthenticatedMeetingsRoute
   '/_authenticated/opportunities': typeof AuthenticatedOpportunitiesRoute
+  '/_authenticated/projects': typeof AuthenticatedProjectsRoute
   '/_authenticated/prospects': typeof AuthenticatedProspectsRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/send-sms': typeof AuthenticatedSendSmsRoute
@@ -253,6 +270,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/agent-reports': typeof AuthenticatedAdminAgentReportsRoute
   '/_authenticated/admin/backup': typeof AuthenticatedAdminBackupRoute
   '/_authenticated/admin/data-backup': typeof AuthenticatedAdminDataBackupRoute
+  '/_authenticated/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/_authenticated/admin/services': typeof AuthenticatedAdminServicesRoute
   '/_authenticated/admin/stage-history': typeof AuthenticatedAdminStageHistoryRoute
   '/_authenticated/admin/stages': typeof AuthenticatedAdminStagesRoute
@@ -275,6 +293,7 @@ export interface FileRouteTypes {
     | '/follow-ups'
     | '/meetings'
     | '/opportunities'
+    | '/projects'
     | '/prospects'
     | '/reports'
     | '/send-sms'
@@ -282,6 +301,7 @@ export interface FileRouteTypes {
     | '/admin/agent-reports'
     | '/admin/backup'
     | '/admin/data-backup'
+    | '/admin/roles'
     | '/admin/services'
     | '/admin/stage-history'
     | '/admin/stages'
@@ -302,6 +322,7 @@ export interface FileRouteTypes {
     | '/follow-ups'
     | '/meetings'
     | '/opportunities'
+    | '/projects'
     | '/prospects'
     | '/reports'
     | '/send-sms'
@@ -309,6 +330,7 @@ export interface FileRouteTypes {
     | '/admin/agent-reports'
     | '/admin/backup'
     | '/admin/data-backup'
+    | '/admin/roles'
     | '/admin/services'
     | '/admin/stage-history'
     | '/admin/stages'
@@ -330,6 +352,7 @@ export interface FileRouteTypes {
     | '/_authenticated/follow-ups'
     | '/_authenticated/meetings'
     | '/_authenticated/opportunities'
+    | '/_authenticated/projects'
     | '/_authenticated/prospects'
     | '/_authenticated/reports'
     | '/_authenticated/send-sms'
@@ -337,6 +360,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/agent-reports'
     | '/_authenticated/admin/backup'
     | '/_authenticated/admin/data-backup'
+    | '/_authenticated/admin/roles'
     | '/_authenticated/admin/services'
     | '/_authenticated/admin/stage-history'
     | '/_authenticated/admin/stages'
@@ -444,6 +468,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOpportunitiesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/projects': {
+      id: '/_authenticated/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof AuthenticatedProjectsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/prospects': {
       id: '/_authenticated/prospects'
       path: '/prospects'
@@ -491,6 +522,13 @@ declare module '@tanstack/react-router' {
       path: '/data-backup'
       fullPath: '/admin/data-backup'
       preLoaderRoute: typeof AuthenticatedAdminDataBackupRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/roles': {
+      id: '/_authenticated/admin/roles'
+      path: '/roles'
+      fullPath: '/admin/roles'
+      preLoaderRoute: typeof AuthenticatedAdminRolesRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/services': {
@@ -542,6 +580,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAgentReportsRoute: typeof AuthenticatedAdminAgentReportsRoute
   AuthenticatedAdminBackupRoute: typeof AuthenticatedAdminBackupRoute
   AuthenticatedAdminDataBackupRoute: typeof AuthenticatedAdminDataBackupRoute
+  AuthenticatedAdminRolesRoute: typeof AuthenticatedAdminRolesRoute
   AuthenticatedAdminServicesRoute: typeof AuthenticatedAdminServicesRoute
   AuthenticatedAdminStageHistoryRoute: typeof AuthenticatedAdminStageHistoryRoute
   AuthenticatedAdminStagesRoute: typeof AuthenticatedAdminStagesRoute
@@ -553,6 +592,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminAgentReportsRoute: AuthenticatedAdminAgentReportsRoute,
     AuthenticatedAdminBackupRoute: AuthenticatedAdminBackupRoute,
     AuthenticatedAdminDataBackupRoute: AuthenticatedAdminDataBackupRoute,
+    AuthenticatedAdminRolesRoute: AuthenticatedAdminRolesRoute,
     AuthenticatedAdminServicesRoute: AuthenticatedAdminServicesRoute,
     AuthenticatedAdminStageHistoryRoute: AuthenticatedAdminStageHistoryRoute,
     AuthenticatedAdminStagesRoute: AuthenticatedAdminStagesRoute,
@@ -575,6 +615,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFollowUpsRoute: typeof AuthenticatedFollowUpsRoute
   AuthenticatedMeetingsRoute: typeof AuthenticatedMeetingsRoute
   AuthenticatedOpportunitiesRoute: typeof AuthenticatedOpportunitiesRoute
+  AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
   AuthenticatedProspectsRoute: typeof AuthenticatedProspectsRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedSendSmsRoute: typeof AuthenticatedSendSmsRoute
@@ -594,6 +635,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFollowUpsRoute: AuthenticatedFollowUpsRoute,
   AuthenticatedMeetingsRoute: AuthenticatedMeetingsRoute,
   AuthenticatedOpportunitiesRoute: AuthenticatedOpportunitiesRoute,
+  AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
   AuthenticatedProspectsRoute: AuthenticatedProspectsRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedSendSmsRoute: AuthenticatedSendSmsRoute,

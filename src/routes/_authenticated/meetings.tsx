@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -205,6 +206,7 @@ function StatCard({
 function MeetingsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user, isAdmin } = useAuth();
 
   // Filter state
   const [search, setSearch] = useState("");
@@ -221,7 +223,7 @@ function MeetingsPage() {
     end_date: dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : undefined,
   };
 
-  const meetingsQuery = useQuery(meetingsQueryOptions(filters));
+  const meetingsQuery = useQuery(meetingsQueryOptions(filters, user?.id, isAdmin));
   const meetings = meetingsQuery.data ?? [];
 
   // Metrics calculations

@@ -127,7 +127,7 @@ export const followUpsQuery = (filters: FollowUpFilters, userId: string, isAdmin
 
           // Role permission filter
           if (!isAdmin && userId) {
-            rows = rows.filter((r) => r.assigned_to === userId);
+            rows = rows.filter((r) => r.assigned_to === userId || r.created_by === userId);
           }
           if (filters.agent) {
             rows = rows.filter((r) => r.assigned_to === filters.agent);
@@ -189,14 +189,17 @@ export const followUpSummaryQuery = (userId: string, isAdmin?: boolean) =>
           `SELECT 
             status, 
             due_at, 
-            assigned_to 
+            assigned_to,
+            created_by 
           FROM \`follow_ups\`;`,
         );
 
         if (res.success && Array.isArray(res.data)) {
           let list = res.data;
           if (!isAdmin && userId) {
-            list = list.filter((r) => String(r["assigned_to"]) === userId);
+            list = list.filter(
+              (r) => String(r["assigned_to"]) === userId || String(r["created_by"]) === userId,
+            );
           }
           const nowStr = new Date().toISOString();
           const pending = list.filter(

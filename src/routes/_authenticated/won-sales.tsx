@@ -34,6 +34,7 @@ import type { DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import type { LucideIcon } from "lucide-react";
 import { wonSalesQueryOptions, agentOptionsQueryOptions, WonSaleFilters } from "@/lib/won-sales";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/won-sales")({
   head: () => ({
@@ -120,6 +121,7 @@ function formatCurrency(amount: number): string {
 }
 
 function WonSalesPage() {
+  const { user, isAdmin } = useAuth();
   const [search, setSearch] = useState<string>("");
   const [agentFilter, setAgentFilter] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -132,7 +134,9 @@ function WonSalesPage() {
     to_date: dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : undefined,
   };
 
-  const { data: rawWonSales = [], isLoading } = useQuery(wonSalesQueryOptions(filters));
+  const { data: rawWonSales = [], isLoading } = useQuery(
+    wonSalesQueryOptions(filters, user?.id, isAdmin),
+  );
   const { data: rawAgents = [] } = useQuery(agentOptionsQueryOptions());
 
   const wonSales = Array.isArray(rawWonSales) ? rawWonSales : [];

@@ -18,6 +18,8 @@ import {
   Workflow,
   ScrollText,
   DatabaseBackup,
+  ShieldCheck,
+  FolderKanban,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,6 +40,7 @@ export const navGroups: NavGroup[] = [
     label: "Workspace",
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+      { title: "Projects", url: "/projects", icon: FolderKanban },
       { title: "Prospects", url: "/prospects", icon: Users2 },
       { title: "Opportunities", url: "/opportunities", icon: Target },
       { title: "Follow Ups", url: "/follow-ups", icon: CalendarClock },
@@ -73,6 +76,7 @@ export const navGroups: NavGroup[] = [
     adminOnly: true,
     items: [
       { title: "Users", url: "/admin/users", icon: UserCog },
+      { title: "Role Management", url: "/admin/roles", icon: ShieldCheck },
       { title: "Services", url: "/admin/services", icon: Package },
       { title: "Agent Reports", url: "/admin/agent-reports", icon: Activity },
       { title: "Stage Management", url: "/admin/stages", icon: Workflow },

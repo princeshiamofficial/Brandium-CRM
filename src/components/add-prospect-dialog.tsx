@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -14,6 +14,10 @@ import {
   PlusCircle,
   Loader2,
   Palette,
+  Globe,
+  Image as ImageIcon,
+  Upload,
+  Trash2,
 } from "lucide-react";
 
 import {
@@ -38,18 +42,21 @@ import {
 import { createProspect, CreateProspectInput } from "@/lib/prospects";
 import { stagesQuery } from "@/lib/stages";
 import { servicesQueryOptions } from "@/lib/services";
-import { agentOptionsQueryOptions } from "@/lib/won-sales";
+import { agentOptionsQueryOptions, artistOptionsQueryOptions } from "@/lib/won-sales";
 import { useAuth } from "@/lib/auth";
+import { uploadImageFile } from "@/lib/upload";
 
-export type AddProspectDialogProps = {
+interface AddProspectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
-};
+}
 
 export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspectDialogProps) {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isCurrentUserAgent =
+    role === "agent" || user?.user_metadata?.role?.toLowerCase() === "agent";
 
   // Form fields state
   const [contactName, setContactName] = useState("");
@@ -58,20 +65,68 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
   const [phone, setPhone] = useState("");
   const [altPhone, setAltPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [imgError, setImgError] = useState(false);
   const [address, setAddress] = useState("");
   const [serviceId, setServiceId] = useState<string>("none");
   const [artist, setArtist] = useState<string>("none");
   const [assignedTo, setAssignedTo] = useState<string>("none");
   const [notes, setNotes] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Synchronize previewUrl and clear errors whenever logoUrl is updated
+  useEffect(() => {
+    setPreviewUrl(logoUrl);
+    setImgError(false);
+  }, [logoUrl]);
 
   // Queries for dropdown options
   const { data: rawStages = [] } = useQuery(stagesQuery());
   const { data: rawServices = [] } = useQuery(servicesQueryOptions());
   const { data: rawAgents = [] } = useQuery(agentOptionsQueryOptions());
+  const { data: rawArtists = [] } = useQuery(artistOptionsQueryOptions());
 
-  const stages = Array.isArray(rawStages) ? rawStages : [];
-  const services = Array.isArray(rawServices) ? rawServices : [];
-  const agents = Array.isArray(rawAgents) ? rawAgents : [];
+  const stages = useMemo(() => (Array.isArray(rawStages) ? rawStages : []), [rawStages]);
+  const services = useMemo(() => (Array.isArray(rawServices) ? rawServices : []), [rawServices]);
+  const agents = useMemo(() => (Array.isArray(rawAgents) ? rawAgents : []), [rawAgents]);
+  const artists = useMemo(() => (Array.isArray(rawArtists) ? rawArtists : []), [rawArtists]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Instant 0ms local preview before network upload completes
+    const instantBlobUrl = URL.createObjectURL(file);
+    setPreviewUrl(instantBlobUrl);
+    setImgError(false);
+
+    try {
+      setIsUploading(true);
+      const res = await uploadImageFile(file);
+      if (res.success && res.url) {
+        setLogoUrl(res.url);
+        setPreviewUrl(res.url);
+        toast.success("Logo uploaded successfully!");
+      } else {
+        toast.error(res.error || "Failed to upload logo.");
+      }
+    } catch {
+      toast.error("Upload failed.");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  // Auto pre-fill assigned agent when opening dialog if logged in user is an agent
+  useEffect(() => {
+    if (open && isCurrentUserAgent && user?.id) {
+      setAssignedTo(user.id);
+    }
+  }, [open, isCurrentUserAgent, user?.id]);
 
   const resetForm = () => {
     setContactName("");
@@ -80,10 +135,14 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
     setPhone("");
     setAltPhone("");
     setEmail("");
+    setWebsiteUrl("");
+    setLogoUrl("");
+    setPreviewUrl("");
+    setImgError(false);
     setAddress("");
     setServiceId("none");
     setArtist("none");
-    setAssignedTo("none");
+    setAssignedTo(isCurrentUserAgent && user?.id ? user.id : "none");
     setNotes("");
   };
 
@@ -113,16 +172,6 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
     const prospectStage =
       stages.find((s) => s.name.toLowerCase() === "prospect") || stages.find((s) => s.is_active);
     const initialStageId = prospectStage?.id || "prospect";
-    const selectedAgent = agents.find((ag) => ag.id === assignedTo);
-    const agentTag = selectedAgent ? `[Agent: ${selectedAgent.name}]` : "";
-
-    const notesParts: string[] = [];
-    if (artist !== "none") notesParts.push(`[Artist: ${artist}]`);
-    if (agentTag) notesParts.push(agentTag);
-    if (notes.trim()) notesParts.push(notes.trim());
-
-    const finalNotes = notesParts.length > 0 ? notesParts.join(" ") : null;
-
     createMutation.mutate({
       contact_name: contactName.trim(),
       business_name: businessName.trim() || null,
@@ -131,11 +180,14 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
       alternative_phone: altPhone.trim() || null,
       email: email.trim() || null,
       address: address.trim() || null,
+      website_url: websiteUrl.trim() || null,
+      logo_url: logoUrl.trim() || null,
       service_id: serviceId !== "none" ? serviceId : null,
       stage_id: initialStageId,
       assigned_to: assignedTo !== "none" ? assignedTo : user?.id || null,
+      assigned_artist_id: artist !== "none" ? artist : null,
       created_by: user?.id || null,
-      notes: finalNotes,
+      notes: notes.trim() || null,
     });
   };
 
@@ -204,7 +256,7 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
             </div>
           </div>
 
-          {/* Section 2: Contact Details */}
+          {/* Section 2: Contact & Web Presence Details */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Phone */}
             <div className="space-y-1.5">
@@ -216,6 +268,20 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
                 placeholder="+8801711002233"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+                className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"
+              />
+            </div>
+
+            {/* Alternative Phone */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Phone className="size-3.5 text-teal-500" />
+                Alternative Phone
+              </Label>
+              <Input
+                placeholder="+8801987654321"
+                value={altPhone}
+                onChange={(e) => setAltPhone(e.target.value)}
                 className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"
               />
             </div>
@@ -235,6 +301,90 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
               />
             </div>
 
+            {/* Website / Social URL */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Globe className="size-3.5 text-indigo-500" />
+                Website / Social URL
+              </Label>
+              <Input
+                placeholder="https://brandiumtech.com"
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"
+              />
+            </div>
+
+            {/* Company Logo / Image Upload */}
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <ImageIcon className="size-3.5 text-pink-500" />
+                Company Logo / Image
+              </Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50/50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800">
+                <div className="relative size-12 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                  {(previewUrl || logoUrl) && !imgError ? (
+                    <img
+                      key={previewUrl || logoUrl}
+                      src={previewUrl || logoUrl}
+                      alt="Logo Preview"
+                      className="size-full object-cover"
+                      onError={() => setImgError(true)}
+                    />
+                  ) : (
+                    <ImageIcon className="size-5 text-slate-400" />
+                  )}
+                </div>
+
+                <div className="flex-1 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploading}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="h-8 text-xs font-semibold gap-1.5 px-3 rounded-lg border border-pink-200 dark:border-pink-900/60 text-pink-600 dark:text-pink-400 bg-pink-50/60 dark:bg-pink-950/40 hover:bg-pink-100 dark:hover:bg-pink-900/40 transition-all cursor-pointer"
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="size-3.5" />
+                        {logoUrl ? "Change Logo" : "Upload Logo"}
+                      </>
+                    )}
+                  </Button>
+
+                  {logoUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setLogoUrl("");
+                        setPreviewUrl("");
+                        setImgError(false);
+                      }}
+                      className="h-8 text-xs font-semibold gap-1 px-2.5 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
+                    >
+                      <Trash2 className="size-3.5" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Address */}
             <div className="space-y-1.5 sm:col-span-2">
               <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
@@ -246,7 +396,7 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 className="bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 min-h-[75px] resize-y text-xs sm:text-sm rounded-xl focus:bg-white dark:focus:bg-card transition-all"
-                rows={3}
+                rows={2}
               />
             </div>
           </div>
@@ -286,9 +436,9 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800">
                   <SelectItem value="none">No Artist Selected</SelectItem>
-                  {agents.map((ag) => (
-                    <SelectItem key={ag.id} value={ag.name}>
-                      {ag.name}
+                  {artists.map((art) => (
+                    <SelectItem key={art.id} value={art.id}>
+                      {art.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

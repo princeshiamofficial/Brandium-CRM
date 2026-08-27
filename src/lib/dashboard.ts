@@ -98,11 +98,45 @@ export function getProspectBucket(p: {
   return "new_prospects";
 }
 
+export function filterByDateRange(dateStr: string | null | undefined, range: string): boolean {
+  if (!dateStr || range === "All Time") return true;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return true;
+  const now = new Date();
+
+  if (range === "Today") {
+    return d.toDateString() === now.toDateString();
+  }
+  if (range === "This Week") {
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    return d >= startOfWeek;
+  }
+  if (range === "This Month") {
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }
+  if (range === "This Quarter") {
+    const currentQuarter = Math.floor(now.getMonth() / 3);
+    const itemQuarter = Math.floor(d.getMonth() / 3);
+    return d.getFullYear() === now.getFullYear() && itemQuarter === currentQuarter;
+  }
+  if (range === "This Year") {
+    return d.getFullYear() === now.getFullYear();
+  }
+  return true;
+}
+
 // ─── PRIMARY: All dashboard data comes directly from MySQL database ───
 
-export const dashboardMetricsQuery = (_userId: string) =>
+export const dashboardMetricsQuery = (
+  userId: string,
+  isAdmin: boolean = false,
+  agentFilter?: string,
+  dateRange: string = "This Month",
+) =>
   queryOptions({
-    queryKey: ["dashboard", "metrics"],
+    queryKey: ["dashboard", "metrics", userId, isAdmin, agentFilter, dateRange],
     queryFn: async (): Promise<DashboardMetrics> => {
       let all: Record<string, unknown>[] = [];
       try {
@@ -112,6 +146,28 @@ export const dashboardMetricsQuery = (_userId: string) =>
         }
       } catch (err) {
         console.warn("dashboardMetricsQuery error:", err);
+      }
+
+      // Filter by agent selection or role scoping
+      if (agentFilter) {
+        all = all.filter(
+          (p) =>
+            p["assigned_to"] === agentFilter ||
+            p["assigned_artist_id"] === agentFilter ||
+            p["created_by"] === agentFilter,
+        );
+      } else if (!isAdmin && userId) {
+        all = all.filter(
+          (p) =>
+            p["assigned_to"] === userId ||
+            p["assigned_artist_id"] === userId ||
+            p["created_by"] === userId,
+        );
+      }
+
+      // Filter by date range
+      if (dateRange && dateRange !== "All Time") {
+        all = all.filter((p) => filterByDateRange(p["created_at"] as string, dateRange));
       }
 
       if (all.length === 0) return EMPTY_METRICS;
@@ -142,9 +198,14 @@ export const dashboardMetricsQuery = (_userId: string) =>
       let totalSales = 0;
       let paidSales = 0;
       try {
+        const targetUser = agentFilter || (!isAdmin && userId ? userId : undefined);
+        const sql = targetUser
+          ? `SELECT COALESCE(SUM(total_amount), 0) AS total_sales, COALESCE(SUM(paid_amount), 0) AS paid_sales FROM invoices WHERE created_by = '${targetUser}';`
+          : "SELECT COALESCE(SUM(total_amount), 0) AS total_sales, COALESCE(SUM(paid_amount), 0) AS paid_sales FROM invoices;";
+
         const invRes = (await executeMySQLQueryFn({
           data: {
-            sql: "SELECT COALESCE(SUM(total_amount), 0) AS total_sales, COALESCE(SUM(paid_amount), 0) AS paid_sales FROM invoices;",
+            sql,
           },
         })) as { success?: boolean; data?: Record<string, unknown>[] };
 
@@ -167,9 +228,14 @@ export const dashboardMetricsQuery = (_userId: string) =>
     },
   });
 
-export const recentProspectsQuery = (_userId: string) =>
+export const recentProspectsQuery = (
+  userId: string,
+  isAdmin: boolean = false,
+  agentFilter?: string,
+  dateRange: string = "This Month",
+) =>
   queryOptions({
-    queryKey: ["dashboard", "recent-prospects"],
+    queryKey: ["dashboard", "recent-prospects", userId, isAdmin, agentFilter, dateRange],
     queryFn: async (): Promise<RecentProspect[]> => {
       let all: Record<string, unknown>[] = [];
       try {
@@ -179,6 +245,28 @@ export const recentProspectsQuery = (_userId: string) =>
         }
       } catch (err) {
         console.warn("recentProspectsQuery error:", err);
+      }
+
+      // Filter by agent selection or role scoping
+      if (agentFilter) {
+        all = all.filter(
+          (p) =>
+            p["assigned_to"] === agentFilter ||
+            p["assigned_artist_id"] === agentFilter ||
+            p["created_by"] === agentFilter,
+        );
+      } else if (!isAdmin && userId) {
+        all = all.filter(
+          (p) =>
+            p["assigned_to"] === userId ||
+            p["assigned_artist_id"] === userId ||
+            p["created_by"] === userId,
+        );
+      }
+
+      // Filter by date range
+      if (dateRange && dateRange !== "All Time") {
+        all = all.filter((p) => filterByDateRange(p["created_at"] as string, dateRange));
       }
 
       return all.slice(0, 50).map((p) => {
@@ -201,19 +289,22 @@ export const recentProspectsQuery = (_userId: string) =>
     },
   });
 
-export const recentActivityQuery = (_userId: string) =>
+export const recentActivityQuery = (
+  userId: string,
+  isAdmin: boolean = false,
+  agentFilter?: string,
+) =>
   queryOptions({
-    queryKey: ["dashboard", "activity"],
+    queryKey: ["dashboard", "activity", userId, isAdmin, agentFilter],
     queryFn: async (): Promise<ActivityItem[]> => {
       try {
+        const targetUser = agentFilter || (!isAdmin && userId ? userId : undefined);
+        const sql = targetUser
+          ? `SELECT id, activity_type, message, created_at FROM activities WHERE user_id = '${targetUser}' OR created_by = '${targetUser}' ORDER BY created_at DESC LIMIT 15;`
+          : `SELECT id, activity_type, message, created_at FROM activities ORDER BY created_at DESC LIMIT 15;`;
         const res = (await executeMySQLQueryFn({
           data: {
-            sql: `
-              SELECT id, activity_type, message, created_at
-              FROM activities
-              ORDER BY created_at DESC
-              LIMIT 15;
-            `,
+            sql,
           },
         })) as { success?: boolean; data?: Record<string, unknown>[]; error?: string };
 

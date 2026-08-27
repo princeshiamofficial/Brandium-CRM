@@ -97,7 +97,11 @@ export const prospectsOptionsQuery = () =>
     queryFn: fetchProspectsOptions,
   });
 
-export async function fetchMeetings(filters: MeetingFilters = {}): Promise<Meeting[]> {
+export async function fetchMeetings(
+  filters: MeetingFilters = {},
+  userId?: string,
+  isAdmin: boolean = false,
+): Promise<Meeting[]> {
   try {
     const res = await runMySQLQuery<Record<string, unknown>[]>(
       `SELECT 
@@ -115,7 +119,7 @@ export async function fetchMeetings(filters: MeetingFilters = {}): Promise<Meeti
       return [];
     }
 
-    const mapped: Meeting[] = res.data.map((item) => ({
+    let mapped: Meeting[] = res.data.map((item) => ({
       id: String(item["id"]),
       title: String(item["title"] || "Meeting"),
       prospect_id: (item["prospect_id"] as string) || null,
@@ -135,6 +139,10 @@ export async function fetchMeetings(filters: MeetingFilters = {}): Promise<Meeti
       created_at: String(item["created_at"] || new Date().toISOString()),
       updated_at: String(item["updated_at"] || new Date().toISOString()),
     }));
+
+    if (!isAdmin && userId) {
+      mapped = mapped.filter((m) => m.assigned_user_id === userId || m.created_by === userId);
+    }
 
     return applyClientFilters(mapped, filters);
   } catch (err) {
@@ -422,10 +430,14 @@ export async function deleteMeeting(id: string): Promise<{ success: boolean; mes
   };
 }
 
-export const meetingsQueryOptions = (filters: MeetingFilters = {}) =>
+export const meetingsQueryOptions = (
+  filters: MeetingFilters = {},
+  userId?: string,
+  isAdmin: boolean = false,
+) =>
   queryOptions({
-    queryKey: ["meetings", filters],
-    queryFn: () => fetchMeetings(filters),
+    queryKey: ["meetings", filters, userId, isAdmin],
+    queryFn: () => fetchMeetings(filters, userId, isAdmin),
   });
 
 export const meetingDetailQueryOptions = (id: string) =>

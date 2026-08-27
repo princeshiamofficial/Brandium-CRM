@@ -285,6 +285,7 @@ export function AdminCreateUserModal({ open, onOpenChange }: AdminCreateUserModa
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="AGENT">AGENT</SelectItem>
+                  <SelectItem value="ARTIST">ARTIST</SelectItem>
                   <SelectItem value="ADMIN">ADMIN</SelectItem>
                 </SelectContent>
               </Select>

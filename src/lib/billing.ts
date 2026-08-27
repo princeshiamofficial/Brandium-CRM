@@ -98,7 +98,11 @@ export function calculateInvoiceFinancials(
   };
 }
 
-export async function fetchInvoices(filters: InvoiceFilters = {}): Promise<Invoice[]> {
+export async function fetchInvoices(
+  filters: InvoiceFilters = {},
+  userId?: string,
+  isAdmin: boolean = false,
+): Promise<Invoice[]> {
   try {
     const res = await runMySQLQuery<Record<string, unknown>[]>(
       `SELECT 
@@ -107,6 +111,8 @@ export async function fetchInvoices(filters: InvoiceFilters = {}): Promise<Invoi
         p.business_name,
         p.email AS client_email,
         p.phone AS client_phone,
+        p.assigned_to,
+        p.assigned_artist_id,
         u.name AS created_by_name
       FROM \`invoices\` i
       LEFT JOIN \`prospects\` p ON i.prospect_id = p.id
@@ -118,7 +124,7 @@ export async function fetchInvoices(filters: InvoiceFilters = {}): Promise<Invoi
       return [];
     }
 
-    const mapped: Invoice[] = res.data.map((item) => {
+    let mapped: Invoice[] = res.data.map((item) => {
       const totalAmount = Number(item["total_amount"] || 0);
       const paidAmount = Number(item["paid_amount"] || 0);
       const dueAmount = Number(item["due_amount"] ?? Math.max(0, totalAmount - paidAmount));
@@ -145,6 +151,18 @@ export async function fetchInvoices(filters: InvoiceFilters = {}): Promise<Invoi
         updated_at: String(item["updated_at"] || new Date().toISOString()),
       };
     });
+
+    if (!isAdmin && userId) {
+      const rawRows = Array.isArray(res.data) ? res.data : [];
+      mapped = mapped.filter((inv, idx) => {
+        const raw = rawRows[idx];
+        return (
+          inv.created_by === userId ||
+          raw?.["assigned_to"] === userId ||
+          raw?.["assigned_artist_id"] === userId
+        );
+      });
+    }
 
     return applyInvoiceFilters(mapped, filters);
   } catch (err) {
@@ -517,10 +535,14 @@ export async function updateInvoice(
   return inv;
 }
 
-export const invoicesQueryOptions = (filters: InvoiceFilters = {}) =>
+export const invoicesQueryOptions = (
+  filters: InvoiceFilters = {},
+  userId?: string,
+  isAdmin: boolean = false,
+) =>
   queryOptions({
-    queryKey: ["invoices", filters],
-    queryFn: () => fetchInvoices(filters),
+    queryKey: ["invoices", filters, userId, isAdmin],
+    queryFn: () => fetchInvoices(filters, userId, isAdmin),
   });
 
 export const invoiceDetailQueryOptions = (id: string) =>
