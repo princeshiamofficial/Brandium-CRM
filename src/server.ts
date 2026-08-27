@@ -1,4 +1,6 @@
 import "./lib/error-capture";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
@@ -16,6 +18,68 @@ async function getServerEntry(): Promise<ServerEntry> {
     );
   }
   return serverEntryPromise;
+}
+
+const MIME_TYPES: Record<string, string> = {
+  ".js": "application/javascript; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".txt": "text/plain; charset=utf-8",
+};
+
+async function tryServeStaticAsset(pathname: string): Promise<Response | null> {
+  if (
+    !pathname.startsWith("/assets/") &&
+    !pathname.startsWith("/uploads/") &&
+    !pathname.match(/\.(js|mjs|css|png|jpg|jpeg|svg|webp|ico|json|woff|woff2|ttf|txt)$/i)
+  ) {
+    return null;
+  }
+
+  const cleanPath = pathname.replace(/^\/+/, "");
+  const cwd = process.cwd();
+  const searchDirectories = [
+    path.join(cwd, ".output", "public"),
+    path.join(cwd, "public"),
+    path.join(cwd, "dist", "client"),
+    cwd,
+  ];
+
+  for (const baseDir of searchDirectories) {
+    const fullPath = path.join(baseDir, cleanPath);
+    try {
+      const stat = await fs.stat(fullPath);
+      if (stat.isFile()) {
+        const fileBuffer = await fs.readFile(fullPath);
+        const ext = path.extname(fullPath).toLowerCase();
+        const contentType = MIME_TYPES[ext] || "application/octet-stream";
+
+        return new Response(fileBuffer, {
+          status: 200,
+          headers: {
+            "Content-Type": contentType,
+            "Content-Length": String(stat.size),
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+          },
+        });
+      }
+    } catch {
+      // Continue to next directory
+    }
+  }
+
+  return null;
 }
 
 function withSecurityHeaders(response: Response): Response {
@@ -66,6 +130,12 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const url = new URL(request.url);
+      const staticResponse = await tryServeStaticAsset(url.pathname);
+      if (staticResponse) {
+        return staticResponse;
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       const normalizedResponse = await normalizeCatastrophicSsrResponse(response);
