@@ -201,6 +201,16 @@ export default {
         return staticResponse;
       }
 
+      if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/uploads/")) {
+        return new Response("Not Found", {
+          status: 404,
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+          },
+        });
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       const normalizedResponse = await normalizeCatastrophicSsrResponse(response);
