@@ -65,7 +65,11 @@ export const projectsQueryOptions = (userId?: string, isAdmin: boolean = false) 
       const sql = `
         SELECT 
           p.id, p.contact_name, p.business_name, p.email, p.phone, p.stage_id,
-          p.service_id, p.assigned_to, p.assigned_artist_id, p.created_by, p.deal_value,
+          p.service_id, p.assigned_to, p.assigned_artist_id, p.created_by,
+          COALESCE(p.budget, 0) AS budget,
+          COALESCE(p.paid_amount, 0) AS paid_amount,
+          COALESCE(p.progress, 0) AS progress,
+          p.deadline,
           p.notes, p.is_active, p.created_at, p.updated_at,
           COALESCE(st.name, p.stage_id, 'Prospect') AS stage_name,
           COALESCE(st.stage_group, 'in_progress') AS stage_group,
@@ -109,7 +113,10 @@ export const projectsQueryOptions = (userId?: string, isAdmin: boolean = false) 
       let projects: CrmProjectItem[] = [];
       if (prospectsRes.success && Array.isArray(prospectsRes.data)) {
         projects = prospectsRes.data.map((r, idx) => {
-          const dealVal = Number(r["deal_value"] || 0);
+          const budget = Number(r["budget"] || 0);
+          const paidAmount = Number(r["paid_amount"] || 0);
+          const dueAmount = Math.max(0, budget - paidAmount);
+          const progress = Number(r["progress"] || 0);
           const rawId = String(r["id"]);
           const shortCode = `PRJ-${rawId.slice(0, 4).toUpperCase() || (idx + 1).toString().padStart(4, "0")}`;
           const stageName = String(r["stage_name"] || "Prospect");
@@ -137,11 +144,11 @@ export const projectsQueryOptions = (userId?: string, isAdmin: boolean = false) 
             assigned_artist_id: (r["assigned_artist_id"] as string) || null,
             assigned_artist_name: (r["artist_name"] as string) || null,
             assigned_artist_avatar: (r["artist_avatar"] as string) || null,
-            budget: dealVal,
-            paid_amount: 0,
-            due_amount: dealVal,
-            progress: 50,
-            deadline: null,
+            budget,
+            paid_amount: paidAmount,
+            due_amount: dueAmount,
+            progress,
+            deadline: (r["deadline"] as string) || null,
             notes: (r["notes"] as string) || null,
             created_at: String(r["created_at"] || new Date().toISOString()),
             updated_at: String(r["updated_at"] || new Date().toISOString()),
