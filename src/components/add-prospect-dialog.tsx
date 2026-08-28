@@ -186,11 +186,24 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contactName.trim()) {
       toast.error("Contact Name is required.");
       return;
+    }
+
+    // Hard block if duplicate phone number exists
+    const rawNumber = (phone || altPhone).trim();
+    if (rawNumber && rawNumber.length >= 6) {
+      const dupCheck = await checkDuplicateProspectPhone(rawNumber);
+      if (dupCheck.isDuplicate && dupCheck.match) {
+        setDuplicateMatch(dupCheck);
+        toast.error(
+          `Duplicate phone number blocked! Already assigned to ${dupCheck.match.contact_name} (Stage: ${dupCheck.match.stage_name}).`,
+        );
+        return;
+      }
     }
 
     // Default stage is Prospect
@@ -548,13 +561,18 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
             </Button>
             <Button
               type="submit"
-              className="bg-[#67B239] hover:bg-[#5aa030] text-white font-bold text-xs sm:text-sm h-9.5 rounded-xl shadow-2xs gap-1.5 transition-all cursor-pointer"
-              disabled={createMutation.isPending}
+              className="bg-[#67B239] hover:bg-[#5aa030] text-white font-bold text-xs sm:text-sm h-9.5 rounded-xl shadow-2xs gap-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={createMutation.isPending || Boolean(duplicateMatch?.isDuplicate)}
             >
               {createMutation.isPending ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
                   Saving Prospect...
+                </>
+              ) : duplicateMatch?.isDuplicate ? (
+                <>
+                  <AlertTriangle className="size-4" />
+                  Duplicate Number Blocked
                 </>
               ) : (
                 <>

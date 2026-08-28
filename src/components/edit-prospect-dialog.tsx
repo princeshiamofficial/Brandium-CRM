@@ -368,12 +368,27 @@ export function EditProspectDialog({
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contactName.trim()) {
       toast.error("Contact Name is required.");
       return;
     }
+
+    // Hard block if duplicate phone number exists for another prospect
+    const rawNumber = (phone || altPhone).trim();
+    if (rawNumber && rawNumber.length >= 6) {
+      const currentId = prospect?.id || prospectId || undefined;
+      const dupCheck = await checkDuplicateProspectPhone(rawNumber, currentId);
+      if (dupCheck.isDuplicate && dupCheck.match) {
+        setDuplicateMatch(dupCheck);
+        toast.error(
+          `Duplicate phone number blocked! Already assigned to ${dupCheck.match.contact_name} (Stage: ${dupCheck.match.stage_name}).`,
+        );
+        return;
+      }
+    }
+
     updateMutation.mutate();
   };
 
@@ -724,13 +739,18 @@ export function EditProspectDialog({
               </Button>
               <Button
                 type="submit"
-                className="bg-[#67B239] hover:bg-[#5aa030] text-white font-bold text-xs sm:text-sm h-9.5 rounded-xl shadow-2xs gap-1.5 transition-all cursor-pointer"
-                disabled={updateMutation.isPending}
+                className="bg-[#67B239] hover:bg-[#5aa030] text-white font-bold text-xs sm:text-sm h-9.5 rounded-xl shadow-2xs gap-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={updateMutation.isPending || Boolean(duplicateMatch?.isDuplicate)}
               >
                 {updateMutation.isPending ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
                     Saving Changes...
+                  </>
+                ) : duplicateMatch?.isDuplicate ? (
+                  <>
+                    <AlertTriangle className="size-4" />
+                    Duplicate Number Blocked
                   </>
                 ) : (
                   <>

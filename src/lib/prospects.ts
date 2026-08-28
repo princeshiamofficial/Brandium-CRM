@@ -402,6 +402,17 @@ export async function generateNextProspectId(): Promise<string> {
 }
 
 export async function createProspect(input: CreateProspectInput): Promise<Prospect> {
+  // Check duplicate phone number before creating
+  const rawPhone = (input.phone || input.alternative_phone || "").trim();
+  if (rawPhone && rawPhone.length >= 6) {
+    const dupCheck = await checkDuplicateProspectPhone(rawPhone);
+    if (dupCheck.isDuplicate && dupCheck.match) {
+      throw new Error(
+        `Duplicate phone number! This number is already assigned to ${dupCheck.match.contact_name} (Stage: ${dupCheck.match.stage_name}).`,
+      );
+    }
+  }
+
   const nextId = await generateNextProspectId();
   const now = getMySQLTimestamp();
 
@@ -498,6 +509,18 @@ export async function updateProspect(
   input: Partial<CreateProspectInput>,
 ): Promise<boolean> {
   if (!prospectId) return false;
+
+  // Check duplicate phone number before updating (excluding current prospect)
+  const rawPhone = (input.phone || input.alternative_phone || "").trim();
+  if (rawPhone && rawPhone.length >= 6) {
+    const dupCheck = await checkDuplicateProspectPhone(rawPhone, prospectId);
+    if (dupCheck.isDuplicate && dupCheck.match) {
+      throw new Error(
+        `Duplicate phone number! This number is already assigned to ${dupCheck.match.contact_name} (Stage: ${dupCheck.match.stage_name}).`,
+      );
+    }
+  }
+
   const now = getMySQLTimestamp();
 
   const updateSql = `
