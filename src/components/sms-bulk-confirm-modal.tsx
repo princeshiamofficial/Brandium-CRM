@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { calculateSmsInfo, SmsRecipientInput } from "@/lib/sms";
+import { calculateSmsInfo, type SmsRecipientInput } from "@/lib/sms";
 
 type SmsBulkConfirmModalProps = {
   open: boolean;

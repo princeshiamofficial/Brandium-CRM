@@ -1,7 +1,6 @@
-/* eslint-disable react-refresh/only-export-components */
+"use client";
+
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { createMySQLSession, deleteMySQLSession, getMySQLSession } from "@/lib/auth.functions";
 
 export type User = {
   id: string;
@@ -45,37 +44,7 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
-// Only a tiny session token ID is kept in localStorage (not user data)
-const SESSION_TOKEN_KEY = "brandium_sid";
-
-function getStoredSessionId(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return localStorage.getItem(SESSION_TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function setStoredSessionId(sid: string) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(SESSION_TOKEN_KEY, sid);
-  } catch {
-    // ignore
-  }
-}
-
-function clearStoredSessionId() {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.removeItem(SESSION_TOKEN_KEY);
-    // Also clean up old key if present
-    localStorage.removeItem("brandium_dev_session");
-  } catch {
-    // ignore
-  }
-}
+const SESSION_STORAGE_KEY = "brandium_user_session";
 
 function buildAuthObjects(
   userId: string,
@@ -114,59 +83,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // On mount: restore session from MySQL using stored session ID
   useEffect(() => {
-    const sid = getStoredSessionId();
-
-    if (sid) {
-      // Fetch session data from MySQL
-      getMySQLSession({ data: { sessionId: sid } })
-        .then((res) => {
-          if (res?.success && res.session) {
-            const {
-              user,
-              session: sess,
-              profile: prof,
-            } = buildAuthObjects(
-              res.session.userId,
-              res.session.userName,
-              res.session.userEmail,
-              res.session.userRole,
-            );
-            setSession(sess);
-            setProfile(prof);
-            setRole(res.session.userRole);
-            void user; // used via buildAuthObjects
-          } else {
-            // Session expired or not found in MySQL — clear token
-            clearStoredSessionId();
-            setSession(null);
-            setProfile(null);
-            setRole(null);
+    try {
+      if (typeof window !== "undefined") {
+        const stored =
+          localStorage.getItem(SESSION_STORAGE_KEY) || localStorage.getItem("brandium_dev_session");
+        if (stored) {
+          const parsed = JSON.parse(stored) as {
+            session: Session;
+            profile: Profile;
+            role: AppRole;
+          };
+          if (parsed?.session && parsed?.role) {
+            setSession(parsed.session);
+            setProfile(parsed.profile);
+            setRole(parsed.role);
           }
-        })
-        .catch(() => {
-          // If MySQL unreachable, fall back to old localStorage session (migration safety)
-          try {
-            const old = localStorage.getItem("brandium_dev_session");
-            if (old) {
-              const parsed = JSON.parse(old) as AuthSession;
-              setSession(parsed.session);
-              setProfile(parsed.profile);
-              setRole(parsed.role);
-            }
-          } catch {
-            // ignore
-          }
-        })
-        .finally(() => setLoading(false));
-      return;
-    }
-
-    // No session ID — check supabase fallback (no-op in MySQL mode)
-    supabase.auth.getSession().then(() => {
+        }
+      }
+    } catch {
+      // Ignore
+    } finally {
       setLoading(false);
-    });
+    }
   }, []);
 
   const setAuthenticatedDbSession = (
@@ -175,22 +114,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     userRole: AppRole,
   ) => {
-    const sid = `sid_${userId}_${Date.now()}`;
     const { user, session: sess, profile: prof } = buildAuthObjects(userId, name, email, userRole);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(
+          SESSION_STORAGE_KEY,
+          JSON.stringify({ session: sess, user, profile: prof, role: userRole }),
+        );
+      } catch {
+        // Ignore
+      }
+    }
 
-    // Store session in MySQL (server-side)
-    createMySQLSession({
-      data: { sessionId: sid, userId, userEmail: email, userName: name, userRole },
-    }).catch(() => {
-      // Fallback: keep session in localStorage if MySQL unavailable
-      localStorage.setItem(
-        "brandium_dev_session",
-        JSON.stringify({ session: sess, user, profile: prof, role: userRole }),
-      );
-    });
-
-    // Store only the tiny session token ID locally
-    setStoredSessionId(sid);
     setSession(sess);
     setProfile(prof);
     setRole(userRole);
@@ -209,13 +144,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     isAdmin: role === "admin",
     signOut: async () => {
-      const sid = getStoredSessionId();
-      if (sid) {
-        // Delete session from MySQL
-        deleteMySQLSession({ data: { sessionId: sid } }).catch(() => {});
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.removeItem(SESSION_STORAGE_KEY);
+          localStorage.removeItem("brandium_dev_session");
+          localStorage.removeItem("brandium_sid");
+        } catch {
+          // Ignore
+        }
       }
-      clearStoredSessionId();
-      await supabase.auth.signOut();
       setSession(null);
       setProfile(null);
       setRole(null);

@@ -1,8 +1,9 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "./server-fn";
 import bcrypt from "bcryptjs";
 import mysql from "mysql2/promise";
 
-import { getMySQLConfig, createSingleMySQLConnection, getMySQLTimestamp } from "./mysql-client";
+import { getMySQLConfig, getMySQLTimestamp } from "./mysql-client";
+import { createSingleMySQLConnection } from "./mysql-server";
 
 export type AuthenticateUserResponse = {
   success: boolean;

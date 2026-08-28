@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "./server-fn";
 import fs from "node:fs/promises";
 import path from "node:path";
 

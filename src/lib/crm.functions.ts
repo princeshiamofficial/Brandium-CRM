@@ -1,5 +1,6 @@
-import { createServerFn } from "@tanstack/react-start";
-import { getMySQLConfig, getMySQLPool, generateUUID, getMySQLTimestamp } from "./mysql-client";
+import { createServerFn } from "./server-fn";
+import { getMySQLConfig, generateUUID, getMySQLTimestamp } from "./mysql-client";
+import { getMySQLPool } from "./mysql-server";
 import { ensureMySQLTablesExist } from "./auth.functions";
 
 async function ensureBootstrapped() {

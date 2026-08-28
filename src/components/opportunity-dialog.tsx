@@ -22,22 +22,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { agentsQuery } from "@/lib/follow-ups";
+import { runMySQLQuery } from "@/lib/mysql-api";
 import { PIPELINE_STAGES, useCreateOpportunity, type OpportunityStatus } from "@/lib/opportunities";
 
 const prospectOptionsQuery = () =>
   queryOptions({
     queryKey: ["prospect-options"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("prospects")
-        .select("id, contact_name, business_name")
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (error) return [];
-      return data ?? [];
+      const res = await runMySQLQuery<
+        { id: string; contact_name: string; business_name: string | null }[]
+      >(
+        "SELECT id, contact_name, business_name FROM prospects WHERE is_active = 1 ORDER BY created_at DESC LIMIT 200;",
+      );
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 

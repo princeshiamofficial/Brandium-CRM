@@ -48,39 +48,50 @@ import { getMySQLTimestamp } from "@/lib/mysql-client";
 import { uploadImageFile } from "@/lib/upload";
 
 interface EditProspectDialogProps {
-  prospectId: string | null;
+  prospectId?: string | null;
+  prospect?: Prospect | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 }
 
 export function EditProspectDialog({
-  prospectId,
+  prospectId: propProspectId,
+  prospect,
   open,
   onOpenChange,
   onSuccess,
 }: EditProspectDialogProps) {
+  const prospectId = prospect?.id || propProspectId || null;
   const queryClient = useQueryClient();
   const { user, role } = useAuth();
   const isCurrentUserAgent =
     role === "agent" || user?.user_metadata?.role?.toLowerCase() === "agent";
 
-  // Form fields state
-  const [contactName, setContactName] = useState("");
-  const [businessName, setBusinessName] = useState("");
-  const [designation, setDesignation] = useState("");
-  const [phone, setPhone] = useState("");
-  const [altPhone, setAltPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [websiteUrl, setWebsiteUrl] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
-  const [previewUrl, setPreviewUrl] = useState("");
+  // Form fields state initialized directly from prospect if provided
+  const [contactName, setContactName] = useState(prospect?.contact_name || "");
+  const [businessName, setBusinessName] = useState(prospect?.business_name || "");
+  const [designation, setDesignation] = useState(prospect?.designation || "");
+  const [phone, setPhone] = useState(prospect?.phone || "");
+  const [altPhone, setAltPhone] = useState(prospect?.alternative_phone || "");
+  const [email, setEmail] = useState(prospect?.email || "");
+  const [websiteUrl, setWebsiteUrl] = useState(prospect?.website_url || "");
+  const [logoUrl, setLogoUrl] = useState(prospect?.logo_url || "");
+  const [previewUrl, setPreviewUrl] = useState(prospect?.logo_url || "");
   const [imgError, setImgError] = useState(false);
-  const [address, setAddress] = useState("");
-  const [serviceId, setServiceId] = useState<string>("none");
-  const [artist, setArtist] = useState<string>("none");
-  const [assignedTo, setAssignedTo] = useState<string>("none");
-  const [notes, setNotes] = useState("");
+  const [address, setAddress] = useState(prospect?.address || "");
+  const [serviceId, setServiceId] = useState<string>(
+    prospect?.service_id && prospect.service_id.trim() ? prospect.service_id : "none",
+  );
+  const [artist, setArtist] = useState<string>(
+    prospect?.assigned_artist_id && prospect.assigned_artist_id.trim()
+      ? prospect.assigned_artist_id
+      : "none",
+  );
+  const [assignedTo, setAssignedTo] = useState<string>(
+    prospect?.assigned_to && prospect.assigned_to.trim() ? prospect.assigned_to : "none",
+  );
+  const [notes, setNotes] = useState(prospect?.notes || "");
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,10 +137,13 @@ export function EditProspectDialog({
   const agents = useMemo(() => (Array.isArray(rawAgents) ? rawAgents : []), [rawAgents]);
   const artists = useMemo(() => (Array.isArray(rawArtists) ? rawArtists : []), [rawArtists]);
 
-  // Fetch prospect data for editing from MySQL database brandium_crm
+  // Fetch fresh prospect data for editing from MySQL database brandium_crm
   const prospectQuery = useQuery({
     queryKey: ["prospect-edit-dialog", prospectId],
     enabled: Boolean(prospectId && open),
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
     queryFn: async (): Promise<
       | (Prospect & {
           assigned_artist_id?: string | null;
@@ -140,7 +154,7 @@ export function EditProspectDialog({
     > => {
       if (!prospectId) return null;
 
-      // Try MySQL first
+      // Direct MySQL query
       const res = await runMySQLQuery<Record<string, unknown>[]>(
         "SELECT * FROM `prospects` WHERE `id` = ? LIMIT 1",
         [prospectId],
@@ -173,10 +187,10 @@ export function EditProspectDialog({
     },
   });
 
-  // Pre-fill form when prospect data loads
+  // Pre-fill form when prospect data loads or dialog opens
   useEffect(() => {
-    if (prospectQuery.data) {
-      const p = prospectQuery.data;
+    const p = prospectQuery.data || prospect;
+    if (open && p) {
       setContactName(p.contact_name || "");
       setBusinessName(p.business_name || "");
       setDesignation(p.designation || "");
@@ -186,7 +200,7 @@ export function EditProspectDialog({
       setWebsiteUrl(p.website_url || "");
       setLogoUrl(p.logo_url || "");
       setAddress(p.address || "");
-      setServiceId(p.service_id || "none");
+      setServiceId(p.service_id && p.service_id.trim() ? p.service_id : "none");
 
       let rawNotes = p.notes || "";
 
@@ -227,7 +241,7 @@ export function EditProspectDialog({
       setArtist(artistId || "none");
       setNotes(rawNotes);
     }
-  }, [prospectQuery.data, agents, artists, isCurrentUserAgent, user?.id]);
+  }, [open, prospect, prospectQuery.data, agents, artists, isCurrentUserAgent, user?.id]);
 
   // Normalize artist ID whenever artists options finish loading
   useEffect(() => {
@@ -575,6 +589,9 @@ export function EditProspectDialog({
                         {srv.name}
                       </SelectItem>
                     ))}
+                    {serviceId !== "none" && !services.some((srv) => srv.id === serviceId) && (
+                      <SelectItem value={serviceId}>{serviceId}</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

@@ -1,24 +1,11 @@
 # AGENTS.md
 
-<!-- LOVABLE:BEGIN -->
-
-> [!IMPORTANT]
-> This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
-> published git history â€” force pushing, or rebasing/amending/squashing commits
-> that are already pushed â€” as it rewrites history on Lovable's side and the
-> user will likely lose their project history.
->
-> Commits you push to the connected branch sync back to Lovable and show up in
-> the editor, so keep the branch in a working state.
-
-<!-- LOVABLE:END -->
-
 Welcome to the **Brandium CRM** repository.
 
 ## Repository Overview
 
-- **Framework**: TanStack Router + Vite (React)
-- **Database**: MySQL (brandium_crm) / Direct Server Functions & API Bridge
+- **Framework**: Next.js 15 (App Router) + React 19
+- **Database**: MySQL (brandium_crm) / Direct Server API Route Handlers
 - **Styling**: Tailwind CSS & Radix UI / Shadcn UI
 
 ## Universal AI Engineering Framework
@@ -175,3 +162,24 @@ Welcome to the **Brandium CRM** repository.
 
 - **Real-Time Self-Healing Schema Auto-Migration (`executeMySQLQueryFn`)**:
   - Whenever an `INSERT`, `UPDATE`, or `SELECT` query fails with `Unknown column 'x' in 'field list'`, `executeMySQLQueryFn` automatically intercepts the SQL error, parses the missing column name and target table, dynamically infers the exact column data type (e.g. `TINYINT(1)`, `VARCHAR(36)`, `DECIMAL(12,2)`, `DATETIME`), executes `ALTER TABLE \`table\` ADD COLUMN \`col\` type` instantly on the database, and re-executes the original query. This guarantees zero downtime and zero schema mismatches across any environment.
+
+- **Next.js 15 App Router & Server/Client Boundary Architecture**:
+  - In Next.js App Router, client components marked with `"use client"` must NEVER directly or indirectly import Node.js native drivers (such as `mysql2`, `bcryptjs`, `fs`, `net`, `tls`).
+  - Keep client-safe helpers (`generateUUID`, `getMySQLTimestamp`, `formatCrmDate`, `runMySQLQuery`) in `src/lib/mysql-client.ts` and `src/lib/mysql-api.ts`. Keep database connection pools (`getMySQLPool`, `createSingleMySQLConnection`) strictly in `src/lib/mysql-server.ts`.
+  - Client components communicate with MySQL via Next.js Route Handlers (`/api/mysql`, `/api/auth/login`, `/api/upload`), ensuring complete persistence to local MySQL database `brandium_crm` with zero webpack bundling errors during `next build`.
+
+- **Prospect Artist & Agent Assignment Separation**:
+  - In `src/lib/prospects.ts`, `getProspectArtistName` must NEVER fall back to `assigned_agent_name`. If `assigned_artist_id` or `artist` is unassigned/empty, it must strictly return `"Unassigned"`.
+  - In `prospectsQuery`, always join `users u_artist` and `profiles prof_artist` on `p.assigned_artist_id` to populate `assigned_artist_name` distinctly from `assigned_agent_name`.
+
+- **Edit Modal Direct Prop Initialization & Key Remounting**:
+  - In `EditProspectDialog`, pass `prospect` directly as a prop in addition to `prospectId` and mount with `key={editProspect?.id || "none"}`. This guarantees instant 0ms pre-fill of `service_id`, `assigned_artist_id`, and `assigned_to` in Radix UI Select components without async state flash or placeholder fallbacks.
+
+- **Agent and Artist Dropdown Role Filtering**:
+  - `fetchAgentOptions` must strictly filter users with `LOWER(u.role) = 'agent'` (or profile `role = 'agent'`), and `fetchArtistOptions` must strictly filter users with `LOWER(u.role) = 'artist'` (or profile `role = 'artist'`) so that only users with matching roles appear in their respective dropdowns across Add and Edit Prospect dialogs.
+
+
+- **Agent and Artist Dropdown Role Filtering**:
+  - `fetchAgentOptions` must strictly filter users with `LOWER(u.role) = 'agent'` (or profile role = 'agent'), and `fetchArtistOptions` must strictly filter users with `LOWER(u.role) = 'artist'` (or profile role = 'artist') so that only users with the specific matching role appear in their respective dropdowns across Add and Edit Prospect dialogs.
+
+

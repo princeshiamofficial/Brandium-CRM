@@ -38,7 +38,7 @@ import {
   type FollowUp,
   type FollowUpStatus,
 } from "@/lib/follow-ups";
-import { Link } from "@tanstack/react-router";
+import { Link } from "@/components/navigation-link";
 
 export type FollowUpDetailModalProps = {
   open: boolean;

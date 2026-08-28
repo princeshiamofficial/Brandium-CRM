@@ -1,6 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
 import { runMySQLQuery } from "@/lib/mysql-api";
-import { supabase } from "@/integrations/supabase/client";
 import { resolveStageColor, resolveStageIcon, formatStageSlugOrName } from "@/lib/stages";
 import { formatProspectId } from "@/lib/prospects";
 

@@ -165,12 +165,12 @@ function applyFilters(items: WonSaleItem[], filters: WonSaleFilters): WonSaleIte
 export async function fetchAgentOptions(): Promise<AgentOption[]> {
   try {
     const res = await runMySQLQuery<Record<string, unknown>[]>(
-      `SELECT u.id, COALESCE(p.full_name, u.name, u.email) AS name, u.role 
+      `SELECT u.id, COALESCE(p.full_name, u.name, u.email) AS name, COALESCE(p.role, u.role, 'agent') AS role 
        FROM \`users\` u 
        LEFT JOIN \`profiles\` p ON u.id = p.id 
        WHERE (u.is_deleted = 0 OR u.is_deleted IS NULL) 
          AND (u.status = 'Active' OR u.status IS NULL)
-         AND (UPPER(u.role) = 'AGENT' OR UPPER(u.role) LIKE '%AGENT%')
+         AND (LOWER(COALESCE(p.role, u.role, '')) = 'agent' OR LOWER(COALESCE(p.role, u.role, '')) LIKE '%agent%')
        ORDER BY name ASC;`,
     );
     if (!res.success || !Array.isArray(res.data)) {
@@ -190,12 +190,12 @@ export async function fetchAgentOptions(): Promise<AgentOption[]> {
 export async function fetchArtistOptions(): Promise<ArtistOption[]> {
   try {
     const res = await runMySQLQuery<Record<string, unknown>[]>(
-      `SELECT u.id, COALESCE(p.full_name, u.name, u.email) AS name, u.role 
+      `SELECT u.id, COALESCE(p.full_name, u.name, u.email) AS name, COALESCE(p.role, u.role, 'artist') AS role 
        FROM \`users\` u 
        LEFT JOIN \`profiles\` p ON u.id = p.id 
        WHERE (u.is_deleted = 0 OR u.is_deleted IS NULL) 
          AND (u.status = 'Active' OR u.status IS NULL)
-         AND (UPPER(u.role) = 'ARTIST' OR UPPER(u.role) LIKE '%ARTIST%')
+         AND (LOWER(COALESCE(p.role, u.role, '')) = 'artist' OR LOWER(COALESCE(p.role, u.role, '')) LIKE '%artist%')
        ORDER BY name ASC;`,
     );
     if (!res.success || !Array.isArray(res.data)) {

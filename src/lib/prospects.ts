@@ -3,12 +3,6 @@ import { z } from "zod";
 import { formatStageSlugOrName } from "@/lib/stages";
 import { runMySQLQuery } from "@/lib/mysql-api";
 import { getMySQLTimestamp } from "@/lib/mysql-client";
-import {
-  saveMySQLProspect,
-  fetchMySQLProspects,
-  deleteMySQLProspect,
-  updateMySQLProspect,
-} from "./prospects.functions";
 
 export const prospectFiltersSchema = z.object({
   page: z.number().catch(1),
@@ -49,14 +43,24 @@ export type Prospect = {
   stage_color?: string | null | undefined;
   stage_icon?: string | null | undefined;
   assigned_agent_name?: string | undefined;
+  assigned_artist_name?: string | undefined;
   creator_name?: string | undefined;
 };
 
 export function getProspectArtistName(prospect: {
   artist?: string | null | undefined;
-  assigned_agent_name?: string | null | undefined;
+  assigned_artist_name?: string | null | undefined;
   notes?: string | null | undefined;
 }): string {
+  if (
+    prospect.assigned_artist_name &&
+    prospect.assigned_artist_name.trim() &&
+    prospect.assigned_artist_name.toLowerCase() !== "none" &&
+    prospect.assigned_artist_name.toLowerCase() !== "unknown"
+  ) {
+    return prospect.assigned_artist_name.trim();
+  }
+
   if (prospect.artist && prospect.artist.trim() && prospect.artist.toLowerCase() !== "none") {
     return prospect.artist.trim();
   }
@@ -66,14 +70,6 @@ export function getProspectArtistName(prospect: {
     if (match && match[1] && match[1].trim() && match[1].toLowerCase() !== "none") {
       return match[1].trim();
     }
-  }
-
-  if (
-    prospect.assigned_agent_name &&
-    prospect.assigned_agent_name.trim() &&
-    prospect.assigned_agent_name.toLowerCase() !== "unknown"
-  ) {
-    return prospect.assigned_agent_name.trim();
   }
 
   return "Unassigned";
@@ -108,7 +104,7 @@ export function getProspectAgentName(prospect: {
     return prospect.creator_name.trim();
   }
 
-  return "Mehan Ahmed";
+  return "Unassigned";
 }
 
 export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin: boolean) =>
@@ -130,13 +126,18 @@ export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin
             st.stage_group AS stage_group,
             st.color AS stage_color,
             st.icon AS stage_icon,
-            u_assign.name AS assigned_agent_name,
-            u_create.name AS creator_name
+            COALESCE(prof_assign.full_name, u_assign.name) AS assigned_agent_name,
+            COALESCE(prof_artist.full_name, u_artist.name) AS assigned_artist_name,
+            COALESCE(prof_create.full_name, u_create.name) AS creator_name
           FROM \`prospects\` p
           LEFT JOIN \`services\` s ON p.service_id = s.id
           LEFT JOIN \`stages\` st ON (p.stage_id = st.id OR p.stage_id = REPLACE(st.id, '-', '_') OR p.stage_id = st.name)
           LEFT JOIN \`users\` u_assign ON p.assigned_to = u_assign.id
+          LEFT JOIN \`profiles\` prof_assign ON p.assigned_to = prof_assign.id
+          LEFT JOIN \`users\` u_artist ON p.assigned_artist_id = u_artist.id
+          LEFT JOIN \`profiles\` prof_artist ON p.assigned_artist_id = prof_artist.id
           LEFT JOIN \`users\` u_create ON p.created_by = u_create.id
+          LEFT JOIN \`profiles\` prof_create ON p.created_by = prof_create.id
           WHERE (p.is_active = 1 OR p.is_active IS NULL)
           ORDER BY p.created_at DESC;`,
         );
@@ -170,54 +171,13 @@ export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin
               stage_color: (p["stage_color"] as string) || null,
               stage_icon: (p["stage_icon"] as string) || null,
               assigned_agent_name: (p["assigned_agent_name"] as string) || undefined,
+              assigned_artist_name: (p["assigned_artist_name"] as string) || undefined,
               creator_name: (p["creator_name"] as string) || undefined,
             } as Prospect;
           });
         }
       } catch (err) {
         console.warn("prospectsQuery API error:", err);
-      }
-
-      // Fallback with server function if direct query failed
-      if (!mysqlSuccess) {
-        try {
-          const mysqlRes = await fetchMySQLProspects();
-          if (mysqlRes?.success && Array.isArray(mysqlRes.prospects)) {
-            mysqlSuccess = true;
-            fetchedRows = mysqlRes.prospects.map((p) => {
-              const stId = String(p["stage_id"] || "");
-              return {
-                id: String(p["id"]),
-                contact_name: String(p["contact_name"] || "Client"),
-                business_name: (p["business_name"] as string) || null,
-                designation: (p["designation"] as string) || null,
-                phone: (p["phone"] as string) || null,
-                alternative_phone: (p["alternative_phone"] as string) || null,
-                email: (p["email"] as string) || null,
-                address: (p["address"] as string) || null,
-                website_url: (p["website_url"] as string) || null,
-                logo_url: (p["logo_url"] as string) || null,
-                service_id: (p["service_id"] as string) || null,
-                stage_id: stId || null,
-                assigned_to: (p["assigned_to"] as string) || null,
-                assigned_artist_id: (p["assigned_artist_id"] as string) || null,
-                created_by: (p["created_by"] as string) || null,
-                notes: (p["notes"] as string) || null,
-                created_at: String(p["created_at"] || new Date().toISOString()),
-                updated_at: String(p["updated_at"] || new Date().toISOString()),
-                service_name: (p["service_name"] as string) || undefined,
-                stage_name: String(p["stage_name"] || formatStageSlugOrName(stId) || "Prospect"),
-                stage_group: (p["stage_group"] as string) || "new",
-                stage_color: (p["stage_color"] as string) || null,
-                stage_icon: (p["stage_icon"] as string) || null,
-                assigned_agent_name: (p["assigned_agent_name"] as string) || undefined,
-                creator_name: (p["creator_name"] as string) || undefined,
-              } as Prospect;
-            });
-          }
-        } catch {
-          // ignore
-        }
       }
 
       // User data scoping: regular user sees only their own assigned/created prospects; admin sees all
@@ -245,6 +205,7 @@ export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin
             (p.stage_name && p.stage_name.toLowerCase().includes(q)) ||
             (p.notes && p.notes.toLowerCase().includes(q)) ||
             (p.assigned_agent_name && p.assigned_agent_name.toLowerCase().includes(q)) ||
+            (p.assigned_artist_name && p.assigned_artist_name.toLowerCase().includes(q)) ||
             (p.creator_name && p.creator_name.toLowerCase().includes(q)),
         );
       }
@@ -314,23 +275,8 @@ export const prospectsStatsQuery = (userId: string, isAdmin: boolean) =>
         if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
           allProspects = res.data;
         }
-      } catch {
-        // Fallback
-      }
-
-      if (allProspects.length === 0) {
-        try {
-          const mysqlRes = await fetchMySQLProspects();
-          if (
-            mysqlRes?.success &&
-            Array.isArray(mysqlRes.prospects) &&
-            mysqlRes.prospects.length > 0
-          ) {
-            allProspects = mysqlRes.prospects;
-          }
-        } catch {
-          // Fallback
-        }
+      } catch (err) {
+        console.warn("prospectsStatsQuery notice:", err);
       }
 
       // User data scoping: regular user sees only their own assigned/created prospects stats; admin sees all
@@ -537,28 +483,6 @@ export async function createProspect(input: CreateProspectInput): Promise<Prospe
     console.warn("Direct MySQL Query insert warning:", res?.error);
   }
 
-  // 2. Secondary: server function sync
-  saveMySQLProspect({
-    data: {
-      id: newProspect.id,
-      contact_name: input.contact_name,
-      business_name: input.business_name || null,
-      designation: input.designation || null,
-      phone: input.phone || null,
-      alternative_phone: input.alternative_phone || null,
-      email: input.email || null,
-      address: input.address || null,
-      website_url: input.website_url || null,
-      logo_url: input.logo_url || null,
-      service_id: input.service_id || null,
-      stage_id: input.stage_id || null,
-      assigned_to: input.assigned_to || null,
-      assigned_artist_id: input.assigned_artist_id || null,
-      created_by: input.created_by || null,
-      notes: input.notes || null,
-    },
-  }).catch((e) => console.warn("saveMySQLProspect error notice:", e));
-
   return newProspect;
 }
 
@@ -566,8 +490,6 @@ export async function deleteProspect(prospectId: string): Promise<boolean> {
   if (!prospectId) return false;
 
   await runMySQLQuery("DELETE FROM `prospects` WHERE `id` = ?", [prospectId]);
-  deleteMySQLProspect({ data: { id: prospectId } }).catch(() => {});
-
   return true;
 }
 
@@ -620,25 +542,5 @@ export async function updateProspect(
   ];
 
   await runMySQLQuery(updateSql, updateParams);
-  updateMySQLProspect({
-    data: {
-      id: prospectId,
-      contact_name: input.contact_name || "",
-      business_name: input.business_name || null,
-      designation: input.designation || null,
-      phone: input.phone || null,
-      alternative_phone: input.alternative_phone || null,
-      email: input.email || null,
-      address: input.address || null,
-      website_url: input.website_url || null,
-      logo_url: input.logo_url || null,
-      service_id: input.service_id || null,
-      stage_id: input.stage_id || null,
-      assigned_to: input.assigned_to || null,
-      created_by: input.created_by || null,
-      notes: input.notes || null,
-    },
-  }).catch(() => {});
-
   return true;
 }

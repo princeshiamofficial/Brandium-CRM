@@ -1,6 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { executeMySQLQueryFn } from "./crm.functions";
+import { runMySQLQuery } from "@/lib/mysql-api";
 
 export type BackupCounts = {
   prospects: number;
@@ -36,11 +35,6 @@ export type RestoreValidationResult = {
 
 export type RestoreMode = "merge" | "overwrite";
 
-// Safe DB accessor wrapper
-const dynamicDb = supabase as unknown as {
-  rpc: (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
-};
-
 // Summary metrics helper
 export type BackupSummaryMetrics = {
   prospects_count: number;
@@ -51,18 +45,18 @@ export type BackupSummaryMetrics = {
 
 export async function fetchBackupSummaryMetrics(): Promise<BackupSummaryMetrics> {
   try {
-    const resP = (await executeMySQLQueryFn({
-      data: { sql: "SELECT COUNT(*) AS cnt FROM prospects;" },
-    })) as { success?: boolean; data?: Record<string, unknown>[] };
-    const resF = (await executeMySQLQueryFn({
-      data: { sql: "SELECT COUNT(*) AS cnt FROM follow_ups;" },
-    })) as { success?: boolean; data?: Record<string, unknown>[] };
-    const resI = (await executeMySQLQueryFn({
-      data: { sql: "SELECT COUNT(*) AS cnt FROM invoices;" },
-    })) as { success?: boolean; data?: Record<string, unknown>[] };
-    const resU = (await executeMySQLQueryFn({
-      data: { sql: "SELECT COUNT(*) AS cnt FROM users;" },
-    })) as { success?: boolean; data?: Record<string, unknown>[] };
+    const resP = await runMySQLQuery<Record<string, unknown>[]>(
+      "SELECT COUNT(*) AS cnt FROM prospects;",
+    );
+    const resF = await runMySQLQuery<Record<string, unknown>[]>(
+      "SELECT COUNT(*) AS cnt FROM follow_ups;",
+    );
+    const resI = await runMySQLQuery<Record<string, unknown>[]>(
+      "SELECT COUNT(*) AS cnt FROM invoices;",
+    );
+    const resU = await runMySQLQuery<Record<string, unknown>[]>(
+      "SELECT COUNT(*) AS cnt FROM users;",
+    );
 
     const pCnt = Number(resP?.data?.[0]?.["cnt"] || 0);
     const fCnt = Number(resF?.data?.[0]?.["cnt"] || 0);
@@ -106,16 +100,13 @@ export async function generateBackupPayload(): Promise<BackupPayload> {
     const backupData: Record<string, unknown[]> = {};
 
     for (const tbl of tables) {
-      const res = (await executeMySQLQueryFn({ data: { sql: `SELECT * FROM \`${tbl}\`;` } })) as {
-        success?: boolean;
-        data?: unknown[];
-      };
+      const res = await runMySQLQuery<unknown[]>(`SELECT * FROM \`${tbl}\`;`);
       backupData[tbl] = Array.isArray(res?.data) ? res.data : [];
     }
 
-    const uRes = (await executeMySQLQueryFn({
-      data: { sql: "SELECT id, name, email, role, status, created_at FROM users;" },
-    })) as { success?: boolean; data?: unknown[] };
+    const uRes = await runMySQLQuery<unknown[]>(
+      "SELECT id, name, email, role, status, created_at FROM users;",
+    );
     backupData["users"] = Array.isArray(uRes?.data) ? uRes.data : [];
 
     const counts: BackupCounts = {

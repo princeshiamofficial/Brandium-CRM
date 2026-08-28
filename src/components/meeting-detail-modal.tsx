@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link } from "@/components/navigation-link";
 import { format } from "date-fns";
 import {
   Building2,

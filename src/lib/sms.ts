@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { runMySQLQuery } from "@/lib/mysql-api";
-import { getMySQLTimestamp } from "@/lib/mysql-client";
+import { generateUUID, getMySQLTimestamp } from "@/lib/mysql-client";
 
 export type SmsStatus = "Sent" | "Failed" | "Pending";
 export type SmsMode = "Single" | "Bulk";
@@ -42,10 +42,15 @@ export type SmsRecipientInput = {
   prospect_name?: string | undefined;
 };
 
-const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-const SMS_API_KEY = metaEnv?.["VITE_SMS_API_KEY"] || "";
-const SMS_SENDER_ID = metaEnv?.["VITE_SMS_SENDER_ID"] || "BRANDIUM";
-const SMS_GATEWAY_URL = metaEnv?.["VITE_SMS_GATEWAY_URL"] || "";
+const getEnvVar = (key: string) => {
+  if (typeof process !== "undefined" && process.env) {
+    return process.env[`NEXT_PUBLIC_${key}`] || process.env[key] || "";
+  }
+  return "";
+};
+const SMS_API_KEY = getEnvVar("VITE_SMS_API_KEY") || getEnvVar("SMS_API_KEY");
+const SMS_SENDER_ID = getEnvVar("VITE_SMS_SENDER_ID") || getEnvVar("SMS_SENDER_ID") || "BRANDIUM";
+const SMS_GATEWAY_URL = getEnvVar("VITE_SMS_GATEWAY_URL") || getEnvVar("SMS_GATEWAY_URL");
 
 export const SMS_PRESET_TEMPLATES: SmsPresetTemplate[] = [
   {
@@ -73,17 +78,6 @@ export const SMS_PRESET_TEMPLATES: SmsPresetTemplate[] = [
       "Welcome to Brandium CRM! Your account has been activated. Contact your designated CR agent for setup assistance.",
   },
 ];
-
-function generateUUID(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
 
 export type ProspectOption = {
   id: string;

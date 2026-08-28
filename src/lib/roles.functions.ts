@@ -1,12 +1,8 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "./server-fn";
 import mysql from "mysql2/promise";
 import { ensureMySQLTablesExist } from "./auth.functions";
-import {
-  getMySQLConfig,
-  generateUUID,
-  getMySQLTimestamp,
-  createSingleMySQLConnection,
-} from "./mysql-client";
+import { getMySQLConfig, generateUUID, getMySQLTimestamp } from "./mysql-client";
+import { createSingleMySQLConnection } from "./mysql-server";
 
 export type RolePermissionItem = {
   id: string;

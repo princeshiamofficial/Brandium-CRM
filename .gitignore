@@ -7,15 +7,26 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-.output
-.vinxi
+# Dependencies
+node_modules/
+
+# Next.js Build & Outputs
+.next/
+out/
+dist/
+dist-ssr/
+.output/
+.vinxi/
 .tanstack/**
-.nitro
+.nitro/
+.freebuff/
+*.tsbuildinfo
+
+# Assets & Archives
 assets/
 *.zip
+*.skill
+
 # Environment variables
 .env
 .env*.local
@@ -41,4 +52,3 @@ public/uploads/*
 *.sln
 *.sw?
 *.exe
-

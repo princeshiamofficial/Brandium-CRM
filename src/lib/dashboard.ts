@@ -1,6 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { fetchMySQLProspects } from "@/lib/prospects.functions";
-import { executeMySQLQueryFn } from "@/lib/crm.functions";
+import { runMySQLQuery } from "@/lib/mysql-api";
 
 export type DashboardMetrics = {
   total_prospects: number;
@@ -140,9 +139,16 @@ export const dashboardMetricsQuery = (
     queryFn: async (): Promise<DashboardMetrics> => {
       let all: Record<string, unknown>[] = [];
       try {
-        const res = await fetchMySQLProspects();
-        if (res?.success && Array.isArray(res.prospects) && res.prospects.length > 0) {
-          all = res.prospects;
+        const sql = `
+          SELECT p.*, COALESCE(s.name, p.stage_id, 'Prospect') AS stage_name, s.stage_group, s.is_follow_up
+          FROM prospects p
+          LEFT JOIN stages s ON (p.stage_id = s.id OR p.stage_id = REPLACE(s.id, '-', '_') OR p.stage_id = s.name)
+          WHERE p.is_active = 1
+          ORDER BY p.created_at DESC;
+        `;
+        const res = await runMySQLQuery<Record<string, unknown>[]>(sql);
+        if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
+          all = res.data;
         }
       } catch (err) {
         console.warn("dashboardMetricsQuery error:", err);
@@ -203,12 +209,7 @@ export const dashboardMetricsQuery = (
           ? `SELECT COALESCE(SUM(total_amount), 0) AS total_sales, COALESCE(SUM(paid_amount), 0) AS paid_sales FROM invoices WHERE created_by = '${targetUser}';`
           : "SELECT COALESCE(SUM(total_amount), 0) AS total_sales, COALESCE(SUM(paid_amount), 0) AS paid_sales FROM invoices;";
 
-        const invRes = (await executeMySQLQueryFn({
-          data: {
-            sql,
-          },
-        })) as { success?: boolean; data?: Record<string, unknown>[] };
-
+        const invRes = await runMySQLQuery<Record<string, unknown>[]>(sql);
         totalSales = Number(invRes?.data?.[0]?.["total_sales"] || 0);
         paidSales = Number(invRes?.data?.[0]?.["paid_sales"] || 0);
       } catch {
@@ -239,9 +240,16 @@ export const recentProspectsQuery = (
     queryFn: async (): Promise<RecentProspect[]> => {
       let all: Record<string, unknown>[] = [];
       try {
-        const res = await fetchMySQLProspects();
-        if (res?.success && Array.isArray(res.prospects) && res.prospects.length > 0) {
-          all = res.prospects;
+        const sql = `
+          SELECT p.*, COALESCE(s.name, p.stage_id, 'Prospect') AS stage_name, s.stage_group, s.is_follow_up
+          FROM prospects p
+          LEFT JOIN stages s ON (p.stage_id = s.id OR p.stage_id = REPLACE(s.id, '-', '_') OR p.stage_id = s.name)
+          WHERE p.is_active = 1
+          ORDER BY p.created_at DESC;
+        `;
+        const res = await runMySQLQuery<Record<string, unknown>[]>(sql);
+        if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
+          all = res.data;
         }
       } catch (err) {
         console.warn("recentProspectsQuery error:", err);
@@ -302,11 +310,7 @@ export const recentActivityQuery = (
         const sql = targetUser
           ? `SELECT id, activity_type, message, created_at FROM activities WHERE user_id = '${targetUser}' OR created_by = '${targetUser}' ORDER BY created_at DESC LIMIT 15;`
           : `SELECT id, activity_type, message, created_at FROM activities ORDER BY created_at DESC LIMIT 15;`;
-        const res = (await executeMySQLQueryFn({
-          data: {
-            sql,
-          },
-        })) as { success?: boolean; data?: Record<string, unknown>[]; error?: string };
+        const res = await runMySQLQuery<Record<string, unknown>[]>(sql);
 
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
           return res.data.map((r) => ({

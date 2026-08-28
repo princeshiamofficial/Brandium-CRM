@@ -1,7 +1,7 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { runMySQLQuery } from "@/lib/mysql-api";
-import { getMySQLTimestamp } from "@/lib/mysql-client";
+import { generateUUID, getMySQLTimestamp } from "@/lib/mysql-client";
 
 export const PIPELINE_STAGES = [
   "Opportunity Created",
@@ -95,17 +95,6 @@ export const getStatusBadgeClass = (status: OpportunityStatus | string) => {
 };
 
 const PAGE_SIZE = 10;
-
-function generateUUID(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
 
 export const opportunitiesQuery = (filters: OpportunityFilters, userId: string, isAdmin: boolean) =>
   queryOptions({

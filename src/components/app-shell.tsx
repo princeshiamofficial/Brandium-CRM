@@ -1,5 +1,7 @@
+"use client";
+
 import { useQuery } from "@tanstack/react-query";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { usePathname } from "next/navigation";
 import { crmUsersQueryOptions } from "@/lib/admin-users";
 import {
   LogOut,
@@ -11,8 +13,6 @@ import {
   Trophy,
   CalendarClock,
   CreditCard,
-  Zap,
-  Sparkles,
   ArrowRight,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -32,6 +32,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth";
 import { navGroups } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+import { Link } from "@/components/navigation-link";
 
 function initials(name: string) {
   return (
@@ -46,7 +47,7 @@ function initials(name: string) {
 
 function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const { isAdmin } = useAuth();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const pathname = usePathname();
 
   if (collapsed) {
     return (
@@ -63,7 +64,7 @@ function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (
                 return (
                   <Link
                     key={item.url}
-                    to={item.url}
+                    href={item.url}
                     onClick={onNavigate}
                     title={item.title}
                     className={cn(
@@ -98,7 +99,7 @@ function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (
                 return (
                   <li key={item.url}>
                     <Link
-                      to={item.url}
+                      href={item.url}
                       onClick={onNavigate}
                       className={cn(
                         "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
@@ -125,7 +126,7 @@ function Brand({ collapsed }: { collapsed: boolean }) {
     return (
       <div className="flex h-16 items-center justify-center px-1">
         <Link
-          to="/dashboard"
+          href="/dashboard"
           className="size-11 rounded-full bg-white dark:bg-card border border-slate-200/70 dark:border-border shadow-xs flex items-center justify-center p-1.5 transition-transform hover:scale-105"
         >
           <img src="/logo.png" alt="Brandium Logo" className="size-8 object-contain" />
@@ -136,7 +137,7 @@ function Brand({ collapsed }: { collapsed: boolean }) {
 
   return (
     <div className="flex h-20 items-center justify-center border-b border-slate-200/80 dark:border-border bg-white dark:bg-card px-3 shadow-xs">
-      <Link to="/dashboard" className="flex items-center justify-center w-full">
+      <Link href="/dashboard" className="flex items-center justify-center w-full">
         <img
           src="/logo.png"
           alt="Brandium Logo"
@@ -213,7 +214,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <PanelLeft className="size-4" />
           </Button>
 
-          <Link to="/dashboard" className="flex items-center gap-2 md:hidden">
+          <Link href="/dashboard" className="flex items-center gap-2 md:hidden">
             <img src="/logo.png" alt="Brandium" className="h-7 w-auto object-contain" />
           </Link>
 
@@ -345,7 +346,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     Mark all read
                   </Button>
                   <Link
-                    to="/agent-activity"
+                    href="/agent-activity"
                     className="text-[11px] font-medium text-[#67B239] hover:underline flex items-center gap-1"
                   >
                     View Activity <ArrowRight className="size-3" />

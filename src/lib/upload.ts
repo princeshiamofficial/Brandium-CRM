@@ -1,8 +1,6 @@
-import { uploadImageFn } from "./upload.functions";
-
 /**
  * Client helper to upload an image File to the local server storage.
- * Reads the file as Base64, invokes TanStack Start server function or fallback API endpoint,
+ * Reads the file as Base64, invokes Next.js API route (/api/upload),
  * and returns `{ success: true, url: "/uploads/filename" }`.
  */
 export async function uploadImageFile(
@@ -26,22 +24,6 @@ export async function uploadImageFile(
       reader.readAsDataURL(file);
     });
 
-    // 1. Try TanStack Start Server Function
-    try {
-      const res = await uploadImageFn({
-        data: {
-          filename: file.name,
-          base64,
-        },
-      });
-      if (res?.success && res.url) {
-        return res;
-      }
-    } catch (serverFnErr) {
-      console.warn("uploadImageFn failed, falling back to /api/upload:", serverFnErr);
-    }
-
-    // 2. Fallback to Vite dev server middleware /api/upload
     const res = await fetch("/api/upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

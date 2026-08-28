@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import bcrypt from "bcryptjs";
 import { runMySQLQuery } from "@/lib/mysql-api";
-import { getMySQLTimestamp } from "@/lib/mysql-client";
+import { generateUUID, getMySQLTimestamp } from "@/lib/mysql-client";
 
 export type CrmUserRole = "ADMIN" | "AGENT" | "ARTIST" | "DEVELOPER" | string;
 export type CrmUserStatus = "Active" | "Inactive" | "Deleted";
@@ -13,9 +13,10 @@ export type CrmUser = {
   password_hash: string;
   role: CrmUserRole;
   status: CrmUserStatus;
+  is_active?: boolean;
   avatar_url?: string | null | undefined;
-  is_deleted: boolean;
-  deleted_at?: string | null | undefined;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -23,7 +24,8 @@ export type CrmUser = {
 export type CreateCrmUserInput = {
   name: string;
   email: string;
-  password_hash: string;
+  password?: string | undefined;
+  password_hash?: string | undefined;
   role: CrmUserRole;
   status: CrmUserStatus;
   avatar_url?: string | null | undefined;
@@ -35,17 +37,6 @@ export type UpdateCrmUserInput = {
   role: CrmUserRole;
   status: CrmUserStatus;
 };
-
-function generateUUID(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
 
 export function hashPasswordBcrypt(plaintext: string): string {
   try {
@@ -142,7 +133,9 @@ export async function createCrmUser(input: CreateCrmUserInput): Promise<CrmUser>
     throw new Error(`A user account with email "${input.email}" already exists.`);
   }
 
-  const hashedPassword = hashPasswordBcrypt(input.password_hash);
+  const hashedPassword =
+    input.password_hash ||
+    (input.password ? hashPasswordBcrypt(input.password) : hashPasswordBcrypt("Password@12345"));
   const now = getMySQLTimestamp();
   const userId = generateUUID();
 

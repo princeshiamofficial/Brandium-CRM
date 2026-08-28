@@ -1,9 +1,6 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
-import { supabase } from "@/integrations/supabase/client";
-import { changeProspectStage, createStage, updateStage, deleteStage } from "@/lib/stages.functions";
 import { runMySQLQuery } from "@/lib/mysql-api";
 import { generateUUID, getMySQLTimestamp } from "@/lib/mysql-client";
 
@@ -238,19 +235,7 @@ export const stagesQuery = () =>
         console.warn("stagesQuery MySQL notice:", err);
       }
 
-      try {
-        const { data, error } = await supabase
-          .from("stages")
-          .select(
-            "id, name, stage_group, sort_order, is_follow_up, is_active, color, icon, is_system",
-          )
-          .eq("is_active", true)
-          .order("sort_order", { ascending: true });
-        if (error || !data || data.length === 0) return FALLBACK_STAGES;
-        return data as Stage[];
-      } catch {
-        return FALLBACK_STAGES;
-      }
+      return FALLBACK_STAGES;
     },
   });
 
@@ -302,60 +287,8 @@ export const stageHistoryQuery = (prospectId: string) =>
         console.warn("stageHistoryQuery MySQL notice:", err);
       }
 
-      // 2. Fallback to Supabase if MySQL yielded no rows
-      if (rows.length === 0) {
-        try {
-          const { data, error } = await supabase
-            .from("prospect_stage_history")
-            .select("id, prospect_id, from_stage_id, to_stage_id, note, changed_by, changed_at")
-            .eq("prospect_id", prospectId)
-            .order("changed_at", { ascending: false });
-
-          if (!error && data) {
-            rows = data as Record<string, unknown>[];
-          }
-        } catch (err) {
-          console.warn("stageHistoryQuery Supabase notice:", err);
-        }
-      }
-
-      // Fetch stages list to resolve stage UUIDs to human names
       const stageMap = new Map<string, string>();
-      try {
-        const { data: stagesList } = await supabase.from("stages").select("id, name");
-        const list = (stagesList || []) as Array<Record<string, unknown>>;
-        list.forEach((s) => {
-          const sId = (s["id"] as string) || "";
-          const sName = (s["name"] as string) || "";
-          if (sId && sName) stageMap.set(sId, sName);
-        });
-      } catch {
-        // Ignore
-      }
-
-      // changed_by references auth.users, so names come from profiles separately
-      const actorIds = Array.from(
-        new Set(
-          rows.map((row: Record<string, unknown>) => row["changed_by"]).filter(Boolean) as string[],
-        ),
-      );
       const nameById = new Map<string, string>();
-      if (actorIds.length > 0) {
-        try {
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("id, full_name, email")
-            .in("id", actorIds);
-          for (const profile of (profiles as Record<string, unknown>[] | null) ?? []) {
-            const id = String(profile["id"] ?? "");
-            const fullName = profile["full_name"] as string | null;
-            const email = profile["email"] as string | null;
-            nameById.set(id, fullName || email || "Unknown");
-          }
-        } catch {
-          // Ignore
-        }
-      }
 
       const rawEntries = rows.map((row: Record<string, unknown>) => {
         const fromStageId = (row["from_stage_id"] as string) ?? null;
@@ -437,7 +370,6 @@ export const stageBadgeClass = (group?: string | null) => {
 /** Shared mutation wrapper around the stage engine server function. */
 export function useChangeProspectStage() {
   const queryClient = useQueryClient();
-  const changeStage = useServerFn(changeProspectStage);
 
   return useMutation({
     mutationFn: async (input: {
@@ -446,25 +378,7 @@ export function useChangeProspectStage() {
       note?: string;
       stageName?: string;
     }) => {
-      const isValidUuid = (val: string) =>
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
-
-      if (isValidUuid(input.prospectId) && isValidUuid(input.stageId)) {
-        try {
-          const res = await changeStage({
-            data: {
-              prospectId: input.prospectId,
-              stageId: input.stageId,
-              ...(input.note ? { note: input.note } : {}),
-            },
-          });
-          if (res) return res;
-        } catch (err) {
-          console.warn("Server changeProspectStage notice, applying direct update fallback:", err);
-        }
-      }
-
-      // Direct MySQL & Supabase sync
+      // Direct MySQL sync
       let resolvedStageName =
         input.stageName || formatStageSlugOrName(input.stageId) || "Stage Update";
       let realStageId: string = input.stageId;
@@ -528,24 +442,6 @@ export function useChangeProspectStage() {
           );
         } catch (err) {
           console.warn("Direct MySQL stage update notice:", err);
-        }
-
-        // Also try Supabase update if cloud Supabase is active
-        try {
-          const updatePayload: Record<string, unknown> = {
-            updated_at: getMySQLTimestamp(),
-            stage_name: resolvedStageName,
-            stage_id: realStageId,
-          };
-          await supabase.from("prospects").update(updatePayload).eq("id", input.prospectId);
-          await supabase.from("prospect_stage_history").insert({
-            prospect_id: input.prospectId,
-            to_stage_id: realStageId,
-            note: input.note || null,
-            changed_at: getMySQLTimestamp(),
-          });
-        } catch {
-          // ignore
         }
       }
 
@@ -617,21 +513,6 @@ export const stageManagementSummaryQuery = () =>
         console.warn("stageManagementSummaryQuery MySQL notice:", err);
       }
 
-      // 2. Fallback to Supabase RPC
-      try {
-        const { data, error } = await supabase.rpc("get_stage_management_summary");
-        if (!error && data) {
-          return data as {
-            total_prospects: number;
-            active_stages: number;
-            follow_up_prospects: number;
-            top_stage: string | null;
-          };
-        }
-      } catch {
-        // ignore
-      }
-
       return {
         total_prospects: 0,
         active_stages: FALLBACK_STAGES.length,
@@ -689,17 +570,6 @@ export const stagesWithCountsQuery = () =>
         console.warn("stagesWithCountsQuery MySQL notice:", err);
       }
 
-      // 2. Fallback to Supabase RPC
-      try {
-        const { data, error } = await supabase.rpc("get_stages_with_counts");
-        const rpcData = data as unknown as unknown[];
-        if (!error && rpcData && Array.isArray(rpcData) && rpcData.length > 0) {
-          return rpcData as (Stage & { prospect_count: number; prospect_percentage: number })[];
-        }
-      } catch {
-        // ignore
-      }
-
       return FALLBACK_STAGES.map((stg) => ({
         ...stg,
         prospect_count: 0,
@@ -710,7 +580,6 @@ export const stagesWithCountsQuery = () =>
 
 export function useCreateStage() {
   const queryClient = useQueryClient();
-  const createStageFn = useServerFn(createStage);
 
   return useMutation({
     mutationFn: async (input: {
@@ -722,28 +591,19 @@ export function useCreateStage() {
       icon?: string | null;
     }) => {
       const newId = generateUUID();
-      try {
-        await runMySQLQuery(
-          `INSERT INTO \`stages\` (\`id\`, \`name\`, \`stage_group\`, \`sort_order\`, \`is_follow_up\`, \`color\`, \`icon\`, \`is_active\`)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 1);`,
-          [
-            newId,
-            input.name,
-            input.stage_group,
-            input.sort_order,
-            input.is_follow_up ? 1 : 0,
-            input.color || null,
-            input.icon || null,
-          ],
-        );
-      } catch (err) {
-        console.warn("Direct MySQL stage creation notice:", err);
-      }
-      try {
-        await createStageFn({ data: input });
-      } catch {
-        // ignore
-      }
+      await runMySQLQuery(
+        `INSERT INTO \`stages\` (\`id\`, \`name\`, \`stage_group\`, \`sort_order\`, \`is_follow_up\`, \`color\`, \`icon\`, \`is_active\`)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1);`,
+        [
+          newId,
+          input.name,
+          input.stage_group,
+          input.sort_order,
+          input.is_follow_up ? 1 : 0,
+          input.color || null,
+          input.icon || null,
+        ],
+      );
       return { id: newId, name: input.name };
     },
     onSuccess: () => {
@@ -760,7 +620,6 @@ export function useCreateStage() {
 
 export function useUpdateStage() {
   const queryClient = useQueryClient();
-  const updateStageFn = useServerFn(updateStage);
 
   return useMutation({
     mutationFn: async (input: {
@@ -773,52 +632,43 @@ export function useUpdateStage() {
       color?: string | null;
       icon?: string | null;
     }) => {
-      try {
-        const fields: string[] = [];
-        const values: unknown[] = [];
-        if (input.name !== undefined) {
-          fields.push("`name` = ?");
-          values.push(input.name);
-        }
-        if (input.stage_group !== undefined) {
-          fields.push("`stage_group` = ?");
-          values.push(input.stage_group);
-        }
-        if (input.sort_order !== undefined) {
-          fields.push("`sort_order` = ?");
-          values.push(input.sort_order);
-        }
-        if (input.is_follow_up !== undefined) {
-          fields.push("`is_follow_up` = ?");
-          values.push(input.is_follow_up ? 1 : 0);
-        }
-        if (input.is_active !== undefined) {
-          fields.push("`is_active` = ?");
-          values.push(input.is_active ? 1 : 0);
-        }
-        if (input.color !== undefined) {
-          fields.push("`color` = ?");
-          values.push(input.color);
-        }
-        if (input.icon !== undefined) {
-          fields.push("`icon` = ?");
-          values.push(input.icon);
-        }
-
-        if (fields.length > 0) {
-          values.push(input.id);
-          await runMySQLQuery(
-            `UPDATE \`stages\` SET ${fields.join(", ")}, \`updated_at\` = NOW() WHERE \`id\` = ?;`,
-            values,
-          );
-        }
-      } catch (err) {
-        console.warn("Direct MySQL stage update notice:", err);
+      const fields: string[] = [];
+      const values: unknown[] = [];
+      if (input.name !== undefined) {
+        fields.push("`name` = ?");
+        values.push(input.name);
       }
-      try {
-        await updateStageFn({ data: input });
-      } catch {
-        // ignore
+      if (input.stage_group !== undefined) {
+        fields.push("`stage_group` = ?");
+        values.push(input.stage_group);
+      }
+      if (input.sort_order !== undefined) {
+        fields.push("`sort_order` = ?");
+        values.push(input.sort_order);
+      }
+      if (input.is_follow_up !== undefined) {
+        fields.push("`is_follow_up` = ?");
+        values.push(input.is_follow_up ? 1 : 0);
+      }
+      if (input.is_active !== undefined) {
+        fields.push("`is_active` = ?");
+        values.push(input.is_active ? 1 : 0);
+      }
+      if (input.color !== undefined) {
+        fields.push("`color` = ?");
+        values.push(input.color);
+      }
+      if (input.icon !== undefined) {
+        fields.push("`icon` = ?");
+        values.push(input.icon);
+      }
+
+      if (fields.length > 0) {
+        values.push(input.id);
+        await runMySQLQuery(
+          `UPDATE \`stages\` SET ${fields.join(", ")}, \`updated_at\` = NOW() WHERE \`id\` = ?;`,
+          values,
+        );
       }
       return { success: true };
     },
@@ -840,28 +690,10 @@ export function useUpdateStage() {
 
 export function useDeleteStage() {
   const queryClient = useQueryClient();
-  const deleteStageFn = useServerFn(deleteStage);
 
   return useMutation({
     mutationFn: async (stageId: string) => {
-      try {
-        await runMySQLQuery(`DELETE FROM \`stages\` WHERE \`id\` = ?;`, [stageId]);
-      } catch (err) {
-        console.warn("Direct MySQL stage delete notice:", err);
-      }
-      try {
-        const res = await deleteStageFn({ data: { id: stageId } });
-        if (res) return res;
-      } catch (err) {
-        console.warn("Server deleteStage notice, trying direct client delete:", err);
-      }
-
-      // Direct fallback delete from stages table
-      const { error } = await supabase.from("stages").delete().eq("id", stageId);
-      if (error) {
-        // If foreign key constraint or system stage, deactivate it instead
-        await supabase.from("stages").update({ is_active: false }).eq("id", stageId);
-      }
+      await runMySQLQuery(`DELETE FROM \`stages\` WHERE \`id\` = ?;`, [stageId]);
       return { success: true };
     },
     onSuccess: () => {
@@ -887,54 +719,21 @@ export async function deleteStageHistoryEntry(
   if (!historyId) return false;
 
   try {
-    const { error } = await supabase.from("prospect_stage_history").delete().eq("id", historyId);
-    if (error && !isNaN(Number(historyId))) {
-      await supabase.from("prospect_stage_history").delete().eq("id", Number(historyId));
+    await runMySQLQuery("DELETE FROM `prospect_stage_history` WHERE `id` = ?;", [historyId]);
+
+    if (prospectId) {
+      const res = await runMySQLQuery<Record<string, unknown>[]>(
+        "SELECT to_stage_id FROM `prospect_stage_history` WHERE `prospect_id` = ? ORDER BY `changed_at` DESC LIMIT 1;",
+        [prospectId],
+      );
+      const latestStageId = String(res.data?.[0]?.["to_stage_id"] || "prospect");
+      await runMySQLQuery(
+        "UPDATE `prospects` SET `stage_id` = ?, `updated_at` = ? WHERE `id` = ?;",
+        [latestStageId, getMySQLTimestamp(), prospectId],
+      );
     }
   } catch (err) {
     console.warn("deleteStageHistoryEntry notice:", err);
-  }
-
-  // Update prospect's current stage to latest remaining history stage if needed
-  if (prospectId) {
-    try {
-      const { data: remaining } = await supabase
-        .from("prospect_stage_history")
-        .select("to_stage_id, changed_at")
-        .eq("prospect_id", prospectId)
-        .order("changed_at", { ascending: false })
-        .limit(1);
-
-      const remList = (remaining || []) as Array<Record<string, unknown>>;
-      const firstRem = remList[0];
-      if (firstRem && firstRem["to_stage_id"]) {
-        const latestStageId = String(firstRem["to_stage_id"]);
-        const { data: stg } = await supabase
-          .from("stages")
-          .select("name")
-          .eq("id", latestStageId)
-          .maybeSingle();
-        const stgObj = stg as Record<string, unknown> | null;
-        await supabase
-          .from("prospects")
-          .update({
-            stage_id: latestStageId,
-            stage_name: (stgObj?.["name"] as string) || "Prospect",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", prospectId);
-      } else {
-        await supabase
-          .from("prospects")
-          .update({
-            stage_name: "Prospect",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", prospectId);
-      }
-    } catch {
-      // Ignore
-    }
   }
 
   return true;

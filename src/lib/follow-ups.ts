@@ -2,7 +2,6 @@ import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query
 import { format } from "date-fns";
 import { z } from "zod";
 
-import { supabase } from "@/integrations/supabase/client";
 import { fetchCrmUsers } from "@/lib/admin-users";
 import { runMySQLQuery } from "@/lib/mysql-api";
 import { generateUUID, getMySQLTimestamp } from "@/lib/mysql-client";
@@ -520,20 +519,6 @@ export function useCreateFollowUp() {
             now,
           ],
         );
-
-        // Cloud Supabase fallback update if active
-        try {
-          await supabase
-            .from("prospects")
-            .update({
-              stage_id: followUpStageId,
-              stage_name: "Follow-up",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", input.prospect_id);
-        } catch {
-          // ignore
-        }
       } catch (err) {
         console.warn("useCreateFollowUp MySQL notice:", err);
       }

@@ -1,7 +1,8 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "./server-fn";
 import mysql from "mysql2/promise";
 import { ensureMySQLTablesExist } from "./auth.functions";
-import { generateUUID, getMySQLTimestamp, createSingleMySQLConnection } from "./mysql-client";
+import { generateUUID, getMySQLTimestamp } from "./mysql-client";
+import { createSingleMySQLConnection } from "./mysql-server";
 import { resolveStageColor, resolveStageIcon, isSystemStage, type Stage } from "./stages";
 
 export type CrmProjectItem = {

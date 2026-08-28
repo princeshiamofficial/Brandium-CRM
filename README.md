@@ -1,65 +1,49 @@
 # Brandium CRM
 
-This project is Brandium CRM.
+Brandium CRM is a full-featured Customer Relationship Management web application built with **Next.js 15 App Router**, **React 19**, **Tailwind CSS**, and **MySQL**.
 
-## Build with Lovable
+## Technology Stack
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript
+- **UI & Components**: Tailwind CSS, Radix UI, Lucide Icons
+- **Database**: Local MySQL (`brandium_crm`) via dedicated server API route handlers
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+## Getting Started
 
-## Development
+### Prerequisites
 
-Prefer working locally? You need Node.js and npm â€” [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+- Node.js (v18.17+ or v20+)
+- MySQL (Running on port 3306 with database `brandium_crm`)
+
+### Installation
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+npm install
 npm run dev
 ```
 
-## Built with
+The application will be accessible at `http://localhost:3000`.
 
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
+### Environment Configuration
 
-## Production Readiness
+Create a `.env` file in the root directory:
 
-Brandium CRM now expects all persistent CRM data to flow through server-side MySQL access. Browser-visible `VITE_*` variables may describe non-secret host/database hints, but the database password is read only from server-side `MYSQL_PASSWORD`.
-
-### Environment
-
-Create server-side environment variables before running the app:
-
-```sh
+```env
 MYSQL_HOST=127.0.0.1
 MYSQL_PORT=3306
 MYSQL_USER=root
 MYSQL_PASSWORD=
 MYSQL_DATABASE=brandium_crm
 MYSQL_CONNECTION_LIMIT=20
+MYSQL_TIMEZONE=+06:00
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-For local migration compatibility only, the legacy raw SQL bridge can be enabled with:
+### Scripts
 
-```sh
-ENABLE_DEV_SQL_API=true
-npm run dev
-```
-
-Do not enable `ENABLE_DEV_SQL_API` in production. Production code should use TanStack Start server functions, which validate inputs and keep database credentials on the server.
-
-### Verification
-
-Run the full local quality gate before shipping:
-
-```sh
-npm run check
-```
-
-The local dev server exposes a database health probe at `/api/health` so deployments can verify MySQL connectivity without exposing secrets.
+- `npm run dev`: Start Next.js development server
+- `npm run build`: Build production application
+- `npm run start`: Start production server
+- `npm run typecheck`: Run TypeScript type verification
+- `npm run lint`: Run ESLint checks

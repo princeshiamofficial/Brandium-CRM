@@ -1,11 +1,7 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "./server-fn";
 import mysql from "mysql2/promise";
-import {
-  getMySQLConfig,
-  generateUUID,
-  getMySQLTimestamp,
-  createSingleMySQLConnection,
-} from "./mysql-client";
+import { getMySQLConfig, generateUUID, getMySQLTimestamp } from "./mysql-client";
+import { createSingleMySQLConnection } from "./mysql-server";
 import { ensureMySQLTablesExist } from "./auth.functions";
 
 async function getMySQLConn() {
