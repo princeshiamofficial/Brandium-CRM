@@ -176,10 +176,7 @@ Welcome to the **Brandium CRM** repository.
   - In `EditProspectDialog`, pass `prospect` directly as a prop in addition to `prospectId` and mount with `key={editProspect?.id || "none"}`. This guarantees instant 0ms pre-fill of `service_id`, `assigned_artist_id`, and `assigned_to` in Radix UI Select components without async state flash or placeholder fallbacks.
 
 - **Agent and Artist Dropdown Role Filtering**:
-  - `fetchAgentOptions` must strictly filter users with `LOWER(u.role) = 'agent'` (or profile `role = 'agent'`), and `fetchArtistOptions` must strictly filter users with `LOWER(u.role) = 'artist'` (or profile `role = 'artist'`) so that only users with matching roles appear in their respective dropdowns across Add and Edit Prospect dialogs.
-
-
-- **Agent and Artist Dropdown Role Filtering**:
-  - `fetchAgentOptions` must strictly filter users with `LOWER(u.role) = 'agent'` (or profile role = 'agent'), and `fetchArtistOptions` must strictly filter users with `LOWER(u.role) = 'artist'` (or profile role = 'artist') so that only users with the specific matching role appear in their respective dropdowns across Add and Edit Prospect dialogs.
+  - `fetchAgentOptions` must filter users with `LOWER(u.role) IN ('agent', 'admin')`, and `fetchArtistOptions` must filter users with `LOWER(u.role) = 'artist'`.
+  - Always use `u.role` from table `users` (never `p.role` on `profiles`) as the `profiles` table schema only stores `id`, `full_name`, `email`, and `avatar_url`.
 
 
