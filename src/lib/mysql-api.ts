@@ -66,4 +66,3 @@ export async function fetchDbUUID(): Promise<string> {
     return v.toString(16);
   });
 }
-

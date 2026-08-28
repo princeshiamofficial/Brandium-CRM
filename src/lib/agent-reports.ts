@@ -41,8 +41,7 @@ export type AgentReportsData = {
 };
 
 export async function fetchAgentReports(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  period: AgentReportPeriod = "overview",
+  _period: AgentReportPeriod = "overview",
 ): Promise<AgentReportsData> {
   try {
     const usersRes = await runMySQLQuery<Record<string, unknown>[]>(
