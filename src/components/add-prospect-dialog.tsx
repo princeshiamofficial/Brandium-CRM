@@ -456,7 +456,7 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
                   <SelectValue placeholder="Assign Agent" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800">
-                  <SelectItem value="none">Assign to Me</SelectItem>
+                  <SelectItem value="none">Unassigned</SelectItem>
                   {agents.map((ag) => (
                     <SelectItem key={ag.id} value={ag.id}>
                       {ag.name}
