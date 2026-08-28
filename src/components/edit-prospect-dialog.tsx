@@ -121,13 +121,10 @@ export function EditProspectDialog({
       const result = await checkDuplicateProspectPhone(rawNumber, currentId);
       if (result.isDuplicate && result.match) {
         setDuplicateMatch(result);
-        toast.error(
-          `This phone number already exists! (Registered for ${result.match.contact_name} - ${result.match.stage_name})`,
-          {
-            id: "dup-edit-phone-toast",
-            duration: 5000,
-          },
-        );
+        toast.error("This phone number already exists!", {
+          id: "dup-edit-phone-toast",
+          duration: 4000,
+        });
       } else {
         setDuplicateMatch(null);
         toast.dismiss("dup-edit-phone-toast");
@@ -395,9 +392,9 @@ export function EditProspectDialog({
       const dupCheck = await checkDuplicateProspectPhone(rawNumber, currentId);
       if (dupCheck.isDuplicate && dupCheck.match) {
         setDuplicateMatch(dupCheck);
-        toast.error(
-          `Duplicate phone number blocked! Already assigned to ${dupCheck.match.contact_name} (Stage: ${dupCheck.match.stage_name}).`,
-        );
+        toast.error("This phone number already exists!", {
+          id: "dup-edit-phone-toast",
+        });
         return;
       }
     }

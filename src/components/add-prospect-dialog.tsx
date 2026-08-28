@@ -104,13 +104,10 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
       const result = await checkDuplicateProspectPhone(rawNumber);
       if (result.isDuplicate && result.match) {
         setDuplicateMatch(result);
-        toast.error(
-          `This phone number already exists! (Registered for ${result.match.contact_name} - ${result.match.stage_name})`,
-          {
-            id: "dup-phone-toast",
-            duration: 5000,
-          },
-        );
+        toast.error("This phone number already exists!", {
+          id: "dup-phone-toast",
+          duration: 4000,
+        });
       } else {
         setDuplicateMatch(null);
         toast.dismiss("dup-phone-toast");
@@ -212,9 +209,9 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
       const dupCheck = await checkDuplicateProspectPhone(rawNumber);
       if (dupCheck.isDuplicate && dupCheck.match) {
         setDuplicateMatch(dupCheck);
-        toast.error(
-          `Duplicate phone number blocked! Already assigned to ${dupCheck.match.contact_name} (Stage: ${dupCheck.match.stage_name}).`,
-        );
+        toast.error("This phone number already exists!", {
+          id: "dup-phone-toast",
+        });
         return;
       }
     }

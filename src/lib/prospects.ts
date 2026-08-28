@@ -407,9 +407,7 @@ export async function createProspect(input: CreateProspectInput): Promise<Prospe
   if (rawPhone && rawPhone.length >= 6) {
     const dupCheck = await checkDuplicateProspectPhone(rawPhone);
     if (dupCheck.isDuplicate && dupCheck.match) {
-      throw new Error(
-        `Duplicate phone number! This number is already assigned to ${dupCheck.match.contact_name} (Stage: ${dupCheck.match.stage_name}).`,
-      );
+      throw new Error("This phone number already exists!");
     }
   }
 
@@ -515,9 +513,7 @@ export async function updateProspect(
   if (rawPhone && rawPhone.length >= 6) {
     const dupCheck = await checkDuplicateProspectPhone(rawPhone, prospectId);
     if (dupCheck.isDuplicate && dupCheck.match) {
-      throw new Error(
-        `Duplicate phone number! This number is already assigned to ${dupCheck.match.contact_name} (Stage: ${dupCheck.match.stage_name}).`,
-      );
+      throw new Error("This phone number already exists!");
     }
   }
 
