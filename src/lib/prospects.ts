@@ -544,3 +544,83 @@ export async function updateProspect(
   await runMySQLQuery(updateSql, updateParams);
   return true;
 }
+
+export type DuplicatePhoneMatch = {
+  isDuplicate: boolean;
+  match?: {
+    id: string;
+    contact_name: string;
+    business_name: string | null;
+    phone: string;
+    stage_name: string;
+    assigned_agent_name: string;
+    created_at: string;
+  };
+};
+
+export async function checkDuplicateProspectPhone(
+  rawPhone: string,
+  excludeProspectId?: string,
+): Promise<DuplicatePhoneMatch> {
+  if (!rawPhone || typeof rawPhone !== "string") {
+    return { isDuplicate: false };
+  }
+
+  const cleanDigits = rawPhone.replace(/\D/g, "");
+  if (cleanDigits.length < 6) {
+    return { isDuplicate: false };
+  }
+
+  // Extract core subscriber digits (last 9 digits) to match regardless of country codes or local prefixes
+  const lastDigits = cleanDigits.slice(-9);
+
+  try {
+    let sql = `
+      SELECT 
+        p.id, p.contact_name, p.business_name, p.phone, p.alternative_phone,
+        COALESCE(st.name, p.stage_id, 'Prospect') AS stage_name,
+        COALESCE(prof_agent.full_name, u_agent.name, 'Unassigned') AS assigned_agent_name,
+        p.created_at
+      FROM \`prospects\` p
+      LEFT JOIN \`stages\` st ON (p.stage_id = st.id OR p.stage_id = REPLACE(st.id, '-', '_') OR p.stage_id = st.name)
+      LEFT JOIN \`users\` u_agent ON p.assigned_to = u_agent.id
+      LEFT JOIN \`profiles\` prof_agent ON p.assigned_to = prof_agent.id
+      WHERE p.is_active = 1
+        AND (
+          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(p.phone, ''), ' ', ''), '-', ''), '+', ''), '(', ''), ')', '') LIKE ?
+          OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(p.alternative_phone, ''), ' ', ''), '-', ''), '+', ''), '(', ''), ')', '') LIKE ?
+        )
+    `;
+    const params: unknown[] = [`%${lastDigits}%`, `%${lastDigits}%`];
+
+    if (excludeProspectId && excludeProspectId !== "none") {
+      sql += " AND p.id != ?";
+      params.push(excludeProspectId);
+    }
+
+    sql += " LIMIT 1;";
+
+    const res = await runMySQLQuery<Record<string, unknown>[]>(sql, params);
+    if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      const match = res.data[0];
+      if (match) {
+        return {
+          isDuplicate: true,
+          match: {
+            id: String(match["id"]),
+            contact_name: String(match["contact_name"] || "Unknown"),
+            business_name: (match["business_name"] as string) || null,
+            phone: String(match["phone"] || match["alternative_phone"] || ""),
+            stage_name: String(match["stage_name"] || "Prospect"),
+            assigned_agent_name: String(match["assigned_agent_name"] || "Unassigned"),
+            created_at: String(match["created_at"] || ""),
+          },
+        };
+      }
+    }
+    return { isDuplicate: false };
+  } catch (err) {
+    console.warn("checkDuplicateProspectPhone error:", err);
+    return { isDuplicate: false };
+  }
+}

@@ -18,6 +18,7 @@ import {
   Image as ImageIcon,
   Upload,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 import {
@@ -39,7 +40,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createProspect, CreateProspectInput } from "@/lib/prospects";
+import {
+  createProspect,
+  CreateProspectInput,
+  checkDuplicateProspectPhone,
+  type DuplicatePhoneMatch,
+} from "@/lib/prospects";
 import { stagesQuery } from "@/lib/stages";
 import { servicesQueryOptions } from "@/lib/services";
 import { agentOptionsQueryOptions, artistOptionsQueryOptions } from "@/lib/won-sales";
@@ -77,11 +83,29 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [duplicateMatch, setDuplicateMatch] = useState<DuplicatePhoneMatch | null>(null);
+
   // Synchronize previewUrl and clear errors whenever logoUrl is updated
   useEffect(() => {
     setPreviewUrl(logoUrl);
     setImgError(false);
   }, [logoUrl]);
+
+  // Debounced real-time duplicate phone number check
+  useEffect(() => {
+    const rawNumber = (phone || altPhone).trim();
+    if (!rawNumber || rawNumber.length < 6) {
+      setDuplicateMatch(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const result = await checkDuplicateProspectPhone(rawNumber);
+      setDuplicateMatch(result.isDuplicate ? result : null);
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [phone, altPhone]);
 
   // Queries for dropdown options
   const { data: rawStages = [] } = useQuery(stagesQuery());
@@ -144,6 +168,7 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
     setArtist("none");
     setAssignedTo(isCurrentUserAgent && user?.id ? user.id : "none");
     setNotes("");
+    setDuplicateMatch(null);
   };
 
   const createMutation = useMutation({
@@ -285,6 +310,35 @@ export function AddProspectDialog({ open, onOpenChange, onSuccess }: AddProspect
                 className="h-10 bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-semibold rounded-xl focus:bg-white dark:focus:bg-card transition-all"
               />
             </div>
+
+            {/* Real-time Duplicate Phone Detection Alert */}
+            {duplicateMatch?.isDuplicate && duplicateMatch.match && (
+              <div className="sm:col-span-2 p-3 rounded-xl bg-amber-50/95 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/70 flex items-start gap-2.5 text-amber-900 dark:text-amber-200 text-xs shadow-2xs animate-in fade-in slide-in-from-top-1 duration-200">
+                <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-bold text-amber-950 dark:text-amber-200">
+                      ⚠️ Duplicate Phone Detected:
+                    </span>
+                    <span>Already registered for</span>
+                    <span className="font-bold text-slate-900 dark:text-white underline decoration-amber-400">
+                      {duplicateMatch.match.contact_name}
+                      {duplicateMatch.match.business_name
+                        ? ` (${duplicateMatch.match.business_name})`
+                        : ""}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap text-[11px] text-amber-800 dark:text-amber-300 pt-0.5">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-200/70 dark:bg-amber-900/60 font-medium">
+                      Stage: {duplicateMatch.match.stage_name}
+                    </span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-200/70 dark:bg-slate-800 font-medium text-slate-800 dark:text-slate-200">
+                      Agent: {duplicateMatch.match.assigned_agent_name}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Email */}
             <div className="space-y-1.5">
