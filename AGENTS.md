@@ -182,4 +182,13 @@ Welcome to the **Brandium CRM** repository.
 - **Next.js App Router Dynamic Runtime Upload Serving (`/uploads/[filename]` Route Handler)**:
   - In Next.js production mode (`next start`), files written to `public/uploads/` dynamically after `next build` are not included in Next.js's static build manifest and return 404 by default. Always create an App Router Route Handler at `src/app/uploads/[filename]/route.ts` that streams dynamic binary image files directly from the disk filesystem (`public/uploads`) with appropriate `Content-Type` and cache headers.
 
+- **Next.js App Router Dynamic Runtime Upload Serving (`/uploads/[filename]` Route Handler)**:
+  - In Next.js production mode (`next start`), files written to `public/uploads/` dynamically after `next build` are not included in Next.js's static build manifest and return 404 by default. Always create an App Router Route Handler at `src/app/uploads/[filename]/route.ts` that streams dynamic binary image files directly from the disk filesystem (`public/uploads`) with appropriate `Content-Type` and cache headers.
+
+- **Dashboard Prospect List Service Relational Join & ScrollArea**:
+  - In `src/lib/dashboard.ts`, `recentProspectsQuery` must explicitly `LEFT JOIN \`services\` srv ON (p.service_id = srv.id OR p.service_id = srv.name)` and select `COALESCE(srv.name, p.service_id) AS service_name` so service names populate rather than displaying `"No service"`.
+  - In `src/app/(authenticated)/dashboard/page.tsx`, wrap category prospect column lists inside Radix `<ScrollArea className="h-[500px] pr-2.5">` to show 10 items comfortably per column with smooth vertical scrolling for overflow items.
+
+
+
 

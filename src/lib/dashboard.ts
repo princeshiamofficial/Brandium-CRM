@@ -241,9 +241,15 @@ export const recentProspectsQuery = (
       let all: Record<string, unknown>[] = [];
       try {
         const sql = `
-          SELECT p.*, COALESCE(s.name, p.stage_id, 'Prospect') AS stage_name, s.stage_group, s.is_follow_up
-          FROM prospects p
-          LEFT JOIN stages s ON (p.stage_id = s.id OR p.stage_id = REPLACE(s.id, '-', '_') OR p.stage_id = s.name)
+          SELECT 
+            p.*, 
+            COALESCE(srv.name, p.service_id) AS service_name,
+            COALESCE(s.name, p.stage_id, 'Prospect') AS stage_name, 
+            s.stage_group, 
+            s.is_follow_up
+          FROM \`prospects\` p
+          LEFT JOIN \`services\` srv ON (p.service_id = srv.id OR p.service_id = srv.name)
+          LEFT JOIN \`stages\` s ON (p.stage_id = s.id OR p.stage_id = REPLACE(s.id, '-', '_') OR p.stage_id = s.name)
           WHERE p.is_active = 1
           ORDER BY p.created_at DESC;
         `;
@@ -277,18 +283,28 @@ export const recentProspectsQuery = (
         all = all.filter((p) => filterByDateRange(p["created_at"] as string, dateRange));
       }
 
-      return all.slice(0, 50).map((p) => {
+      return all.map((p) => {
         const sName = String((p["stage_name"] as string) || "Prospect").toLowerCase();
         let group = "in_progress";
         if (sName.includes("won") || sName.includes("sales won")) group = "won";
         else if (sName.includes("prospect")) group = "new";
         else if (sName.includes("lost")) group = "lost";
 
+        const rawServiceName = (p["service_name"] as string) || (p["service_id"] as string) || null;
+        const cleanServiceName =
+          rawServiceName &&
+          rawServiceName.trim() !== "" &&
+          rawServiceName.toLowerCase() !== "null" &&
+          rawServiceName.toLowerCase() !== "undefined" &&
+          rawServiceName !== "N/A"
+            ? rawServiceName.trim()
+            : null;
+
         return {
           id: String(p["id"]),
           contact_name: String(p["contact_name"] || "N/A"),
           business_name: (p["business_name"] as string) || null,
-          service_name: (p["service_name"] as string) || null,
+          service_name: cleanServiceName,
           stage_name: (p["stage_name"] as string) || "Prospect",
           stage_group: (p["stage_group"] as string) || group,
           created_at: String(p["created_at"] || new Date().toISOString()),

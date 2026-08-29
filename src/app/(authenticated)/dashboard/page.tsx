@@ -16,6 +16,7 @@ import {
 import { DashboardGreetingBanner } from "@/components/dashboard-greeting-banner";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 import {
@@ -217,27 +218,29 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   ) : (
-                    <ul className="mt-1 divide-y divide-slate-200/50 dark:divide-slate-800/50">
-                      {cat.items.map((p) => (
-                        <li key={p.id} className="flex items-center justify-between gap-2 py-2.5">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">
-                              {p.business_name || p.contact_name}
-                            </p>
-                            <p className="truncate text-[11px] font-medium text-slate-700 dark:text-slate-300">
-                              {p.business_name ? `${p.contact_name} · ` : ""}
-                              {p.service_name ?? "No service"}
-                            </p>
-                          </div>
-                          <Badge
-                            variant={stageBadgeVariant(p.stage_group)}
-                            className="shrink-0 text-[10px] font-semibold rounded-full px-2 py-0.5"
-                          >
-                            {p.stage_name ?? "Unassigned"}
-                          </Badge>
-                        </li>
-                      ))}
-                    </ul>
+                    <ScrollArea className="h-[500px] pr-2.5">
+                      <ul className="mt-1 divide-y divide-slate-200/50 dark:divide-slate-800/50">
+                        {cat.items.map((p) => (
+                          <li key={p.id} className="flex items-center justify-between gap-2 py-2.5">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">
+                                {p.business_name || p.contact_name}
+                              </p>
+                              <p className="truncate text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                                {p.business_name ? `${p.contact_name} · ` : ""}
+                                {p.service_name ?? "No service"}
+                              </p>
+                            </div>
+                            <Badge
+                              variant={stageBadgeVariant(p.stage_group)}
+                              className="shrink-0 text-[10px] font-semibold rounded-full px-2 py-0.5"
+                            >
+                              {p.stage_name ?? "Unassigned"}
+                            </Badge>
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
                   )}
                 </div>
               </div>
