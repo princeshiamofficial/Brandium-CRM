@@ -55,7 +55,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { useAuth } from "@/lib/auth";
-import { formatCrmDate, formatCrmTime } from "@/lib/mysql-client";
+import { formatCrmDate, formatCrmTime, formatCrmDateTime } from "@/lib/mysql-client";
 import { agentsQuery } from "@/lib/follow-ups";
 import { servicesQueryOptions } from "@/lib/services";
 import {
@@ -518,6 +518,7 @@ function ProspectsPageContent() {
               <div className="space-y-2">
                 <Skeleton className="h-3.5 w-full" />
                 <Skeleton className="h-3.5 w-3/4" />
+                <Skeleton className="h-3.5 w-2/3" />
                 <Skeleton className="h-3.5 w-1/2" />
               </div>
               <div className="flex gap-2">
@@ -706,6 +707,10 @@ function ProspectsPageContent() {
                     <div className="flex items-center gap-2 truncate">
                       <MapPin className="size-3.5 text-slate-800 dark:text-slate-200 shrink-0" />
                       <span className="truncate">{prospectLocation}</span>
+                    </div>
+                    <div className="flex items-center gap-2 truncate">
+                      <CalendarIcon className="size-3.5 text-slate-800 dark:text-slate-200 shrink-0" />
+                      <span className="truncate">{formatCrmDateTime(p.created_at)}</span>
                     </div>
 
                     {/* Soft Badges row */}
