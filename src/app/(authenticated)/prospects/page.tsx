@@ -21,6 +21,14 @@ import {
   TrendingUp,
   CalendarIcon,
   RefreshCw,
+  Mail,
+  MapPin,
+  PhoneCall,
+  MessageSquare,
+  Globe,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
   type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect, useRef, Suspense } from "react";
@@ -56,6 +64,8 @@ import {
   deleteProspect,
   getProspectArtistName,
   getProspectAgentName,
+  getProspectCreatorName,
+  getProspectCreatorAvatar,
   type Prospect,
   type ProspectFilters,
 } from "@/lib/prospects";
@@ -146,7 +156,10 @@ function StatCard({
 
 function ProspectsPageContent() {
   const { user, isAdmin } = useAuth();
-  const [searchParams, setSearchParams] = useAppFilters<ProspectFilters>({ page: 1 });
+  const [searchParams, setSearchParams] = useAppFilters<ProspectFilters>({
+    page: 1,
+    pageSize: 12,
+  });
 
   const [searchTerm, setSearchTerm] = useState(searchParams.search || "");
   const [debouncedSearch] = useDebounce(searchTerm, 500);
@@ -215,6 +228,13 @@ function ProspectsPageContent() {
   const stages = useQuery(stagesQuery());
   const agents = useQuery(agentsQuery());
   const services = useQuery(servicesQueryOptions());
+
+  const currentPageSize = Number(searchParams.pageSize) || 12;
+  const currentPage = Number(searchParams.page) || 1;
+  const totalCount = prospects.data?.count ?? 0;
+  const pageCount = prospects.data?.pageCount ?? 1;
+  const startIndex = totalCount === 0 ? 0 : (currentPage - 1) * currentPageSize + 1;
+  const endIndex = Math.min(currentPage * currentPageSize, totalCount);
 
   const displayStages =
     stages.data && stages.data.length > 0
@@ -477,20 +497,37 @@ function ProspectsPageContent() {
           prospects
         </p>
       </div>
-
-      {/* 5-Column Prospect Cards Grid */}
+      {/* Responsive Prospect Cards Grid */}
       {prospects.isPending ? (
-        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, i) => (
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
-              className="rounded-2xl border border-slate-200/80 dark:border-border bg-white dark:bg-card p-4 shadow-2xs space-y-3"
+              className="rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-card p-5 shadow-xs space-y-4"
             >
-              <Skeleton className="h-10 w-full rounded-xl" />
-              <Skeleton className="h-6 w-3/4" />
-              <Skeleton className="h-20 w-full rounded-xl" />
-              <Skeleton className="h-9 w-full rounded-xl" />
-              <Skeleton className="h-9 w-full rounded-xl" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Skeleton className="size-10 rounded-full" />
+                  <div className="space-y-1">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+                <Skeleton className="size-8 rounded-md" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-3/4" />
+                <Skeleton className="h-3.5 w-1/2" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-6 w-16 rounded-md" />
+                <Skeleton className="h-6 w-16 rounded-md" />
+              </div>
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+                <Skeleton className="h-6 w-28 rounded-md" />
+                <Skeleton className="size-6 rounded-full" />
+              </div>
             </div>
           ))}
         </div>
@@ -499,7 +536,7 @@ function ProspectsPageContent() {
           <p className="text-sm font-medium">No prospects found matching your filters.</p>
         </div>
       ) : (
-        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {(prospects.data?.data ?? []).map((p) => {
             const stageName =
               p.stage_name ||
@@ -510,9 +547,6 @@ function ProspectsPageContent() {
               stageName,
               (pRecord["stage_color"] as string) || null,
             );
-            const iconName = resolveStageIcon(stageName, (pRecord["stage_icon"] as string) || null);
-            const IconComponent =
-              (Icons as unknown as Record<string, LucideIcon>)[iconName] || Icons.Circle;
 
             const resolvedServiceName =
               (p.service_name && p.service_name.trim() !== "" && p.service_name !== "N/A"
@@ -523,6 +557,17 @@ function ProspectsPageContent() {
               p.service_id ||
               "Graphics Design";
 
+            const creatorName = getProspectCreatorName(p);
+            const creatorAvatar = getProspectCreatorAvatar(p);
+            const agentName = getProspectAgentName(p);
+            const artistName = getProspectArtistName(p);
+            const prospectLocation =
+              p.address ||
+              (pRecord["country"] as string) ||
+              (pRecord["location"] as string) ||
+              (pRecord["city"] as string) ||
+              "Location not set";
+
             return (
               <div
                 key={p.id}
@@ -530,189 +575,269 @@ function ProspectsPageContent() {
                   setViewStageProspect(p as unknown as Prospect);
                   setViewStageOpen(true);
                 }}
-                className="group relative rounded-2xl border border-slate-200/80 dark:border-border bg-white dark:bg-card p-4 shadow-2xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between cursor-pointer select-none"
+                className="group relative rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-card p-5 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between cursor-pointer select-none"
               >
                 <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      <div className="size-10 rounded-full bg-slate-100 dark:bg-slate-800 text-orange-600 dark:text-orange-400 font-bold flex items-center justify-center shrink-0 border border-slate-200/90 dark:border-slate-700 shadow-2xs mt-0.5 overflow-hidden">
+                  {/* Top: Avatar + Name / Designation + 3-Dot Action Button */}
+                  <div className="flex items-center justify-between gap-2 mb-3.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="size-10 rounded-full shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium flex items-center justify-center border border-slate-200/80 dark:border-slate-700 overflow-hidden">
                         {p.logo_url ? (
                           <img
                             src={p.logo_url}
-                            alt={p.business_name || p.contact_name}
-                            className="size-full object-cover"
+                            alt={p.contact_name}
+                            className="size-full object-cover rounded-full"
                             onError={(e) => {
-                              const target = e.currentTarget;
-                              target.style.display = "none";
-                              if (target.parentElement) {
-                                target.parentElement.className =
-                                  "size-10 rounded-full bg-orange-100/80 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-bold flex items-center justify-center shrink-0 border border-orange-200/60 shadow-2xs mt-0.5";
-                              }
+                              e.currentTarget.style.display = "none";
                             }}
                           />
                         ) : (
-                          <div className="size-full bg-orange-100/80 dark:bg-orange-950/40 flex items-center justify-center">
-                            <User className="size-5" />
-                          </div>
+                          <span className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                            {p.contact_name ? p.contact_name.slice(0, 2).toUpperCase() : "PR"}
+                          </span>
                         )}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 leading-tight truncate group-hover:text-[#0A2E5C] transition-colors">
+                        <h6 className="text-[14px] font-semibold text-slate-900 dark:text-slate-100 leading-snug truncate group-hover:text-blue-600 transition-colors">
                           {p.contact_name}
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold truncate mt-0.5">
-                          {p.business_name
-                            ? `${p.business_name}`
-                            : p.designation || "Prospect Lead"}
+                        </h6>
+                        <p className="text-[13px] text-slate-500 dark:text-slate-400 truncate mb-0">
+                          {p.designation || "Lead / Prospect"}
                         </p>
                       </div>
                     </div>
 
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7.5 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-accent shrink-0 -mr-1 transition-colors cursor-pointer"
+                        <button
+                          type="button"
+                          className="size-7.75 rounded-[5px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700/80 shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] dark:shadow-none flex items-center justify-center shrink-0 transition-colors cursor-pointer"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <MoreVertical className="size-4" />
-                          <span className="sr-only">Open menu</span>
-                        </Button>
+                          <MoreVertical className="size-3.5" />
+                          <span className="sr-only">Actions</span>
+                        </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
                         align="end"
-                        className="w-40 rounded-xl shadow-lg border-slate-200 dark:border-slate-800"
+                        sideOffset={4}
+                        className="w-40 min-w-40 rounded-[5px] border border-slate-200 dark:border-slate-800 bg-white dark:bg-card p-1 shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] dark:shadow-none"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <DropdownMenuItem
-                          className="flex items-center gap-2 cursor-pointer font-semibold text-xs py-2"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                          className="flex items-center gap-2 cursor-pointer w-full text-[14px] font-normal leading-5.25 text-[#707070] dark:text-slate-400 focus:text-slate-900 dark:focus:text-slate-100 focus:bg-slate-50 dark:focus:bg-slate-800 rounded-[6px] px-3.75 py-[6.4px] transition-colors"
+                          onClick={() => {
                             setEditProspect(p);
                             setEditProspectId(p.id);
                             setEditProspectOpen(true);
                           }}
                         >
-                          <Pencil className="size-3.5 text-slate-600 dark:text-slate-400" />
+                          <Pencil className="size-3.5 text-[#1B84FF] shrink-0" />
                           <span>Edit</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          className="flex items-center gap-2 cursor-pointer font-semibold text-xs py-2"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setViewStageProspect(p);
-                            setViewStageOpen(true);
-                          }}
-                        >
-                          <Eye className="size-3.5 text-emerald-600" />
-                          <span>View Stage</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="flex items-center gap-2 cursor-pointer font-semibold text-xs py-2"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setStageTarget({
-                              id: p.id,
-                              label: p.business_name || p.contact_name,
-                              stageId: p.stage_id,
-                              currentStageName:
-                                p.stage_name ||
-                                ((p as Record<string, unknown>)["stage_name"] as string) ||
-                                (p.stage_id ? formatStageSlugOrName(p.stage_id) : "Prospect"),
-                            });
-                          }}
-                        >
-                          <RefreshCw className="size-3.5 text-blue-600" />
-                          <span>Update Stage</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="flex items-center gap-2 cursor-pointer font-semibold text-xs py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                          className="flex items-center gap-2 cursor-pointer w-full text-[14px] font-normal leading-5.25 text-[#707070] dark:text-slate-400 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40 rounded-[6px] px-3.75 py-[6.4px] transition-colors"
+                          onClick={() => {
                             setDeleteTarget({ id: p.id, name: p.contact_name });
                             setDeleteDialogOpen(true);
                           }}
                         >
-                          <Trash2 className="size-3.5 text-rose-500" />
+                          <Trash2 className="size-3.5 text-[#707070] dark:text-slate-400 shrink-0" />
                           <span>Delete</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center gap-2 cursor-pointer w-full text-[14px] font-normal leading-5.25 text-[#707070] dark:text-slate-400 focus:text-slate-900 dark:focus:text-slate-100 focus:bg-slate-50 dark:focus:bg-slate-800 rounded-[6px] px-3.75 py-[6.4px] transition-colors"
+                          onClick={() => {
+                            setViewStageProspect(p);
+                            setViewStageOpen(true);
+                          }}
+                        >
+                          <Eye className="size-3.5 text-[#00c5fb] shrink-0" />
+                          <span>Preview</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center gap-2 cursor-pointer w-full text-[14px] font-normal leading-5.25 text-[#707070] dark:text-slate-400 focus:text-slate-900 dark:focus:text-slate-100 focus:bg-slate-50 dark:focus:bg-slate-800 rounded-[6px] px-3.75 py-[6.4px] transition-colors"
+                          onClick={() => {
+                            setStageTarget({
+                              id: p.id,
+                              label: p.business_name || p.contact_name,
+                              stageId: p.stage_id,
+                              currentStageName: stageName,
+                            });
+                          }}
+                        >
+                          <RefreshCw className="size-3.5 text-emerald-600 shrink-0" />
+                          <span>Update Stage</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
 
-                  <div className="mt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-300 font-semibold">
-                    <div className="flex items-center gap-2">
-                      <Phone className="size-3.5 text-slate-400 shrink-0" />
-                      <span className="font-mono text-xs text-slate-800 dark:text-slate-200 truncate">
-                        {p.phone || "—"}
+                  {/* Middle: Details (Business Name, Email, Phone, Location) & Soft Badges */}
+                  <div className="space-y-2.5 text-[13px] text-slate-500 dark:text-slate-400 font-normal">
+                    {/* Business Name */}
+                    <div className="flex items-center gap-2 truncate">
+                      <Building2 className="size-3.5 text-slate-800 dark:text-slate-200 shrink-0" />
+                      <span className="truncate font-medium text-slate-700 dark:text-slate-200">
+                        {p.business_name || "—"}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="size-3.5 text-slate-400 shrink-0" />
-                      <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+
+                    <div className="flex items-center gap-2 truncate">
+                      <Mail className="size-3.5 text-slate-800 dark:text-slate-200 shrink-0" />
+                      <a
+                        href={p.email ? `mailto:${p.email}` : undefined}
+                        onClick={(e) => e.stopPropagation()}
+                        className={`truncate ${p.email ? "hover:text-blue-600 hover:underline" : "text-slate-400 dark:text-slate-500"}`}
+                      >
+                        {p.email || "No email"}
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2 truncate">
+                      <Phone className="size-3.5 text-slate-800 dark:text-slate-200 shrink-0" />
+                      <a
+                        href={p.phone ? `tel:${p.phone}` : undefined}
+                        onClick={(e) => e.stopPropagation()}
+                        className={`truncate ${p.phone ? "hover:text-blue-600 hover:underline" : "text-slate-400 dark:text-slate-500"}`}
+                      >
+                        {p.phone || "No phone"}
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2 truncate">
+                      <MapPin className="size-3.5 text-slate-800 dark:text-slate-200 shrink-0" />
+                      <span className="truncate">{prospectLocation}</span>
+                    </div>
+
+                    {/* Soft Badges row */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
+                      {/* Dynamic Soft Stage Badge */}
+                      <span
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[6px] text-xs font-medium border"
+                        style={{
+                          backgroundColor: `${stageColor}15`,
+                          color: stageColor,
+                          borderColor: `${stageColor}30`,
+                        }}
+                      >
+                        <span
+                          className="size-1.5 rounded-full shrink-0"
+                          style={{ backgroundColor: stageColor }}
+                        />
+                        <span className="truncate max-w-30">{stageName}</span>
+                      </span>
+
+                      {/* Soft Service Tag (matches badge-soft-warning) */}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] text-xs font-medium bg-[#FEF8E6] text-[#B78103] dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/60 truncate max-w-32.5">
                         {resolvedServiceName}
                       </span>
                     </div>
                   </div>
-
-                  <div className="mt-2.5">
-                    <div
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border shadow-2xs transition-all"
-                      style={{
-                        backgroundColor: `${stageColor}18`,
-                        color: stageColor,
-                        borderColor: `${stageColor}35`,
-                      }}
-                    >
-                      <div
-                        className="size-4 rounded-md flex items-center justify-center text-white shrink-0 shadow-2xs"
-                        style={{ backgroundColor: stageColor }}
-                      >
-                        <IconComponent className="size-2.5 text-white" />
-                      </div>
-                      <span className="truncate">{stageName}</span>
-                    </div>
-                  </div>
                 </div>
 
-                <div className="mt-3 bg-[#F4F6F8] dark:bg-slate-800/50 rounded-xl p-3 text-xs text-slate-700 dark:text-slate-300 font-semibold space-y-1.5 border border-slate-100/80 dark:border-slate-800">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <Pencil className="size-3.5 text-slate-400 shrink-0" />
-                    <span>
-                      Agent :{" "}
-                      <strong className="font-bold text-slate-900 dark:text-slate-100">
-                        {getProspectAgentName(p)}
-                      </strong>
+                {/* Bottom Footer: Quick Social Links & Assigned Agent Avatar */}
+                <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                  <div className="flex items-center gap-1">
+                    {/* Mail Link */}
+                    <a
+                      href={p.email ? `mailto:${p.email}` : undefined}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!p.email) toast.info("No email provided");
+                      }}
+                      title={p.email ? `Send Email (${p.email})` : "No email"}
+                      className="size-6 rounded-full text-slate-800 dark:text-slate-300 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      <Mail className="size-3.5" />
+                    </a>
+
+                    {/* Phone Call Link */}
+                    <a
+                      href={p.phone ? `tel:${p.phone}` : undefined}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!p.phone) toast.info("No phone number provided");
+                      }}
+                      title={p.phone ? `Call (${p.phone})` : "No phone"}
+                      className="size-6 rounded-full text-slate-800 dark:text-slate-300 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      <PhoneCall className="size-3.5" />
+                    </a>
+
+                    {/* WhatsApp / Message Link */}
+                    <a
+                      href={p.phone ? `https://wa.me/${p.phone.replace(/[^0-9]/g, "")}` : undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!p.phone) toast.info("No phone for WhatsApp message");
+                      }}
+                      title={p.phone ? "Message on WhatsApp" : "No WhatsApp"}
+                      className="size-6 rounded-full text-slate-800 dark:text-slate-300 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      <MessageSquare className="size-3.5" />
+                    </a>
+
+                    {/* Website / Globe Link */}
+                    <a
+                      href={
+                        p.website_url
+                          ? p.website_url.startsWith("http")
+                            ? p.website_url
+                            : `https://${p.website_url}`
+                          : undefined
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!p.website_url) toast.info("No website URL");
+                      }}
+                      title={p.website_url ? `Open ${p.website_url}` : "No website"}
+                      className="size-6 rounded-full text-slate-800 dark:text-slate-300 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      <Globe className="size-3.5" />
+                    </a>
+                  </div>
+
+                  {/* Creator Info: Avatar + Name (by user id) */}
+                  <div
+                    title={`Added by: ${creatorName}`}
+                    className="flex items-center gap-1.5 cursor-pointer shrink-0 max-w-[55%] min-w-0 group/creator"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toast.info(`Added by: ${creatorName}`);
+                    }}
+                  >
+                    <div className="size-6 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden text-[10px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs shrink-0">
+                      {creatorAvatar ? (
+                        <img
+                          src={creatorAvatar}
+                          alt={creatorName}
+                          className="size-full object-cover rounded-full"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            if (e.currentTarget.nextElementSibling) {
+                              (e.currentTarget.nextElementSibling as HTMLElement).style.display =
+                                "flex";
+                            }
+                          }}
+                        />
+                      ) : null}
+                      <span
+                        className="text-[10px] font-semibold text-slate-700 dark:text-slate-200 uppercase"
+                        style={{ display: creatorAvatar ? "none" : "flex" }}
+                      >
+                        {creatorName ? (
+                          creatorName.charAt(0).toUpperCase()
+                        ) : (
+                          <User className="size-3 text-slate-400" />
+                        )}
+                      </span>
+                    </div>
+                    <span className="text-[12px] font-medium text-slate-600 dark:text-slate-300 truncate group-hover/creator:text-blue-600 transition-colors">
+                      {creatorName}
                     </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 truncate">
-                    <User className="size-3.5 text-[#67B239] shrink-0" />
-                    <span>
-                      Artist :{" "}
-                      <strong className="font-bold text-slate-900 dark:text-slate-100">
-                        {getProspectArtistName(p)}
-                      </strong>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 font-medium">
-                    <div className="flex items-center gap-1">
-                      <CalendarIcon className="size-3.5 text-slate-400 shrink-0" />
-                      <span>Created : {formatCrmDate(p.created_at)}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Clock className="size-3.5 text-slate-400 shrink-0" />
-                      <span>{formatCrmTime(p.created_at)}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 font-medium">
-                    <div className="flex items-center gap-1">
-                      <CalendarIcon className="size-3.5 text-slate-400 shrink-0" />
-                      <span>Updated : {formatCrmDate(p.updated_at || p.created_at)}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Clock className="size-3.5 text-slate-400 shrink-0" />
-                      <span>{formatCrmTime(p.updated_at || p.created_at)}</span>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -720,6 +845,70 @@ function ProspectsPageContent() {
           })}
         </div>
       )}
+
+      {/* Pagination Controls */}
+      {prospects.data && totalCount > 0 ? (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 pb-6 border-t border-slate-200/80 dark:border-slate-800">
+          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+            <p>
+              Showing{" "}
+              <span className="font-semibold text-slate-700 dark:text-slate-200">{startIndex}</span>{" "}
+              to{" "}
+              <span className="font-semibold text-slate-700 dark:text-slate-200">{endIndex}</span>{" "}
+              of{" "}
+              <span className="font-semibold text-slate-700 dark:text-slate-200">{totalCount}</span>{" "}
+              prospects
+            </p>
+
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 dark:text-slate-400">Show:</span>
+              <Select
+                value={String(currentPageSize)}
+                onValueChange={(val: string) => {
+                  setSearchParams({ pageSize: Number(val), page: 1 });
+                }}
+              >
+                <SelectTrigger className="w-18 h-7 text-xs rounded-[6px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-2xs">
+                  <SelectValue placeholder="12" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="12">12</SelectItem>
+                  <SelectItem value="24">24</SelectItem>
+                  <SelectItem value="36">36</SelectItem>
+                  <SelectItem value="48">48</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-slate-500 dark:text-slate-400">per page</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage <= 1}
+              onClick={() => setSearchParams({ page: currentPage - 1 })}
+              className="h-8 px-3 text-xs font-medium rounded-[6px] border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
+            >
+              <ChevronLeft className="size-3.5 mr-1" />
+              Previous
+            </Button>
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 px-2 min-w-20 text-center">
+              Page {currentPage} of {pageCount}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage >= pageCount}
+              onClick={() => setSearchParams({ page: currentPage + 1 })}
+              className="h-8 px-3 text-xs font-medium rounded-[6px] border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
+            >
+              Next
+              <ChevronRight className="size-3.5 ml-1" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <ChangeStageDialog
         target={stageTarget}
@@ -827,7 +1016,7 @@ export default function ProspectsPage() {
   return (
     <Suspense
       fallback={
-        <div className="grid min-h-[400px] place-items-center">
+        <div className="grid min-h-100 place-items-center">
           <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
         </div>
       }

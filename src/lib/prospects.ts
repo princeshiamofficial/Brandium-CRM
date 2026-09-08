@@ -6,6 +6,7 @@ import { getMySQLTimestamp } from "@/lib/mysql-client";
 
 export const prospectFiltersSchema = z.object({
   page: z.number().catch(1),
+  pageSize: z.number().catch(12).optional(),
   search: z.string().optional(),
   stage: z.string().optional(),
   agent: z.string().optional(),
@@ -43,8 +44,11 @@ export type Prospect = {
   stage_color?: string | null | undefined;
   stage_icon?: string | null | undefined;
   assigned_agent_name?: string | undefined;
+  assigned_agent_avatar?: string | null | undefined;
   assigned_artist_name?: string | undefined;
+  assigned_artist_avatar?: string | null | undefined;
   creator_name?: string | undefined;
+  creator_avatar?: string | null | undefined;
 };
 
 export function getProspectArtistName(prospect: {
@@ -107,11 +111,46 @@ export function getProspectAgentName(prospect: {
   return "Unassigned";
 }
 
+export function getProspectCreatorName(prospect: {
+  creator_name?: string | null | undefined;
+  assigned_agent_name?: string | null | undefined;
+}): string {
+  if (
+    prospect.creator_name &&
+    prospect.creator_name.trim() &&
+    prospect.creator_name.toLowerCase() !== "system"
+  ) {
+    return prospect.creator_name.trim();
+  }
+  if (
+    prospect.assigned_agent_name &&
+    prospect.assigned_agent_name.trim() &&
+    prospect.assigned_agent_name.toLowerCase() !== "unknown" &&
+    prospect.assigned_agent_name.toLowerCase() !== "agent"
+  ) {
+    return prospect.assigned_agent_name.trim();
+  }
+  return "Agent / Admin";
+}
+
+export function getProspectCreatorAvatar(prospect: {
+  creator_avatar?: string | null | undefined;
+  assigned_agent_avatar?: string | null | undefined;
+}): string | null {
+  if (prospect.creator_avatar && prospect.creator_avatar.trim()) {
+    return prospect.creator_avatar.trim();
+  }
+  if (prospect.assigned_agent_avatar && prospect.assigned_agent_avatar.trim()) {
+    return prospect.assigned_agent_avatar.trim();
+  }
+  return null;
+}
+
 export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin: boolean) =>
   queryOptions({
     queryKey: ["prospects", filters, userId, isAdmin],
     queryFn: async () => {
-      const pageSize = 10;
+      const pageSize = filters.pageSize || 12;
       const from = (filters.page - 1) * pageSize;
       let fetchedRows: Prospect[] = [];
 
@@ -127,8 +166,11 @@ export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin
             st.color AS stage_color,
             st.icon AS stage_icon,
             COALESCE(prof_assign.full_name, u_assign.name) AS assigned_agent_name,
+            COALESCE(prof_assign.avatar_url, u_assign.avatar_url) AS assigned_agent_avatar,
             COALESCE(prof_artist.full_name, u_artist.name) AS assigned_artist_name,
-            COALESCE(prof_create.full_name, u_create.name) AS creator_name
+            COALESCE(prof_artist.avatar_url, u_artist.avatar_url) AS assigned_artist_avatar,
+            COALESCE(prof_create.full_name, u_create.name, prof_assign.full_name, u_assign.name) AS creator_name,
+            COALESCE(prof_create.avatar_url, u_create.avatar_url, prof_assign.avatar_url, u_assign.avatar_url) AS creator_avatar
           FROM \`prospects\` p
           LEFT JOIN \`services\` s ON p.service_id = s.id
           LEFT JOIN \`stages\` st ON (p.stage_id = st.id OR p.stage_id = REPLACE(st.id, '-', '_') OR p.stage_id = st.name)
@@ -171,8 +213,11 @@ export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin
               stage_color: (p["stage_color"] as string) || null,
               stage_icon: (p["stage_icon"] as string) || null,
               assigned_agent_name: (p["assigned_agent_name"] as string) || undefined,
+              assigned_agent_avatar: (p["assigned_agent_avatar"] as string) || null,
               assigned_artist_name: (p["assigned_artist_name"] as string) || undefined,
+              assigned_artist_avatar: (p["assigned_artist_avatar"] as string) || null,
               creator_name: (p["creator_name"] as string) || undefined,
+              creator_avatar: (p["creator_avatar"] as string) || null,
             } as Prospect;
           });
         }
@@ -436,7 +481,11 @@ export async function createProspect(input: CreateProspectInput): Promise<Prospe
     stage_name: "Prospect",
     stage_group: "new",
     assigned_agent_name: undefined,
+    assigned_agent_avatar: null,
+    assigned_artist_name: undefined,
+    assigned_artist_avatar: null,
     creator_name: undefined,
+    creator_avatar: null,
   };
 
   // 1. Direct INSERT query via API bridge into MySQL `brandium_crm.prospects` table
