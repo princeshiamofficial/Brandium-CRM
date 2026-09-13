@@ -547,6 +547,7 @@ export async function ensureMySQLTablesExist(
         { table: "projects", column: "progress", def: "INT NOT NULL DEFAULT 0" },
         { table: "projects", column: "deadline", def: "DATE NULL" },
         { table: "projects", column: "notes", def: "TEXT NULL" },
+        { table: "projects", column: "created_by", def: "VARCHAR(36) NULL" },
         // users & profiles
         { table: "users", column: "phone", def: "VARCHAR(50) NULL" },
         { table: "users", column: "avatar_url", def: "TEXT NULL" },

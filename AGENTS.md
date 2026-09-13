@@ -222,5 +222,50 @@ Welcome to the **Brandium CRM** repository.
 - **Prospect Card Creation Date & Time Display Standard**:
   - In `src/app/(authenticated)/prospects/page.tsx`, every prospect card displays its creation timestamp formatted with 12-hour AM/PM (e.g., `Sep 8, 2026, 7:47 PM`) directly underneath the Location row using `formatCrmDateTime(p.created_at)` from `@/lib/mysql-client` and paired with a `<CalendarIcon className="size-3.5 text-slate-800 dark:text-slate-200 shrink-0" />`.
 
+- **Prospect Card Notes & Requirements Display Standard (Torn Paper / "Chira Kagoj" via SVG)**:
+  - In `src/app/(authenticated)/prospects/page.tsx`, every prospect card displays its notes/requirements directly underneath the Creation Date & Time row and above the Soft Badges row. Notes are cleaned via `getProspectCleanNotes(p.notes)` (stripping internal `[Artist: ...]` and `[Agent: ...]` tags), styled inside an authentic ripped paper banner rendered via a precision `<svg viewBox="0 0 500 100" preserveAspectRatio="none">` path mirroring real torn paper silhouettes (ripped top and bottom edges, corner cuts, and downward tear spikes), styled with soft pastel yellow sticky note color palette (`fill-[#FEFCE8] dark:fill-[#1e1a0e] stroke-[#FDE68A]/60 dark:stroke-[#4a3f1d]`), paired with subtle amber typography (`<FileText className="size-3.5 text-amber-700 dark:text-yellow-400" /> Note:` in amber-800 / dark yellow-300), bottom paper shadow (`filter drop-shadow-[0_1.5px_3px_rgba(0,0,0,0.12)]`), single-line truncated with `title={cleanNote || "No note"}` for full hover tooltip, and falls back to a muted italic `"No note"` when empty.
+- **Projects Page Card Grid Layout Standard**:
+  - On `/projects` (`src/app/(authenticated)/projects/page.tsx`), projects are presented in a responsive multi-column card grid (`grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`) replacing the legacy horizontal Kanban board.
+  - Each project card features:
+    - Top: Project Code badge, business title, and 3-dot dropdown action menu (View Details, Edit Project, Advance Stage, Delete).
+    - Middle: Contact person, phone, email, creation date, stage soft badge (with dynamic color indicator), and service badge.
+    - Footer: Assigned team member avatars and names (Artist & Agent overlapping avatar badges) and quick "Details" button.
+  - Search and filter controls allow instant live filtering by text, stage, and assigned artist.
 
+- **Dreamstechnologies Sales CRM Projects Page Reference Standard (`media_1789243032328.png` / `projects.html`)**:
+  - In `src/app/(authenticated)/projects/page.tsx`, the Projects page strictly mirrors the Dreamstechnologies Sales CRM template and reference image:
+    - **Header**: `Projects` title with soft red counter badge `125` (`bg-[#FEE2E2] text-[#EF1E1E] rounded-md px-2 py-0.5 text-xs font-semibold`) and Export dropdown (`ti ti-package-export`).
+    - **Filter & Action Toolbar**: Clean row without outer card container:
+      - Left: Filter button (`ti ti-filter` + chevron) opening a popover with Pipeline Stage, Priority, Artist dropdowns and Reset button, followed by Search input with leading `ti ti-search` icon and placeholder `Search`.
+      - Right: Brandium Growth Green `+ Add New Project` button (`bg-[#67B239] hover:bg-[#5aa030] text-white`).
+    - **Card Design (100% Reference Image Match)**:
+      - Typography & Font: `font-['Golos_Text',sans-serif]`, padding `p-5`, border radius `rounded-[12px]`, subtle border `border border-slate-200/90`, shadow `shadow-[0_4px_4px_0_rgba(219,219,219,0.25)]`.
+      - Row 1: Priority soft badge with dot (`● High` in `bg-[#FDE8E8] text-[#EF1E1E]`, Medium in `#FFF4E6`/`#FF9F43`, Low in `#E8F9ED`/`#28C76F`), Active badge (`bg-[#16A34A] text-white`), and golden star favorite icon (`ti ti-star-filled text-[#F59E0B] text-[17px]`).
+      - Row 2: Light info box (`bg-[#F8F9FA] rounded-[8px] p-2.5 mb-3.5`), 40px circular logo avatar with vibrant SVG logos, project title (`font-semibold text-[14px] text-[#1F2020]`), service subtitle (`text-[12px] text-[#707070]`), and 30px 3-dots action button opening full management dropdown.
+      - Row 3: 2-line truncated description (`Kofejob is a freelancers marketplace where you can post projects & get instant help.` or notes).
+      - Row 4: 3 metadata rows styled with `text-[13px] text-[#707070] mb-2`:
+        - Project ID: `ti ti-forbid-2` `Project ID : #12145`
+        - Value: `ti ti-report-money` `Value : $03,50,000`
+        - Due Date: `ti ti-calendar-exclamation` `Due Date : 15 Oct 2023`
+      - Row 5: Overlapping assigned team avatars (Artist and Agent) resolved dynamically by user ID (`usersMap.get(project.assigned_artist_id)` / `agent_id`), paired with 32px circular Project Creator avatar on the right resolved by user ID (`created_by`), replacing legacy static mock counters and decorative badges.
+      - Row 6 (Footer): `border-t border-[#F1F5F9] pt-3` with Total Hours badge (`bg-[#EBF5FF] text-[#2563EB] rounded-[5px] px-2.5 py-1 text-[12px] font-medium` with `ti ti-clock-stop` `Total Hours : 100` / `80` / `75`) and communication counters: WeChat (`ti ti-brand-wechat` `02`) and Subtasks (`ti ti-subtask` `04`).
+    - **Slide-Out Offcanvas Drawer (`offcanvas_add` & `offcanvas_edit`)**:
+      - Slide-out Radix UI `Sheet` (`side="right"`, `w-full sm:max-w-[750px] lg:max-w-[800px]`, `bg-[#f8f9fa] dark:bg-slate-950`) divided into accordion cards with Brandium Green `#67B239` and Navy `#0a2e5c` badge headers: Basic Information, Stage & Financials, and Team Assignment & Specifications with sticky action footer.
 
+- **Tabler Icons Local Hosting & Cross-Origin Font Blocking Prevention**:
+  - Remote CDN / external template stylesheets (`crms.dreamstechnologies.com`) block webfonts (`.woff2`, `.woff`, `.ttf`) in modern browsers due to missing `Access-Control-Allow-Origin` CORS headers, rendering icons as blank squares.
+  - Always host Tabler Icons locally in `public/tabler-icons/` (`tabler-icons.min.css` and `fonts/tabler-icons.woff2`), link it directly in `RootLayout` via `<link rel="stylesheet" href="/tabler-icons/tabler-icons.min.css" />`, and include explicit aliases for `.ti-star-filled:before` (`\eb2e`) and `.ti-square-rounded-plus-filled:before` (`\f63f`).
+
+- **Workspace Scratch File Cleanup & Tailwind v4 Unknown At-Rule Inspection**:
+  - Never retain temporary migration/fetch helper scripts (`.cjs`, `.js`) in workspace project root or `scratch/` folders inside the codebase; always remove them upon task completion to keep linter diagnostics 100% clean.
+  - Tailwind CSS v4 custom directives (`@source`, `@custom-variant`, `@theme`) trigger IDE CSS language server warnings by default. Configure `"css.lint.unknownAtRules": "ignore"` in `.vscode/settings.json` to silence false positive warnings.
+
+- **Projects Assigned Team Members & Creator Avatar by User ID Standard**:
+  - On `/projects` (`src/app/(authenticated)/projects/page.tsx`), Row 5 dynamically resolves both:
+    - **Assigned Team Members** (Left): Looks up `project.assigned_artist_id` and `project.assigned_agent_id` via `usersMap` to display genuine user avatars (or colored initials) with role-specific tooltips (`Artist: [Name]`, `Agent: [Name]`). Eliminates static dummy counters (`+04`/`+05`).
+    - **Project Creator Avatar** (Right): Replaces the arbitrary decorative company icon with a 32px circular avatar of whoever created/added the project (`created_by`), resolved by user ID via `usersMap` and MySQL database joins (`users u_creator` & `profiles prof_creator`).
+  - Automatically migrates table `projects` with `ADD COLUMN created_by VARCHAR(36) NULL` and persists `created_by: user.id` upon project creation via `ProjectOffcanvasDrawer`.
+
+- **Projects Brand Color UI Standardization**:
+  - Primary call-to-actions on `/projects` (`src/app/(authenticated)/projects/page.tsx`), specifically the `+ Add New Project` button, strictly use Brandium Growth Green (`bg-[#67B239] hover:bg-[#5aa030] text-white`).
+  - Active filter indicators and interactive reset links follow the same brand palette (`bg-[#67B239]`, `text-[#67B239] hover:text-[#5aa030]`), and the header project counter badge renders in soft green (`bg-[#67B239]/15 text-[#55962e] dark:bg-[#67B239]/25 dark:text-[#7ac142]`) ensuring complete visual alignment with the Brandium CRM design system.

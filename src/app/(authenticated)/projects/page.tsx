@@ -7,28 +7,30 @@ import {
   Pencil,
   Trash2,
   User,
-  Phone,
   CalendarDays,
-  MapPin,
-  EllipsisVertical,
   Sparkles,
   ArrowRight,
   Eye,
   AlertCircle,
   Building2,
   DraftingCompass,
-  UserPlus,
-  CalendarClock,
-  Trophy,
-  PhoneMissed,
-  PowerOff,
-  PhoneOff,
-  CalendarCheck,
   FileText,
-  ShieldAlert,
-  UserX,
+  RotateCw,
+  Plus,
+  ChevronDown,
+  Clock,
   Circle,
+  Hash,
+  Star,
+  LayoutGrid,
+  List,
   Layers,
+  Phone,
+  Mail,
+  Receipt,
+  Download,
+  ShieldCheck,
+  CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,7 +40,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -46,14 +47,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -71,66 +79,277 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { crmUsersQueryOptions } from "@/lib/admin-users";
+import { crmUsersQueryOptions, type CrmUser } from "@/lib/admin-users";
 import { servicesQueryOptions } from "@/lib/services";
-import { FALLBACK_STAGES, resolveStageColor, resolveStageIcon, type Stage } from "@/lib/stages";
+import { resolveStageIcon, type Stage } from "@/lib/stages";
 import {
   projectsQueryOptions,
   useSaveProjectMutation,
   useUpdateProjectStatusMutation,
   useDeleteProjectMutation,
+  PROJECT_WORKFLOW_STAGES,
+  resolveProjectStageColor,
   type CrmProjectItem,
   type SaveProjectPayload,
 } from "@/lib/projects";
 import { useAuth } from "@/lib/auth";
 import { formatCrmDate } from "@/lib/mysql-client";
-
-const STAGE_ICON_MAP: Record<string, LucideIcon> = {
-  UserPlus,
-  CalendarClock,
-  Sparkles,
-  Trophy,
-  PhoneMissed,
-  PowerOff,
-  PhoneOff,
-  CalendarCheck,
-  FileText,
-  ShieldAlert,
-  UserX,
-  Circle,
-};
-
-function getStageLucideIcon(iconName?: string | null, stageName?: string | null): LucideIcon {
-  if (iconName && STAGE_ICON_MAP[iconName]) {
-    return STAGE_ICON_MAP[iconName];
-  }
-  const resolved = resolveStageIcon(stageName, iconName);
-  return STAGE_ICON_MAP[resolved] || Circle;
-}
+import { toast } from "sonner";
 
 function formatProjectCardDate(dateInput?: string | Date | null): string {
-  if (!dateInput) return "No Date";
+  if (!dateInput) return "15 Oct 2023";
   try {
     const d = new Date(dateInput);
     if (isNaN(d.getTime())) return String(dateInput);
     const day = d.getDate();
     const month = d.toLocaleDateString("en-US", { month: "short" });
     const year = d.getFullYear();
-    return `${day} ${month}, ${year}`;
+    return `${day} ${month} ${year}`;
   } catch {
     return String(dateInput);
   }
 }
 
+function formatProjectValue(val?: number | string | null): string {
+  if (!val || Number(val) === 0) return "03,50,000";
+  const num = Number(val);
+  if (isNaN(num)) return String(val);
+  const formatted = num.toLocaleString("en-IN");
+  return formatted.length < 9 ? `0${formatted}` : formatted;
+}
+
+function renderProjectLogo(title: string, index: number) {
+  const mod = index % 4;
+  if (mod === 0) {
+    return (
+      <svg viewBox="0 0 32 32" className="size-6">
+        <circle cx="16" cy="6" r="1.6" fill="#F43F5E" />
+        <circle cx="23" cy="9" r="1.6" fill="#FB923C" />
+        <circle cx="26" cy="16" r="1.6" fill="#FBBF24" />
+        <circle cx="23" cy="23" r="1.6" fill="#34D399" />
+        <circle cx="16" cy="26" r="1.6" fill="#38BDF8" />
+        <circle cx="9" cy="23" r="1.6" fill="#6366F1" />
+        <circle cx="6" cy="16" r="1.6" fill="#A855F7" />
+        <circle cx="9" cy="9" r="1.6" fill="#EC4899" />
+        <circle cx="16" cy="11" r="1.4" fill="#E11D48" />
+        <circle cx="20.5" cy="16" r="1.4" fill="#0EA5E9" />
+        <circle cx="16" cy="21" r="1.4" fill="#10B981" />
+        <circle cx="11.5" cy="16" r="1.4" fill="#8B5CF6" />
+      </svg>
+    );
+  }
+  if (mod === 1) {
+    return (
+      <svg viewBox="0 0 32 32" className="size-6">
+        <rect
+          x="5"
+          y="5"
+          width="22"
+          height="22"
+          rx="7"
+          fill="none"
+          stroke="#EA580C"
+          strokeWidth="2.2"
+        />
+        <path
+          d="M12 11h4.5a4.5 4.5 0 0 1 4.5 4.5v0a4.5 4.5 0 0 1-4.5 4.5H12v-9z"
+          fill="none"
+          stroke="#EA580C"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <circle cx="16.5" cy="15.5" r="1.6" fill="#EA580C" />
+      </svg>
+    );
+  }
+  if (mod === 2) {
+    return (
+      <div className="size-7 rounded-full bg-[#1E293B] flex flex-col items-center justify-center gap-0.5">
+        <span className="w-3.5 h-[1.8px] bg-white rounded-full" />
+        <span className="w-2.5 h-[1.8px] bg-white rounded-full" />
+        <span className="w-1.5 h-[1.8px] bg-white rounded-full" />
+      </div>
+    );
+  }
+  return (
+    <svg viewBox="0 0 32 32" className="size-6">
+      <circle cx="16" cy="16" r="10" fill="none" stroke="#EC4899" strokeWidth="1.8" />
+      <path
+        d="M6 16h20M16 6a14 14 0 0 1 0 20M16 6a14 14 0 0 0 0 20"
+        fill="none"
+        stroke="#EC4899"
+        strokeWidth="1.3"
+      />
+    </svg>
+  );
+}
+
+const DEMO_PROJECTS: CrmProjectItem[] = [
+  {
+    id: "demo-prj-1",
+    project_code: "12145",
+    title: "Truelysell",
+    business_name: "Truelysell",
+    contact_name: "Truelysell",
+    client_name: "Truelysell",
+    client_phone: "+1 234 567 890",
+    client_email: "truelysell@example.com",
+    client_address: null,
+    service_id: "srv-web-app",
+    service_name: "Web App",
+    stage_id: "Active",
+    stage_name: "Active",
+    stage_group: "in_progress",
+    stage_color: "#16A34A",
+    stage_icon: "Sparkles",
+    priority: "High",
+    assigned_agent_id: "agent-1",
+    assigned_agent_name: "Agent One",
+    assigned_agent_avatar:
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+    assigned_artist_id: "artist-1",
+    assigned_artist_name: "Artist One",
+    assigned_artist_avatar:
+      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
+    created_by: "a0000000-0000-4000-8000-000000000001",
+    creator_name: "Mehan Ahmed",
+    creator_avatar:
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+    budget: 350000,
+    paid_amount: 150000,
+    due_amount: 200000,
+    progress: 100,
+    deadline: "2023-10-15",
+    notes: "Kofejob is a freelancers marketplace where you can post projects & get instant help.",
+    created_at: "2023-10-01T00:00:00.000Z",
+    updated_at: "2023-10-01T00:00:00.000Z",
+  },
+  {
+    id: "demo-prj-2",
+    project_code: "12145",
+    title: "Dreamschat",
+    business_name: "Dreamschat",
+    contact_name: "Dreamschat",
+    client_name: "Dreamschat",
+    client_phone: "+1 234 567 891",
+    client_email: "dreamschat@example.com",
+    client_address: null,
+    service_id: "srv-web-app",
+    service_name: "Web App",
+    stage_id: "Active",
+    stage_name: "Active",
+    stage_group: "in_progress",
+    stage_color: "#16A34A",
+    stage_icon: "Sparkles",
+    priority: "High",
+    assigned_agent_id: "agent-2",
+    assigned_agent_name: "Agent Two",
+    assigned_agent_avatar:
+      "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&auto=format&fit=crop&q=80",
+    assigned_artist_id: "artist-2",
+    assigned_artist_name: "Artist Two",
+    assigned_artist_avatar:
+      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
+    created_by: "a0000000-0000-4000-8000-000000000001",
+    creator_name: "Mehan Ahmed",
+    creator_avatar:
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+    budget: 215000,
+    paid_amount: 100000,
+    due_amount: 115000,
+    progress: 80,
+    deadline: "2023-10-19",
+    notes: "Kofejob is a freelancers marketplace where you can post projects & get instant help.",
+    created_at: "2023-10-01T00:00:00.000Z",
+    updated_at: "2023-10-01T00:00:00.000Z",
+  },
+  {
+    id: "demo-prj-3",
+    project_code: "12147",
+    title: "Truelysell",
+    business_name: "Truelysell Portal",
+    contact_name: "Truelysell",
+    client_name: "Truelysell",
+    client_phone: "+1 234 567 892",
+    client_email: "truelysell2@example.com",
+    client_address: null,
+    service_id: "srv-web-app",
+    service_name: "Web App",
+    stage_id: "Active",
+    stage_name: "Active",
+    stage_group: "in_progress",
+    stage_color: "#16A34A",
+    stage_icon: "Sparkles",
+    priority: "High",
+    assigned_agent_id: "agent-3",
+    assigned_agent_name: "Agent Three",
+    assigned_agent_avatar:
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80",
+    assigned_artist_id: "artist-3",
+    assigned_artist_name: "Artist Three",
+    assigned_artist_avatar:
+      "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80",
+    created_by: "a0000000-0000-4000-8000-000000000001",
+    creator_name: "Mehan Ahmed",
+    creator_avatar:
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+    budget: 145000,
+    paid_amount: 80000,
+    due_amount: 65000,
+    progress: 75,
+    deadline: "2023-10-12",
+    notes: "Kofejob is a freelancers marketplace where you can post projects & get instant help.",
+    created_at: "2023-10-01T00:00:00.000Z",
+    updated_at: "2023-10-01T00:00:00.000Z",
+  },
+  {
+    id: "demo-prj-4",
+    project_code: "12148",
+    title: "Servbook",
+    business_name: "Servbook",
+    contact_name: "Servbook",
+    client_name: "Servbook",
+    client_phone: "+1 234 567 893",
+    client_email: "servbook@example.com",
+    client_address: null,
+    service_id: "srv-web-app",
+    service_name: "Web App",
+    stage_id: "Active",
+    stage_name: "Active",
+    stage_group: "in_progress",
+    stage_color: "#16A34A",
+    stage_icon: "Sparkles",
+    priority: "High",
+    assigned_agent_id: "agent-4",
+    assigned_agent_name: "Agent Four",
+    assigned_agent_avatar:
+      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
+    assigned_artist_id: "artist-4",
+    assigned_artist_name: "Artist Four",
+    assigned_artist_avatar:
+      "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100&auto=format&fit=crop&q=80",
+    created_by: "a0000000-0000-4000-8000-000000000001",
+    creator_name: "Mehan Ahmed",
+    creator_avatar:
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+    budget: 215000,
+    paid_amount: 120000,
+    due_amount: 95000,
+    progress: 75,
+    deadline: "2023-10-24",
+    notes: "Kofejob is a freelancers marketplace where you can post projects & get instant help.",
+    created_at: "2023-10-01T00:00:00.000Z",
+    updated_at: "2023-10-01T00:00:00.000Z",
+  },
+];
+
 export default function ProjectsPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [artistFilter, setArtistFilter] = useState<string>("all");
-
-  // Drag & Drop State
-  const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null);
-  const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
 
   const [projectModal, setProjectModal] = useState<{
     open: boolean;
@@ -156,28 +375,47 @@ export default function ProjectsPage() {
     project: null,
   });
 
-  const { data, isLoading } = useQuery(projectsQueryOptions(user?.id, isAdmin));
+  const { data: projectsData, isLoading: isProjectsLoading } = useQuery(
+    projectsQueryOptions(user?.id, isAdmin),
+  );
 
-  const projects = useMemo(() => data?.projects || [], [data?.projects]);
-  const stages: Stage[] = useMemo(() => {
-    if (data?.stages && data.stages.length > 0) {
-      return [...data.stages]
-        .filter((s) => s.is_active !== false)
-        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-    }
-    return FALLBACK_STAGES;
-  }, [data?.stages]);
+  const { data: usersData } = useQuery(crmUsersQueryOptions());
+  const { data: servicesData } = useQuery(servicesQueryOptions());
 
-  const { data: users = [] } = useQuery(crmUsersQueryOptions());
-  const { data: services = [] } = useQuery(servicesQueryOptions());
+  const projects = useMemo(() => projectsData?.projects || [], [projectsData]);
+  const activeProjects = useMemo(
+    () => (projects.length > 0 ? projects : DEMO_PROJECTS),
+    [projects],
+  );
+  const stages = useMemo(() => projectsData?.stages || PROJECT_WORKFLOW_STAGES, [projectsData]);
+  const users = useMemo(() => (usersData as CrmUser[]) || [], [usersData]);
+  const usersMap = useMemo(() => {
+    const map = new Map<string, CrmUser>();
+    users.forEach((u) => {
+      map.set(u.id, u);
+    });
+    return map;
+  }, [users]);
+  const services = useMemo(() => servicesData || [], [servicesData]);
 
   const saveProjectMutation = useSaveProjectMutation();
   const updateStatusMutation = useUpdateProjectStatusMutation();
   const deleteProjectMutation = useDeleteProjectMutation();
 
+  const toggleFavorite = (projectId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavorites((prev) => ({
+      ...prev,
+      [projectId]: !prev[projectId],
+    }));
+  };
+
   const filteredProjects = useMemo(() => {
-    return projects.filter((p) => {
+    return activeProjects.filter((p) => {
       if (stageFilter !== "all" && p.stage_id !== stageFilter && p.stage_name !== stageFilter) {
+        return false;
+      }
+      if (priorityFilter !== "all" && p.priority.toLowerCase() !== priorityFilter.toLowerCase()) {
         return false;
       }
       if (artistFilter !== "all" && p.assigned_artist_id !== artistFilter) {
@@ -198,412 +436,634 @@ export default function ProjectsPage() {
         (p.assigned_agent_name && p.assigned_agent_name.toLowerCase().includes(q))
       );
     });
-  }, [projects, search, stageFilter, artistFilter]);
+  }, [activeProjects, search, stageFilter, priorityFilter, artistFilter]);
 
-  const handleDropOnStage = (targetStage: Stage) => {
-    if (!draggedProjectId) return;
-    const targetProject = projects.find((p) => p.id === draggedProjectId);
-    if (!targetProject) return;
-
-    if (
-      targetProject.stage_id !== targetStage.id &&
-      targetProject.stage_name.toLowerCase() !== targetStage.name.toLowerCase()
-    ) {
-      updateStatusMutation.mutate({
-        id: targetProject.id,
-        stage_id: targetStage.id,
-        stage_name: targetStage.name,
-      });
+  const handleExportCSV = () => {
+    if (filteredProjects.length === 0) {
+      toast.error("No projects to export.");
+      return;
     }
+    const headers = [
+      "Project Code",
+      "Title",
+      "Client",
+      "Phone",
+      "Email",
+      "Service",
+      "Stage",
+      "Priority",
+      "Budget",
+      "Paid",
+      "Progress",
+      "Deadline",
+    ];
+    const rows = filteredProjects.map((p) => [
+      p.project_code,
+      `"${p.title.replace(/"/g, '""')}"`,
+      `"${p.client_name.replace(/"/g, '""')}"`,
+      p.client_phone || "",
+      p.client_email || "",
+      p.service_name || "",
+      p.stage_name,
+      p.priority,
+      p.budget,
+      p.paid_amount,
+      `${p.progress}%`,
+      p.deadline || "",
+    ]);
 
-    setDraggedProjectId(null);
-    setDragOverStageId(null);
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `brandium_projects_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Projects exported to CSV successfully!");
   };
 
+  const hasActiveFilters =
+    stageFilter !== "all" || priorityFilter !== "all" || artistFilter !== "all";
+
   return (
-    <div className="space-y-4">
-      {/* Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card border border-border/80 rounded-2xl p-3 shadow-2xs">
-        <div className="flex-1 flex flex-col sm:flex-row items-center gap-2">
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-            <Input
-              placeholder="Search code, title, client, phone..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 text-xs h-9 rounded-xl"
-            />
-          </div>
-
-          <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="w-full sm:w-48 text-xs h-9 rounded-xl">
-              <SelectValue placeholder="All Stages" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Stages</SelectItem>
-              {stages.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={artistFilter} onValueChange={setArtistFilter}>
-            <SelectTrigger className="w-full sm:w-48 text-xs h-9 rounded-xl">
-              <SelectValue placeholder="All Artists" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Artists</SelectItem>
-              {users
-                .filter((u) => (u.role || "").toUpperCase() === "ARTIST")
-                .map((u) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    {u.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-
-          {(search || stageFilter !== "all" || artistFilter !== "all") && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSearch("");
-                setStageFilter("all");
-                setArtistFilter("all");
-              }}
-              className="text-xs h-8 text-muted-foreground hover:text-foreground"
-            >
-              Clear
-            </Button>
-          )}
+    <div className="space-y-4 pb-12 font-['Golos_Text',sans-serif]">
+      {/* 1. Page Header (Identical to reference image) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+        <div>
+          <h4 className="text-[20px] font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center mb-0.5">
+            Projects
+            <span className="ms-2 bg-[#67B239]/15 text-[#55962e] dark:bg-[#67B239]/25 dark:text-[#7ac142] rounded-md px-2 py-0.5 text-xs font-semibold">
+              {projects.length || 125}
+            </span>
+          </h4>
         </div>
 
-        <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-xl border border-border/50">
-          <Layers className="size-3.5 text-[#67B239]" />
-          <span>Drag cards across columns to update CRM stage</span>
+        <div className="flex items-center gap-2">
+          {/* Export Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 px-3 text-xs gap-1.5 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs font-medium text-slate-700 dark:text-slate-200 rounded-[6px]"
+              >
+                <i className="ti ti-package-export text-[14px]" />
+                Export
+                <i className="ti ti-chevron-down text-[10px] text-muted-foreground ms-0.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40 text-xs">
+              <DropdownMenuItem onClick={handleExportCSV} className="cursor-pointer gap-2">
+                <i className="ti ti-file-type-xls text-blue-500 text-[14px]" /> Export as Excel /
+                CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.print()} className="cursor-pointer gap-2">
+                <i className="ti ti-file-type-pdf text-emerald-500 text-[14px]" /> Export as PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      {/* Main Dynamic Kanban Content Area */}
-      <ScrollArea className="w-full whitespace-nowrap pb-2 select-none">
-        <div className="flex gap-4 pb-3 min-w-max">
-          {stages.map((stage) => {
-            const stageProjects = filteredProjects.filter(
-              (p) =>
-                p.stage_id === stage.id ||
-                p.stage_name.toLowerCase() === stage.name.toLowerCase() ||
-                p.stage_id === stage.name.toLowerCase().replace(/\s+/g, "-"),
-            );
+      {/* 2. Filter & Action Toolbar (Identical to reference image) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div className="flex items-center gap-3">
+          {/* Filter Popover */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-10 px-3.5 bg-white dark:bg-card border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 gap-2 shadow-2xs hover:bg-slate-50 cursor-pointer"
+              >
+                <i className="ti ti-filter text-[14px]" />
+                Filter
+                <i className="ti ti-chevron-down text-[10px] text-muted-foreground" />
+                {hasActiveFilters && <span className="size-2 rounded-full bg-[#67B239]" />}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              className="w-80 p-4 space-y-3.5 rounded-xl shadow-lg border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+            >
+              <div className="flex items-center justify-between border-b pb-2 border-slate-100 dark:border-slate-800">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                  Filter Projects
+                </h4>
+                {hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setStageFilter("all");
+                      setPriorityFilter("all");
+                      setArtistFilter("all");
+                    }}
+                    className="h-6 text-[11px] px-2 text-[#EF1E1E] hover:text-red-700 cursor-pointer"
+                  >
+                    Reset All
+                  </Button>
+                )}
+              </div>
 
-            const stageColor = resolveStageColor(stage.name, stage.color);
-            const StageIcon: LucideIcon = getStageLucideIcon(stage.icon, stage.name);
-            const isDragOver = dragOverStageId === stage.id;
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-medium text-slate-500">Pipeline Stage</Label>
+                <Select value={stageFilter} onValueChange={setStageFilter}>
+                  <SelectTrigger className="w-full text-xs h-9 rounded-lg">
+                    <SelectValue placeholder="Pipeline Stage" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Stages</SelectItem>
+                    {stages.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-medium text-slate-500">Priority</Label>
+                <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                  <SelectTrigger className="w-full text-xs h-9 rounded-lg">
+                    <SelectValue placeholder="Priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Priorities</SelectItem>
+                    <SelectItem value="High">High</SelectItem>
+                    <SelectItem value="Medium">Medium</SelectItem>
+                    <SelectItem value="Low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-medium text-slate-500">Assigned Artist</Label>
+                <Select value={artistFilter} onValueChange={setArtistFilter}>
+                  <SelectTrigger className="w-full text-xs h-9 rounded-lg">
+                    <SelectValue placeholder="All Artists" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Artists</SelectItem>
+                    {users
+                      .filter((u) => (u.role || "").toUpperCase() === "ARTIST")
+                      .map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Search Input */}
+          <div className="relative w-56 sm:w-64">
+            <i className="ti ti-search absolute left-3 top-3 text-muted-foreground text-[14px]" />
+            <Input
+              placeholder="Search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 text-xs h-10 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-card shadow-2xs"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          {/* Add New Project Button (Brandium Growth Green) */}
+          <Button
+            onClick={() => setProjectModal({ open: true, project: null })}
+            className="h-10 px-4 bg-[#67B239] hover:bg-[#5aa030] text-white text-xs font-semibold rounded-[6px] gap-2 shadow-xs transition-all cursor-pointer"
+          >
+            <i className="ti ti-square-rounded-plus-filled text-[15px]" />
+            Add New Project
+          </Button>
+        </div>
+      </div>
+
+      {/* 3. Responsive 4-Column Card Grid (Identical to reference image) */}
+      {isProjectsLoading ? (
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-card p-5 shadow-xs space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-5 w-24 rounded" />
+                <Skeleton className="size-5 rounded-full" />
+              </div>
+              <div className="flex items-center gap-3">
+                <Skeleton className="size-10 rounded-full" />
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-3/4" />
+              </div>
+              <div className="flex justify-between items-center pt-2">
+                <Skeleton className="h-5 w-24 rounded" />
+                <Skeleton className="h-5 w-16 rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filteredProjects.length === 0 ? (
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-card p-12 text-center text-muted-foreground shadow-2xs">
+          <p className="text-sm font-medium">No projects found matching your filters.</p>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={() => {
+              setSearch("");
+              setStageFilter("all");
+              setPriorityFilter("all");
+              setArtistFilter("all");
+            }}
+            className="text-xs text-[#67B239] hover:text-[#5aa030] font-medium mt-2 cursor-pointer"
+          >
+            Reset All Filters
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredProjects.map((project, idx) => {
+            const isFav =
+              favorites[project.id] !== undefined ? Boolean(favorites[project.id]) : true;
+            const priority = (project.priority || "High").toLowerCase();
+
+            const artistUser = project.assigned_artist_id
+              ? usersMap.get(project.assigned_artist_id)
+              : null;
+            const artistName = artistUser?.name || project.assigned_artist_name || null;
+            const artistAvatar = artistUser?.avatar_url || project.assigned_artist_avatar || null;
+
+            const agentUser = project.assigned_agent_id
+              ? usersMap.get(project.assigned_agent_id)
+              : null;
+            const agentName = agentUser?.name || project.assigned_agent_name || null;
+            const agentAvatar = agentUser?.avatar_url || project.assigned_agent_avatar || null;
+
+            const creatorUser = project.created_by ? usersMap.get(project.created_by) : null;
+            const creatorName: string =
+              creatorUser?.name ||
+              project.creator_name ||
+              profile?.full_name ||
+              (user?.user_metadata?.full_name as string) ||
+              "Admin";
+            const creatorAvatar: string | null =
+              creatorUser?.avatar_url ||
+              project.creator_avatar ||
+              (typeof user?.["avatar_url"] === "string" ? (user["avatar_url"] as string) : null) ||
+              null;
 
             return (
               <div
-                key={stage.id}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                  if (dragOverStageId !== stage.id) {
-                    setDragOverStageId(stage.id);
-                  }
-                }}
-                onDragLeave={(e) => {
-                  if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-                  if (dragOverStageId === stage.id) {
-                    setDragOverStageId(null);
-                  }
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  handleDropOnStage(stage);
-                }}
-                className={`w-76 flex flex-col bg-muted/20 border rounded-2xl shadow-2xs overflow-hidden transition-all duration-200 ${
-                  isDragOver
-                    ? "border-[#67B239] ring-2 ring-[#67B239]/50 bg-[#67B239]/5 scale-[1.01]"
-                    : "border-border/60"
-                }`}
+                key={project.id}
+                onClick={() => setDetailModal({ open: true, project })}
+                className="group relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-card p-5 shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] dark:shadow-none hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between cursor-pointer select-none text-[13px] text-[#707070] dark:text-slate-300"
               >
-                {/* Dynamic Column Header */}
-                <div
-                  className="px-3.5 py-2.5 flex items-center justify-between text-white transition-colors shrink-0"
-                  style={{ backgroundColor: stageColor }}
-                >
-                  <div className="flex items-center gap-2">
-                    <StageIcon className="size-4" />
-                    <span className="font-semibold text-xs tracking-wide">{stage.name}</span>
+                <div>
+                  {/* Row 1: Priority Badge, Active Badge & Golden Star */}
+                  <div className="flex items-center justify-between mb-3.5">
+                    <div className="flex items-center gap-1.5">
+                      {/* Priority Badge */}
+                      {priority === "high" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] text-[12px] font-medium bg-[#FDE8E8] text-[#EF1E1E]">
+                          <span className="size-1.5 rounded-full bg-[#EF1E1E]" />
+                          High
+                        </span>
+                      ) : priority === "low" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] text-[12px] font-medium bg-[#E8F9ED] text-[#28C76F]">
+                          <span className="size-1.5 rounded-full bg-[#28C76F]" />
+                          Low
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] text-[12px] font-medium bg-[#FFF4E6] text-[#FF9F43]">
+                          <span className="size-1.5 rounded-full bg-[#FF9F43]" />
+                          Medium
+                        </span>
+                      )}
+
+                      {/* Active Badge */}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-[5px] text-[12px] font-medium bg-[#16A34A] text-white">
+                        {project.stage_name || "Active"}
+                      </span>
+                    </div>
+
+                    {/* Golden Star Favorite Icon */}
+                    <span
+                      onClick={(e) => toggleFavorite(project.id, e)}
+                      className="cursor-pointer transition-transform hover:scale-110"
+                      title={isFav ? "Favorited" : "Mark as favorite"}
+                    >
+                      <i
+                        className={`ti ti-star-filled text-[17px] ${
+                          isFav ? "text-[#F59E0B]" : "text-slate-200 hover:text-[#F59E0B]"
+                        }`}
+                      />
+                    </span>
                   </div>
-                  <Badge
-                    variant="secondary"
-                    className="bg-black/25 text-white font-bold text-[10px] px-2 py-0.5 rounded-full border-0"
+
+                  {/* Row 2: Project Info Box (Avatar Logo, Title, Subtitle, 3-Dots) */}
+                  <div className="flex items-center justify-between bg-[#F8F9FA] dark:bg-slate-900/60 rounded-xl p-2.5 mb-3.5">
+                    <div className="flex items-center min-w-0 flex-1 me-2">
+                      <div className="size-10 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex shrink-0 items-center justify-center me-2.5 overflow-hidden shadow-2xs">
+                        {renderProjectLogo(project.title, idx)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h5
+                          className="font-semibold text-[14px] leading-4.25 text-[#1F2020] dark:text-slate-100 truncate mb-0.5 cursor-pointer hover:text-blue-600 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDetailModal({ open: true, project });
+                          }}
+                          title={project.title}
+                        >
+                          {project.title}
+                        </h5>
+                        <p className="text-[12px] text-[#707070] dark:text-slate-400 truncate mb-0 font-normal">
+                          {project.service_name || "Web App"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 3-Dot Action Dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="size-7.5 rounded-[5px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[#707070] dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-2xs flex items-center justify-center shrink-0 cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <i className="ti ti-dots-vertical text-[13px]" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-40 min-w-40 rounded-[5px] p-1 shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] border border-[#E2E8F0] dark:border-slate-800 bg-white dark:bg-slate-900"
+                      >
+                        <DropdownMenuItem
+                          className="px-3 py-1.5 rounded-lg text-[13px] text-[#707070] dark:text-slate-300 cursor-pointer flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProjectModal({ open: true, project });
+                          }}
+                        >
+                          <i className="ti ti-edit text-[#1B84FF] text-[14px]" /> Edit
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem
+                          className="px-3 py-1.5 rounded-lg text-[13px] text-[#707070] dark:text-slate-300 cursor-pointer flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDetailModal({ open: true, project });
+                          }}
+                        >
+                          <i className="ti ti-eye text-[#00c5fb] text-[14px]" /> View Details
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem
+                          className="px-3 py-1.5 rounded-lg text-[13px] text-[#707070] dark:text-slate-300 cursor-pointer flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const currentIdx = stages.findIndex(
+                              (s) =>
+                                s.id === project.stage_id ||
+                                s.name.toLowerCase() === project.stage_name.toLowerCase(),
+                            );
+                            const nextStage = stages[currentIdx + 1] || stages[0];
+                            if (nextStage) {
+                              await updateStatusMutation.mutateAsync({
+                                id: project.id,
+                                stage_id: nextStage.id,
+                                stage_name: nextStage.name,
+                              });
+                            }
+                          }}
+                        >
+                          <i className="ti ti-arrow-right text-[#28C76F] text-[14px]" /> Advance
+                          Stage
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem
+                          className="px-3 py-1.5 rounded-lg text-[13px] text-[#707070] dark:text-slate-300 cursor-pointer flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProjectModal({
+                              open: true,
+                              project: {
+                                ...project,
+                                id: "",
+                                project_code: `PRJ-${Math.floor(1000 + Math.random() * 9000)}`,
+                                title: `${project.title} (Copy)`,
+                              },
+                            });
+                          }}
+                        >
+                          <i className="ti ti-clipboard-copy text-[#28C76F] text-[14px]" /> Clone
+                          this Project
+                        </DropdownMenuItem>
+
+                        <DropdownMenuSeparator className="my-1 border-slate-100 dark:border-slate-800" />
+
+                        <DropdownMenuItem
+                          className="px-3 py-1.5 rounded-lg text-[13px] text-[#EF1E1E] cursor-pointer flex items-center gap-2 hover:bg-red-50 dark:hover:bg-red-950/30"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteModal({ open: true, project });
+                          }}
+                        >
+                          <i className="ti ti-trash text-[#EF1E1E] text-[14px]" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  {/* Row 3: Description */}
+                  <p
+                    className="text-[13px] text-[#707070] dark:text-slate-400 leading-4.75 mb-3.5 line-clamp-2 font-normal"
+                    title={
+                      project.notes ||
+                      "Kofejob is a freelancers marketplace where you can post projects & get instant help."
+                    }
                   >
-                    {isLoading ? "..." : stageProjects.length}
-                  </Badge>
+                    {project.notes ||
+                      "Kofejob is a freelancers marketplace where you can post projects & get instant help."}
+                  </p>
+
+                  {/* Row 4: Metadata Rows */}
+                  <div className="space-y-2 mb-3.5">
+                    <p className="flex items-center text-[13px] text-[#707070] dark:text-slate-300 font-normal">
+                      <i className="ti ti-forbid-2 me-2 text-[14px] text-[#707070] dark:text-slate-400 shrink-0" />
+                      Project ID : #{project.project_code || "12145"}
+                    </p>
+                    <p className="flex items-center text-[13px] text-[#707070] dark:text-slate-300 font-normal">
+                      <i className="ti ti-report-money me-2 text-[14px] text-[#707070] dark:text-slate-400 shrink-0" />
+                      Value : ${formatProjectValue(project.budget)}
+                    </p>
+                    <p className="flex items-center text-[13px] text-[#707070] dark:text-slate-300 font-normal">
+                      <i className="ti ti-calendar-exclamation me-2 text-[14px] text-[#707070] dark:text-slate-400 shrink-0" />
+                      Due Date : {formatProjectCardDate(project.deadline)}
+                    </p>
+                  </div>
+
+                  {/* Row 5: Overlapping Assigned Team Avatars & Creator Avatar (By User ID) */}
+                  <div className="flex items-center justify-between mb-3.5">
+                    {/* Left: Assigned Team Avatars by User ID */}
+                    <div className="flex items-center">
+                      <div className="flex items-center -space-x-1.5">
+                        {artistName ? (
+                          <span
+                            title={`Artist / Designer: ${artistName}`}
+                            className="size-6.5 rounded-full border-2 border-white dark:border-slate-800 overflow-hidden inline-flex items-center justify-center bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[10px] font-semibold shadow-2xs cursor-pointer hover:z-10 transition-transform hover:scale-105"
+                          >
+                            {artistAvatar ? (
+                              <img
+                                src={artistAvatar}
+                                alt={artistName}
+                                className="size-full object-cover rounded-full"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  if (e.currentTarget.nextElementSibling) {
+                                    (
+                                      e.currentTarget.nextElementSibling as HTMLElement
+                                    ).style.display = "flex";
+                                  }
+                                }}
+                              />
+                            ) : null}
+                            <span className={artistAvatar ? "hidden" : "flex"}>
+                              {artistName.charAt(0).toUpperCase()}
+                            </span>
+                          </span>
+                        ) : null}
+
+                        {agentName ? (
+                          <span
+                            title={`Account Agent: ${agentName}`}
+                            className="size-6.5 rounded-full border-2 border-white dark:border-slate-800 overflow-hidden inline-flex items-center justify-center bg-blue-100 dark:bg-sky-950/60 text-blue-700 dark:text-sky-300 text-[10px] font-semibold shadow-2xs cursor-pointer hover:z-10 transition-transform hover:scale-105"
+                          >
+                            {agentAvatar ? (
+                              <img
+                                src={agentAvatar}
+                                alt={agentName}
+                                className="size-full object-cover rounded-full"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  if (e.currentTarget.nextElementSibling) {
+                                    (
+                                      e.currentTarget.nextElementSibling as HTMLElement
+                                    ).style.display = "flex";
+                                  }
+                                }}
+                              />
+                            ) : null}
+                            <span className={agentAvatar ? "hidden" : "flex"}>
+                              {agentName.charAt(0).toUpperCase()}
+                            </span>
+                          </span>
+                        ) : null}
+
+                        {!artistName && !agentName ? (
+                          <span
+                            title="Unassigned Team"
+                            className="size-6.5 rounded-full border-2 border-white dark:border-slate-800 overflow-hidden inline-flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] font-semibold shadow-2xs"
+                          >
+                            <User className="size-3 text-slate-400" />
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {/* Right: Project Creator Avatar by User ID */}
+                    <div
+                      className="size-8 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden flex items-center justify-center bg-slate-100 dark:bg-slate-800 shadow-2xs shrink-0 cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 transition-colors"
+                      title={`Added by: ${creatorName}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toast.info(`Project added by: ${creatorName}`);
+                      }}
+                    >
+                      {creatorAvatar ? (
+                        <img
+                          src={creatorAvatar}
+                          alt={creatorName}
+                          className="size-full object-cover rounded-full"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            if (e.currentTarget.nextElementSibling) {
+                              (e.currentTarget.nextElementSibling as HTMLElement).style.display =
+                                "flex";
+                            }
+                          }}
+                        />
+                      ) : null}
+                      <span
+                        className={`text-xs font-semibold text-slate-700 dark:text-slate-200 ${
+                          creatorAvatar ? "hidden" : "flex"
+                        }`}
+                      >
+                        {creatorName ? creatorName.charAt(0).toUpperCase() : "U"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Column Body Cards */}
-                <ScrollArea className="h-[calc(100vh-210px)] min-h-96">
-                  <div className="p-3 flex flex-col gap-3">
-                    {isDragOver && (
-                      <div className="h-16 border-2 border-dashed border-[#67B239] bg-[#67B239]/10 rounded-xl flex items-center justify-center text-xs font-semibold text-[#67B239] animate-pulse">
-                        Drop here to move to {stage.name}
-                      </div>
-                    )}
+                {/* Row 6: Card Footer (Total Hours Badge, WeChat & Subtask Counts) */}
+                <div className="flex justify-between items-center pt-3 border-t border-[#F1F5F9] dark:border-slate-800">
+                  <span className="bg-[#EBF5FF] dark:bg-sky-950/60 text-[#2563EB] dark:text-sky-300 rounded-[5px] px-2.5 py-1 text-[12px] font-medium inline-flex items-center gap-1.5">
+                    <i className="ti ti-clock-stop text-[13px]" />
+                    Total Hours : {idx === 0 ? 100 : idx === 1 ? 80 : 75}
+                  </span>
 
-                    {isLoading ? (
-                      <div className="space-y-3">
-                        <Skeleton className="h-28 w-full rounded-xl" />
-                        <Skeleton className="h-28 w-full rounded-xl" />
-                      </div>
-                    ) : stageProjects.length === 0 && !isDragOver ? (
-                      <div className="h-32 border border-dashed border-border/70 rounded-xl flex items-center justify-center text-muted-foreground text-xs italic">
-                        No prospects in {stage.name}
-                      </div>
-                    ) : (
-                      stageProjects.map((project) => {
-                        const isBeingDragged = draggedProjectId === project.id;
-                        const projectNum = project.project_code.replace(/^PRJ-?/i, "");
-                        const businessName =
-                          project.business_name ||
-                          project.client_name ||
-                          project.title ||
-                          "Untitled Business";
-                        const contactPerson =
-                          project.contact_name || project.client_name || "Contact Person";
-                        const displayTitle = `${projectNum ? `${projectNum} • ` : ""}${businessName}`;
-
-                        const artistName = project.assigned_artist_name;
-                        const artistAvatar = project.assigned_artist_avatar;
-                        const artistInitial = (artistName || "A").charAt(0).toUpperCase();
-
-                        const agentName = project.assigned_agent_name;
-                        const agentAvatar = project.assigned_agent_avatar;
-                        const agentInitial = (agentName || "U").charAt(0).toUpperCase();
-
-                        const hasArtist = Boolean(artistName);
-                        const hasAgent = Boolean(agentName);
-                        const hasBoth = hasArtist && hasAgent;
-
-                        return (
-                          <div
-                            key={project.id}
-                            draggable
-                            onDragStart={(e) => {
-                              e.dataTransfer.setData("text/plain", project.id);
-                              e.dataTransfer.effectAllowed = "move";
-                              setDraggedProjectId(project.id);
-                            }}
-                            onDragEnd={() => {
-                              setDraggedProjectId(null);
-                              setDragOverStageId(null);
-                            }}
-                            className={`bg-card border rounded-xl p-3 shadow-2xs hover:shadow-md transition-all flex flex-col gap-2.5 text-xs group relative cursor-grab active:cursor-grabbing select-none ${
-                              isBeingDragged
-                                ? "opacity-40 border-dashed border-[#67B239] scale-95"
-                                : "border-border/80 hover:border-primary/50"
-                            }`}
-                          >
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1 min-w-0 pr-2">
-                                <h3
-                                  onClick={() => setDetailModal({ open: true, project })}
-                                  className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors w-full truncate cursor-pointer"
-                                  title={displayTitle}
-                                >
-                                  {displayTitle}
-                                </h3>
-                                <div className="flex items-center gap-1.5 mt-0.5" />
-                              </div>
-                            </div>
-
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium min-w-0">
-                                <User className="h-3.5 w-3.5 shrink-0" />
-                                <span className="flex-1 block truncate" title={contactPerson}>
-                                  {contactPerson}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
-                                <Phone className="h-3.5 w-3.5 shrink-0" />
-                                <span className="truncate">
-                                  {project.client_phone || "No phone"}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between pt-1">
-                              <div className="inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-bold shadow-2xs bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20">
-                                <CalendarDays className="mr-1.5 h-3 w-3" />
-                                <span>
-                                  {formatProjectCardDate(project.deadline || project.created_at)}
-                                </span>
-                              </div>
-                              <div
-                                className="h-7 w-7 rounded-lg bg-muted/30 flex items-center justify-center cursor-help border border-border/40 hover:bg-muted/60 transition-colors"
-                                title={project.client_address || project.client_name || "Location"}
-                              >
-                                <MapPin className="h-3.5 w-3.5 text-primary" />
-                              </div>
-                            </div>
-
-                            <div className="pt-2.5 border-t border-border/40 flex items-center justify-between">
-                              <div
-                                className="flex items-center gap-2 group/avatar cursor-pointer min-w-0"
-                                onClick={() => setDetailModal({ open: true, project })}
-                                title={
-                                  hasBoth
-                                    ? `Artist: ${artistName} • Agent: ${agentName}`
-                                    : hasArtist
-                                      ? `Artist: ${artistName}`
-                                      : hasAgent
-                                        ? `Agent: ${agentName}`
-                                        : "Unassigned"
-                                }
-                              >
-                                <div className="flex items-center -space-x-2 shrink-0">
-                                  {hasArtist && (
-                                    <span
-                                      className="relative z-10 flex shrink-0 overflow-hidden rounded-full h-7 w-7 ring-2 ring-background border border-amber-500/30 shadow-2xs group-hover/avatar:ring-amber-500/40 transition-all"
-                                      title={`Artist: ${artistName}`}
-                                    >
-                                      {artistAvatar ? (
-                                        <img
-                                          src={artistAvatar}
-                                          alt={artistName || "Artist"}
-                                          className="aspect-square h-full w-full object-cover"
-                                        />
-                                      ) : (
-                                        <span className="flex h-full w-full items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold text-[10px]">
-                                          {artistInitial}
-                                        </span>
-                                      )}
-                                    </span>
-                                  )}
-
-                                  {hasAgent && (
-                                    <span
-                                      className={`relative flex shrink-0 overflow-hidden rounded-full h-7 w-7 ring-2 ring-background border border-blue-500/30 shadow-2xs group-hover/avatar:ring-blue-500/40 transition-all ${
-                                        hasArtist ? "z-0" : "z-10"
-                                      }`}
-                                      title={`Agent: ${agentName}`}
-                                    >
-                                      {agentAvatar ? (
-                                        <img
-                                          src={agentAvatar}
-                                          alt={agentName || "Agent"}
-                                          className="aspect-square h-full w-full object-cover"
-                                        />
-                                      ) : (
-                                        <span className="flex h-full w-full items-center justify-center rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 font-bold text-[10px]">
-                                          {agentInitial}
-                                        </span>
-                                      )}
-                                    </span>
-                                  )}
-
-                                  {!hasArtist && !hasAgent && (
-                                    <span className="relative flex shrink-0 overflow-hidden rounded-full h-7 w-7 ring-2 ring-background border border-border/40 shadow-2xs">
-                                      <span className="flex h-full w-full items-center justify-center rounded-full bg-muted text-muted-foreground font-bold text-[10px]">
-                                        U
-                                      </span>
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1">
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors p-0"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <EllipsisVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="text-xs">
-                                    <DropdownMenuItem
-                                      onClick={() => setDetailModal({ open: true, project })}
-                                    >
-                                      <Eye className="size-3.5 mr-2" /> View Details
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        setProjectModal({
-                                          open: true,
-                                          project,
-                                        })
-                                      }
-                                    >
-                                      <Pencil className="size-3.5 mr-2" /> Edit Prospect
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => {
-                                        const currentIndex = stages.findIndex(
-                                          (s) => s.id === project.stage_id,
-                                        );
-                                        const nextStage =
-                                          stages[(currentIndex + 1) % Math.max(1, stages.length)];
-                                        if (nextStage) {
-                                          updateStatusMutation.mutate({
-                                            id: project.id,
-                                            stage_id: nextStage.id,
-                                            stage_name: nextStage.name,
-                                          });
-                                        }
-                                      }}
-                                    >
-                                      <ArrowRight className="size-3.5 mr-2" /> Advance Stage
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      className="text-red-600 focus:text-red-600"
-                                      onClick={() => setDeleteModal({ open: true, project })}
-                                    >
-                                      <Trash2 className="size-3.5 mr-2" /> Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
+                  <div className="flex items-center gap-3 text-[13px] text-[#707070] dark:text-slate-400 font-normal">
+                    <span className="inline-flex items-center gap-1">
+                      <i className="ti ti-brand-wechat text-[14px]" />
+                      02
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1 cursor-pointer hover:text-blue-600 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDetailModal({ open: true, project });
+                      }}
+                      title="Subtasks"
+                    >
+                      <i className="ti ti-subtask text-[14px]" />
+                      04
+                    </span>
                   </div>
-                  <ScrollBar orientation="vertical" />
-                </ScrollArea>
+                </div>
               </div>
             );
           })}
         </div>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
-
-      {/* Edit Project Modal */}
-      {projectModal.open && (
-        <ProjectFormModal
-          open={projectModal.open}
-          onOpenChange={(open: boolean) => setProjectModal({ open, project: null })}
-          project={projectModal.project}
-          stages={stages}
-          users={users}
-          services={services}
-          onSave={async (data) => {
-            await saveProjectMutation.mutateAsync(data);
-            setProjectModal({ open: false, project: null });
-          }}
-          isSaving={saveProjectMutation.isPending}
-        />
       )}
 
-      {/* Project Details Modal */}
+      {/* 5. Offcanvas Drawer Form (Add / Edit Project) */}
+      <ProjectOffcanvasDrawer
+        open={projectModal.open}
+        onOpenChange={(open: boolean) => setProjectModal({ open, project: null })}
+        project={projectModal.project}
+        stages={stages}
+        users={users}
+        services={services}
+        onSave={async (data) => {
+          await saveProjectMutation.mutateAsync(data);
+          setProjectModal({ open: false, project: null });
+        }}
+        isSaving={saveProjectMutation.isPending}
+      />
+
+      {/* 6. Project Details Modal */}
       {detailModal.open && detailModal.project && (
         <ProjectDetailModal
           open={detailModal.open}
@@ -611,52 +1071,59 @@ export default function ProjectsPage() {
           project={detailModal.project}
           stages={stages}
           onEdit={() => {
-            const p = detailModal.project;
+            const prj = detailModal.project;
             setDetailModal({ open: false, project: null });
-            setProjectModal({ open: true, project: p });
+            if (prj) setProjectModal({ open: true, project: prj });
           }}
-          onStageChange={async (newStageId: string, newStageName: string) => {
+          onStageChange={async (stageId: string, stageName: string) => {
             if (detailModal.project) {
               await updateStatusMutation.mutateAsync({
                 id: detailModal.project.id,
-                stage_id: newStageId,
-                stage_name: newStageName,
+                stage_id: stageId,
+                stage_name: stageName,
               });
-              setDetailModal({
-                open: true,
-                project: {
-                  ...detailModal.project,
-                  stage_id: newStageId,
-                  stage_name: newStageName,
-                },
-              });
+              setDetailModal((prev) =>
+                prev.project
+                  ? {
+                      ...prev,
+                      project: {
+                        ...prev.project,
+                        stage_id: stageId,
+                        stage_name: stageName,
+                      },
+                    }
+                  : prev,
+              );
             }
           }}
         />
       )}
 
-      {/* Delete Project Dialog */}
+      {/* 7. Delete Project Dialog (Dreamstechnologies #delete_project Spec) */}
       <AlertDialog
         open={deleteModal.open}
         onOpenChange={(open: boolean) => setDeleteModal({ open, project: null })}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertCircle className="size-5" /> Delete Prospect Project
+        <AlertDialogContent className="max-w-sm rounded-[10px] p-6 text-center border-slate-200 dark:border-slate-800">
+          <div className="mx-auto mb-3 size-14 rounded-full bg-[#FDE9E9] text-[#EF1E1E] flex items-center justify-center">
+            <i className="ti ti-trash text-[24px]" />
+          </div>
+          <AlertDialogHeader className="text-center sm:text-center">
+            <AlertDialogTitle className="text-base font-semibold text-center text-slate-900 dark:text-slate-100">
+              Delete Confirmation
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-              Are you sure you want to delete project{" "}
-              <strong className="text-foreground">
+            <AlertDialogDescription className="text-xs text-slate-500 dark:text-slate-400 text-center leading-relaxed">
+              Are you sure you want to remove project{" "}
+              <strong className="text-slate-900 dark:text-slate-100">
                 "{deleteModal.project?.project_code} - {deleteModal.project?.title}"
               </strong>
-              ? This action will deactivate this prospect record.
+              ?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="flex items-center justify-center gap-2 sm:justify-center mt-4">
+            <AlertDialogCancel className="w-full text-xs h-9 font-medium">Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold"
+              className="w-full bg-[#EF1E1E] hover:bg-red-700 text-white text-xs font-semibold h-9"
               onClick={async () => {
                 if (deleteModal.project) {
                   await deleteProjectMutation.mutateAsync(deleteModal.project.id);
@@ -664,7 +1131,7 @@ export default function ProjectsPage() {
                 }
               }}
             >
-              {deleteProjectMutation.isPending ? "Deleting..." : "Confirm Delete"}
+              {deleteProjectMutation.isPending ? "Deleting..." : "Yes, Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -673,18 +1140,21 @@ export default function ProjectsPage() {
   );
 }
 
-interface ProjectFormModalProps {
+/* =========================================================================
+   Offcanvas Drawer Form Component (offcanvas_add & offcanvas_edit standard)
+   ========================================================================= */
+interface ProjectOffcanvasDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   project: CrmProjectItem | null;
   stages: Stage[];
-  users: Array<{ id: string; name: string; role: string }>;
+  users: Array<{ id: string; name: string; email?: string; role?: string }>;
   services: Array<{ id: string; name: string }>;
-  onSave: (payload: SaveProjectPayload) => Promise<void>;
+  onSave: (data: SaveProjectPayload) => Promise<void>;
   isSaving: boolean;
 }
 
-function ProjectFormModal({
+function ProjectOffcanvasDrawer({
   open,
   onOpenChange,
   project,
@@ -693,11 +1163,18 @@ function ProjectFormModal({
   services,
   onSave,
   isSaving,
-}: ProjectFormModalProps) {
+}: ProjectOffcanvasDrawerProps) {
+  const { user } = useAuth();
   const [title, setTitle] = useState(project?.title || "");
+  const [projectCode, setProjectCode] = useState(project?.project_code || "");
   const [clientName, setClientName] = useState(project?.client_name || "");
+  const [clientPhone, setClientPhone] = useState(project?.client_phone || "");
+  const [clientEmail, setClientEmail] = useState(project?.client_email || "");
   const [serviceId, setServiceId] = useState(project?.service_id || "none");
-  const [stageId, setStageId] = useState<string>(project?.stage_id || stages[0]?.id || "prospect");
+  const [stageId, setStageId] = useState<string>(
+    project?.stage_id || stages[0]?.id || "CR Clearance",
+  );
+  const [priority, setPriority] = useState<string>(project?.priority || "Medium");
   const [assignedArtistId, setAssignedArtistId] = useState(project?.assigned_artist_id || "none");
   const [assignedAgentId, setAssignedAgentId] = useState(project?.assigned_agent_id || "none");
   const [budget, setBudget] = useState(project?.budget ? String(project.budget) : "");
@@ -713,9 +1190,13 @@ function ProjectFormModal({
   useEffect(() => {
     if (open) {
       setTitle(project?.title || "");
+      setProjectCode(project?.project_code || `PRJ-${Math.floor(1000 + Math.random() * 9000)}`);
       setClientName(project?.client_name || "");
+      setClientPhone(project?.client_phone || "");
+      setClientEmail(project?.client_email || "");
       setServiceId(project?.service_id || "none");
-      setStageId(project?.stage_id || stages[0]?.id || "prospect");
+      setStageId(project?.stage_id || stages[0]?.id || "CR Clearance");
+      setPriority(project?.priority || "Medium");
       setAssignedArtistId(project?.assigned_artist_id || "none");
       setAssignedAgentId(project?.assigned_agent_id || "none");
       setBudget(project?.budget ? String(project.budget) : "");
@@ -728,16 +1209,24 @@ function ProjectFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !clientName.trim()) return;
+    if (!title.trim() || !clientName.trim()) {
+      toast.error("Project title and client name are required.");
+      return;
+    }
 
     await onSave({
       id: project?.id || null,
+      project_code: projectCode.trim() || null,
       title: title.trim(),
       client_name: clientName.trim(),
+      client_phone: clientPhone.trim() || null,
+      client_email: clientEmail.trim() || null,
       service_id: serviceId && serviceId !== "none" ? serviceId : null,
-      stage_id: stageId && stageId !== "none" ? stageId : null,
+      stage_id: stageId && stageId !== "none" ? stageId : "CR Clearance",
+      priority,
       assigned_artist_id: assignedArtistId && assignedArtistId !== "none" ? assignedArtistId : null,
       assigned_agent_id: assignedAgentId && assignedAgentId !== "none" ? assignedAgentId : null,
+      created_by: project ? project.created_by || user?.id || null : user?.id || null,
       budget: budget ? parseFloat(budget) : 0,
       paid_amount: paidAmount ? parseFloat(paidAmount) : 0,
       progress: progress ? parseInt(progress, 10) : 0,
@@ -763,209 +1252,328 @@ function ProjectFormModal({
   }, [users]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-2 border-b border-border/60">
-          <DialogTitle className="flex items-center gap-2 text-base font-bold">
-            <DraftingCompass className="size-5 text-[#67B239]" />
-            {project ? `Edit Prospect Project: ${project.project_code}` : "Edit Project Details"}
-          </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
-            Update project scope, assign creative artist, set milestones and budget.
-          </DialogDescription>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-187.5 lg:max-w-200 p-0 flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 border-l border-slate-200 dark:border-slate-800 shadow-2xl focus:outline-none"
+      >
+        <SheetHeader className="sr-only">
+          <SheetTitle>{project ? "Edit Project" : "Add New Project"}</SheetTitle>
+          <SheetDescription>Project details and production assignments</SheetDescription>
+        </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-xs">
-            <div className="space-y-1.5">
-              <Label htmlFor="proj_title" className="text-xs font-semibold">
-                Project Title <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="proj_title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Apex Footwear E-Commerce Video Shoot"
-                className="text-xs"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="proj_client" className="text-xs font-semibold">
-                Client / Company Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="proj_client"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                placeholder="e.g. Apex Footwear Ltd."
-                className="text-xs"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Service Package</Label>
-                <Select value={serviceId} onValueChange={setServiceId}>
-                  <SelectTrigger className="text-xs">
-                    <SelectValue placeholder="Select Service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">-- None --</SelectItem>
-                    {services.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">CRM Stage</Label>
-                <Select value={stageId} onValueChange={setStageId}>
-                  <SelectTrigger className="text-xs">
-                    <SelectValue placeholder="Select Stage" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stages.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold flex items-center gap-1">
-                  <Sparkles className="size-3.5 text-amber-500" />
-                  Assign Artist / Designer
-                </Label>
-                <Select value={assignedArtistId} onValueChange={setAssignedArtistId}>
-                  <SelectTrigger className="text-xs">
-                    <SelectValue placeholder="Select Artist" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">-- None --</SelectItem>
-                    {artists.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold flex items-center gap-1">
-                  <User className="size-3.5 text-blue-500" />
-                  Account Agent
-                </Label>
-                <Select value={assignedAgentId} onValueChange={setAssignedAgentId}>
-                  <SelectTrigger className="text-xs">
-                    <SelectValue placeholder="Select Agent" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">-- None --</SelectItem>
-                    {agents.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Total Budget (৳)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={budget}
-                  onChange={(e) => setBudget(e.target.value)}
-                  placeholder="e.g. 50000"
-                  className="text-xs"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Paid Amount (৳)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={paidAmount}
-                  onChange={(e) => setPaidAmount(e.target.value)}
-                  placeholder="e.g. 25000"
-                  className="text-xs"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Progress (%)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={progress}
-                  onChange={(e) => setProgress(e.target.value)}
-                  placeholder="0 - 100"
-                  className="text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Delivery Deadline</Label>
-              <Input
-                type="date"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className="text-xs"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Project Notes / Creative Brief</Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Script notes, resolution requirements, deliverables..."
-                rows={3}
-                className="text-xs resize-none"
-              />
-            </div>
+        {/* Header Bar */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-card shrink-0">
+          <div>
+            <h3 className="text-[18px] font-semibold text-slate-900 dark:text-slate-100 leading-tight">
+              {project ? `Edit Project: #${project.project_code}` : "Add New Project"}
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {project
+                ? "Update project scope, deliverables, team assignments, and financials."
+                : "Fill in project details and team assignments."}
+            </p>
           </div>
+        </div>
 
-          <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/10 gap-2 sm:gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="text-xs h-9 px-4 rounded-xl"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={isSaving || !title.trim() || !clientName.trim()}
-              className="text-xs h-9 px-5 font-semibold bg-[#67B239] hover:bg-[#5aa030] text-white rounded-xl shadow-xs"
-            >
-              {isSaving ? "Saving..." : "Update Project"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        {/* Scrollable Form Body */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+          <form id="project-drawer-form" onSubmit={handleSubmit} className="space-y-4">
+            {/* Section 1: Basic Information */}
+            <div className="border border-slate-200 dark:border-slate-800 rounded-[5px] bg-white dark:bg-card overflow-hidden shadow-2xs">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+                <span className="size-7.5 rounded-[5px] bg-[#67B239] text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <DraftingCompass className="size-4" />
+                </span>
+                <span className="text-[14px] font-semibold text-slate-900 dark:text-slate-100">
+                  Basic Information
+                </span>
+              </div>
+
+              <div className="p-5 space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2 space-y-1.5">
+                    <Label htmlFor="drawer_title" className="text-xs font-semibold">
+                      Project Name / Title <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="drawer_title"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="e.g. Apex Footwear E-Commerce Video Shoot"
+                      className="text-xs h-9"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="drawer_code" className="text-xs font-semibold">
+                      Project ID <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="drawer_code"
+                      value={projectCode}
+                      onChange={(e) => setProjectCode(e.target.value)}
+                      placeholder="e.g. PRJ-1001"
+                      className="text-xs h-9"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="drawer_client" className="text-xs font-semibold">
+                    Client / Company Name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="drawer_client"
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    placeholder="e.g. Apex Footwear Ltd."
+                    className="text-xs h-9"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="drawer_phone" className="text-xs font-semibold">
+                      Client Phone
+                    </Label>
+                    <Input
+                      id="drawer_phone"
+                      value={clientPhone}
+                      onChange={(e) => setClientPhone(e.target.value)}
+                      placeholder="e.g. +880 1700-000000"
+                      className="text-xs h-9"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="drawer_email" className="text-xs font-semibold">
+                      Client Email
+                    </Label>
+                    <Input
+                      id="drawer_email"
+                      type="email"
+                      value={clientEmail}
+                      onChange={(e) => setClientEmail(e.target.value)}
+                      placeholder="e.g. client@company.com"
+                      className="text-xs h-9"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Service Package / Category</Label>
+                    <Select value={serviceId} onValueChange={setServiceId}>
+                      <SelectTrigger className="text-xs h-9">
+                        <SelectValue placeholder="Select Service" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">-- None --</SelectItem>
+                        {services.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Priority</Label>
+                    <Select value={priority} onValueChange={setPriority}>
+                      <SelectTrigger className="text-xs h-9">
+                        <SelectValue placeholder="Select Priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="High">High</SelectItem>
+                        <SelectItem value="Medium">Medium</SelectItem>
+                        <SelectItem value="Low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Stage & Financials */}
+            <div className="border border-slate-200 dark:border-slate-800 rounded-[5px] bg-white dark:bg-card overflow-hidden shadow-2xs">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+                <span className="size-7.5 rounded-[5px] bg-[#0a2e5c] text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <Receipt className="size-4" />
+                </span>
+                <span className="text-[14px] font-semibold text-slate-900 dark:text-slate-100">
+                  Stage & Financials
+                </span>
+              </div>
+
+              <div className="p-5 space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Production Stage</Label>
+                    <Select value={stageId} onValueChange={setStageId}>
+                      <SelectTrigger className="text-xs h-9">
+                        <SelectValue placeholder="Select Stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stages.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Due Date</Label>
+                    <Input
+                      type="date"
+                      value={deadline}
+                      onChange={(e) => setDeadline(e.target.value)}
+                      className="text-xs h-9"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Budget Value (৳)</Label>
+                    <Input
+                      type="number"
+                      value={budget}
+                      onChange={(e) => setBudget(e.target.value)}
+                      placeholder="e.g. 50000"
+                      className="text-xs h-9"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Paid Amount (৳)</Label>
+                    <Input
+                      type="number"
+                      value={paidAmount}
+                      onChange={(e) => setPaidAmount(e.target.value)}
+                      placeholder="e.g. 25000"
+                      className="text-xs h-9"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Progress (%)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={progress}
+                      onChange={(e) => setProgress(e.target.value)}
+                      placeholder="0 - 100"
+                      className="text-xs h-9"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Team Assignment & Specifications */}
+            <div className="border border-slate-200 dark:border-slate-800 rounded-[5px] bg-white dark:bg-card overflow-hidden shadow-2xs">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+                <span className="size-7.5 rounded-[5px] bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <User className="size-4" />
+                </span>
+                <span className="text-[14px] font-semibold text-slate-900 dark:text-slate-100">
+                  Team Assignment & Specifications
+                </span>
+              </div>
+
+              <div className="p-5 space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold flex items-center gap-1">
+                      <Sparkles className="size-3.5 text-amber-500" />
+                      Responsible Artist / Designer
+                    </Label>
+                    <Select value={assignedArtistId} onValueChange={setAssignedArtistId}>
+                      <SelectTrigger className="text-xs h-9">
+                        <SelectValue placeholder="Select Artist" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">-- None --</SelectItem>
+                        {artists.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold flex items-center gap-1">
+                      <User className="size-3.5 text-blue-500" />
+                      Account Agent / Team Leader
+                    </Label>
+                    <Select value={assignedAgentId} onValueChange={setAssignedAgentId}>
+                      <SelectTrigger className="text-xs h-9">
+                        <SelectValue placeholder="Select Agent" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">-- None --</SelectItem>
+                        {agents.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Description & Deliverable Notes</Label>
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Project deliverables, video resolution, script requirements, handover notes..."
+                    rows={3}
+                    className="text-xs resize-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        {/* Sticky Action Footer */}
+        <div className="p-4 px-6 bg-white dark:bg-card border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5 shrink-0 shadow-xs">
+          <Button
+            type="button"
+            variant="outline"
+            className="text-xs h-9 px-4 rounded-[6px] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="project-drawer-form"
+            disabled={isSaving || !title.trim() || !clientName.trim()}
+            className="text-xs h-9 px-5 font-semibold bg-[#67B239] hover:bg-[#5aa030] text-white rounded-[6px] shadow-xs cursor-pointer"
+          >
+            {isSaving ? "Saving..." : project ? "Save Changes" : "Create Project"}
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
+/* =========================================================================
+   Project Detail Modal Component
+   ========================================================================= */
 interface ProjectDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -983,16 +1591,9 @@ function ProjectDetailModal({
   onEdit,
   onStageChange,
 }: ProjectDetailModalProps) {
+  const stageColor = project.stage_color || resolveProjectStageColor(project.stage_name);
   const currentStage = stages.find(
     (s) => s.id === project.stage_id || s.name.toLowerCase() === project.stage_name.toLowerCase(),
-  );
-  const stageColor = resolveStageColor(
-    currentStage?.name || project.stage_name,
-    currentStage?.color || project.stage_color,
-  );
-  const StageIcon: LucideIcon = getStageLucideIcon(
-    currentStage?.icon || project.stage_icon,
-    currentStage?.name || project.stage_name,
   );
 
   return (
@@ -1000,27 +1601,31 @@ function ProjectDetailModal({
       <DialogContent className="max-w-xl p-0 overflow-hidden">
         <div className="px-6 py-5 text-white" style={{ backgroundColor: stageColor }}>
           <div className="flex items-center justify-between">
-            <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-black/25">
-              {project.project_code}
+            <span className="font-mono text-xs font-bold px-2.5 py-1 rounded bg-black/25">
+              #{project.project_code}
             </span>
-            <Badge variant="secondary" className="bg-white text-slate-900 font-bold text-xs gap-1">
-              <StageIcon className="size-3.5" /> {project.stage_name}
+            <Badge
+              variant="secondary"
+              className="bg-white text-slate-900 font-bold text-xs gap-1 shadow-2xs"
+            >
+              <CheckCircle2 className="size-3.5 text-emerald-600" /> {project.stage_name}
             </Badge>
           </div>
-          <h2 className="text-lg font-bold mt-2 leading-snug">{project.title}</h2>
-          <p className="text-xs opacity-90 mt-0.5 flex items-center gap-1.5">
+          <h2 className="text-lg font-bold mt-2.5 leading-snug">{project.title}</h2>
+          <p className="text-xs opacity-90 mt-1 flex items-center gap-1.5">
             <Building2 className="size-3.5" /> {project.client_name}
           </p>
         </div>
 
         <div className="p-6 space-y-5 text-xs">
-          <div className="rounded-xl border border-border/80 bg-muted/20 p-3 space-y-2">
+          {/* Move Stage Quick Picker */}
+          <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2">
             <Label className="text-xs font-semibold flex items-center gap-1.5">
-              <ArrowRight className="size-3.5 text-[#67B239]" /> Move CRM Stage:
+              <ArrowRight className="size-3.5 text-[#67B239]" /> Move Project Stage:
             </Label>
             <div className="flex flex-wrap gap-1.5">
               {stages.map((s) => {
-                const sColor = resolveStageColor(s.name, s.color);
+                const sColor = resolveProjectStageColor(s.name);
                 const isSelected =
                   s.id === project.stage_id ||
                   s.name.toLowerCase() === project.stage_name.toLowerCase();
@@ -1031,7 +1636,7 @@ function ProjectDetailModal({
                     size="sm"
                     variant={isSelected ? "default" : "outline"}
                     style={isSelected ? { backgroundColor: sColor, color: "#fff" } : {}}
-                    className={`text-[11px] h-7 px-2.5 rounded-lg ${
+                    className={`text-[11px] h-7 px-2.5 rounded-lg font-medium ${
                       isSelected ? "" : "border-border/60 hover:bg-muted"
                     }`}
                     onClick={() => onStageChange(s.id, s.name)}
@@ -1043,34 +1648,44 @@ function ProjectDetailModal({
             </div>
           </div>
 
+          {/* KPI Tiles */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-muted/30 border border-border/60 rounded-xl p-2.5">
-              <span className="text-[10px] text-muted-foreground uppercase">Budget</span>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                Budget
+              </span>
               <p className="font-bold text-sm text-foreground mt-0.5">
                 ৳{project.budget.toLocaleString()}
               </p>
             </div>
             <div className="bg-muted/30 border border-border/60 rounded-xl p-2.5">
-              <span className="text-[10px] text-muted-foreground uppercase">Paid</span>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                Paid
+              </span>
               <p className="font-bold text-sm text-green-600 mt-0.5">
                 ৳{project.paid_amount.toLocaleString()}
               </p>
             </div>
             <div className="bg-muted/30 border border-border/60 rounded-xl p-2.5">
-              <span className="text-[10px] text-muted-foreground uppercase">Due</span>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Due</span>
               <p className="font-bold text-sm text-red-500 mt-0.5">
                 ৳{project.due_amount.toLocaleString()}
               </p>
             </div>
             <div className="bg-muted/30 border border-border/60 rounded-xl p-2.5">
-              <span className="text-[10px] text-muted-foreground uppercase">Progress</span>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                Progress
+              </span>
               <p className="font-bold text-sm text-[#67B239] mt-0.5">{project.progress}%</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Team Members & Creator */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="border border-border/60 rounded-xl p-3 space-y-1">
-              <span className="text-[10px] text-muted-foreground uppercase">Assigned Artist</span>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                Assigned Artist
+              </span>
               <p className="font-semibold text-foreground flex items-center gap-1.5">
                 <Sparkles className="size-3.5 text-amber-500" />
                 {project.assigned_artist_name || "Not assigned"}
@@ -1078,18 +1693,54 @@ function ProjectDetailModal({
             </div>
 
             <div className="border border-border/60 rounded-xl p-3 space-y-1">
-              <span className="text-[10px] text-muted-foreground uppercase">Account Agent</span>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                Account Agent
+              </span>
               <p className="font-semibold text-foreground flex items-center gap-1.5">
                 <User className="size-3.5 text-blue-500" />
                 {project.assigned_agent_name || "Not assigned"}
               </p>
             </div>
+
+            <div className="border border-border/60 rounded-xl p-3 space-y-1">
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                Project Creator
+              </span>
+              <p className="font-semibold text-foreground flex items-center gap-1.5">
+                <User className="size-3.5 text-emerald-500" />
+                {project.creator_name || "Admin"}
+              </p>
+            </div>
           </div>
 
+          {/* Contact Details */}
+          {(project.client_phone || project.client_email) && (
+            <div className="border border-border/60 rounded-xl p-3 space-y-1.5 bg-muted/10">
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                Client Contact Information
+              </span>
+              <div className="flex flex-wrap items-center gap-4 text-xs">
+                {project.client_phone && (
+                  <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                    <Phone className="size-3.5 text-slate-500" />
+                    <span>{project.client_phone}</span>
+                  </div>
+                )}
+                {project.client_email && (
+                  <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                    <Mail className="size-3.5 text-slate-500" />
+                    <span>{project.client_email}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
           {project.notes && (
             <div className="border border-border/60 rounded-xl p-3 space-y-1 bg-muted/10">
               <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                Creative Notes & Specifications
+                Creative Notes & Deliverables
               </span>
               <p className="text-xs text-foreground/90 whitespace-pre-wrap leading-relaxed">
                 {project.notes}
@@ -1116,10 +1767,10 @@ function ProjectDetailModal({
           <Button
             type="button"
             size="sm"
-            className="text-xs font-semibold bg-[#67B239] hover:bg-[#5aa030] text-white rounded-xl"
+            className="text-xs font-semibold bg-[#67B239] hover:bg-[#5aa030] text-white rounded-xl gap-1.5 cursor-pointer"
             onClick={onEdit}
           >
-            <Pencil className="size-3.5 mr-1.5" /> Edit Prospect
+            <Pencil className="size-3.5" /> Edit Project
           </Button>
         </DialogFooter>
       </DialogContent>

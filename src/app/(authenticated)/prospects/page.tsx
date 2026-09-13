@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Mail,
   MapPin,
+  FileText,
   PhoneCall,
   MessageSquare,
   Globe,
@@ -66,6 +67,7 @@ import {
   getProspectAgentName,
   getProspectCreatorName,
   getProspectCreatorAvatar,
+  getProspectCleanNotes,
   type Prospect,
   type ProspectFilters,
 } from "@/lib/prospects";
@@ -562,6 +564,7 @@ function ProspectsPageContent() {
             const creatorAvatar = getProspectCreatorAvatar(p);
             const agentName = getProspectAgentName(p);
             const artistName = getProspectArtistName(p);
+            const cleanNote = getProspectCleanNotes(p.notes);
             const prospectLocation =
               p.address ||
               (pRecord["country"] as string) ||
@@ -711,6 +714,38 @@ function ProspectsPageContent() {
                     <div className="flex items-center gap-2 truncate">
                       <CalendarIcon className="size-3.5 text-slate-800 dark:text-slate-200 shrink-0" />
                       <span className="truncate">{formatCrmDateTime(p.created_at)}</span>
+                    </div>
+
+                    {/* Note / Requirements: Torn Paper ("Chira Kagoj") via SVG */}
+                    <div
+                      className="relative my-0.5 min-h-9 flex items-center px-4 py-1.5 filter drop-shadow-[0_1.5px_3px_rgba(0,0,0,0.12)] dark:drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] transition-all hover:scale-[1.01]"
+                      title={cleanNote || "No note"}
+                    >
+                      {/* Exact Torn Paper Background SVG matching user design */}
+                      <svg
+                        viewBox="0 0 500 100"
+                        preserveAspectRatio="none"
+                        className="absolute inset-0 size-full pointer-events-none"
+                      >
+                        <path
+                          d="M12,12 L28,16 L38,11 L52,10 L66,13 L78,9 L90,11 L104,12 L116,8 L130,10 L142,7 L156,6 L168,8 L180,12 L194,10 L208,11 L222,10 L234,12 L248,11 L262,9 L276,11 L288,13 L302,8 L314,10 L328,11 L340,8 L354,10 L368,12 L380,8 L394,14 L408,16 L422,15 L436,18 L448,19 L462,18 L478,24 L462,38 L483,33 L483,84 L472,82 L460,80 L448,84 L436,83 L424,80 L412,82 L400,85 L388,81 L376,84 L364,89 L352,84 L340,81 L328,82 L315,76 L302,83 L288,77 L276,86 L265,97 L250,85 L238,88 L226,85 L214,87 L202,84 L190,85 L178,83 L166,81 L154,82 L142,81 L130,80 L118,81 L106,79 L94,80 L82,77 L70,81 L58,76 L44,82 L32,77 L20,83 L14,75 Z"
+                          className="fill-[#FEFCE8] dark:fill-[#1e1a0e] stroke-[#FDE68A]/60 dark:stroke-[#4a3f1d]"
+                          strokeWidth="0.8"
+                        />
+                      </svg>
+
+                      {/* Content inside the torn paper */}
+                      <div className="relative z-1 flex items-center gap-1.5 truncate w-full text-[12px] px-1">
+                        <div className="flex items-center gap-1 shrink-0 text-amber-800 dark:text-yellow-300 font-bold text-[11px]">
+                          <FileText className="size-3.5 text-amber-700 dark:text-yellow-400" />
+                          <span>Note:</span>
+                        </div>
+                        <span
+                          className={`truncate ${cleanNote ? "text-amber-950 dark:text-amber-100 font-medium" : "text-amber-700/60 dark:text-amber-400/50 italic"}`}
+                        >
+                          {cleanNote || "No note"}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Soft Badges row */}

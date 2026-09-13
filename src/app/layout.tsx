@@ -32,6 +32,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="stylesheet" href="/tabler-icons/tabler-icons.min.css" />
+      </head>
       <body
         className="min-h-screen bg-background text-foreground antialiased"
         suppressHydrationWarning

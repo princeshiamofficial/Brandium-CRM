@@ -146,6 +146,14 @@ export function getProspectCreatorAvatar(prospect: {
   return null;
 }
 
+export function getProspectCleanNotes(notes?: string | null): string {
+  if (!notes) return "";
+  return notes
+    .replace(/\[Artist:\s*[^\]]+\]/gi, "")
+    .replace(/\[Agent:\s*[^\]]+\]/gi, "")
+    .trim();
+}
+
 export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin: boolean) =>
   queryOptions({
     queryKey: ["prospects", filters, userId, isAdmin],
