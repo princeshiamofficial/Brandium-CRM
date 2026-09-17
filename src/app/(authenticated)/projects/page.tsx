@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   Search,
@@ -11,7 +13,9 @@ import {
   Sparkles,
   ArrowRight,
   Eye,
+  Printer,
   AlertCircle,
+  TriangleAlert,
   Building2,
   DraftingCompass,
   FileText,
@@ -31,15 +35,28 @@ import {
   Download,
   ShieldCheck,
   CheckCircle2,
+  X,
+  FolderKanban,
+  Check,
+  ChevronsUpDown,
+  Loader2,
+  PlusCircle,
+  UserPlus,
+  Users,
+  Percent,
+  Gift,
+  ReceiptText,
   type LucideIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -53,8 +70,29 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 import {
   Sheet,
   SheetContent,
@@ -87,17 +125,21 @@ import {
   useSaveProjectMutation,
   useUpdateProjectStatusMutation,
   useDeleteProjectMutation,
+  useUpdateProjectAssigneesMutation,
   PROJECT_WORKFLOW_STAGES,
   resolveProjectStageColor,
   type CrmProjectItem,
   type SaveProjectPayload,
+  type AdvancePaymentRecord,
 } from "@/lib/projects";
+import { Separator } from "@/components/ui/separator";
+import { prospectsQuery, getProspectCleanNotes, type Prospect } from "@/lib/prospects";
 import { useAuth } from "@/lib/auth";
-import { formatCrmDate } from "@/lib/mysql-client";
+import { formatCrmDate, generateUUID } from "@/lib/mysql-client";
 import { toast } from "sonner";
 
 function formatProjectCardDate(dateInput?: string | Date | null): string {
-  if (!dateInput) return "15 Oct 2023";
+  if (!dateInput) return "Not set";
   try {
     const d = new Date(dateInput);
     if (isNaN(d.getTime())) return String(dateInput);
@@ -111,11 +153,81 @@ function formatProjectCardDate(dateInput?: string | Date | null): string {
 }
 
 function formatProjectValue(val?: number | string | null): string {
-  if (!val || Number(val) === 0) return "03,50,000";
-  const num = Number(val);
-  if (isNaN(num)) return String(val);
-  const formatted = num.toLocaleString("en-IN");
-  return formatted.length < 9 ? `0${formatted}` : formatted;
+  const num = Number(val) || 0;
+  return num.toLocaleString();
+}
+
+function getProjectCleanNotesAndItems(
+  rawNotes?: string | null,
+  fallbackNotes?: string | null,
+): {
+  cleanNotes: string;
+  itemsSummary: string;
+  itemCount: number;
+} {
+  let clean = rawNotes || "";
+  let itemsSummary = "";
+  let itemCount = 0;
+
+  if (clean.includes("[Items:")) {
+    try {
+      const match = clean.match(/\[Items:\s*(\[.*?\])\s*\]/s);
+      if (match && match[1]) {
+        const items = JSON.parse(match[1]);
+        if (Array.isArray(items) && items.length > 0) {
+          itemCount = items.length;
+          itemsSummary = items
+            .map((it: { model?: string; quantity?: string | number }) => {
+              const qty = it.quantity && String(it.quantity) !== "1" ? ` (${it.quantity}x)` : "";
+              return `${it.model || "Item"}${qty}`;
+            })
+            .filter(Boolean)
+            .join(", ");
+        }
+      }
+      clean = clean.replace(/\[Items:\s*\[.*?\]\s*\]/s, "").trim();
+    } catch {
+      // ignore parsing errors
+    }
+  }
+
+  clean = clean
+    .replace(/\[Artist:\s*[^\]]+\]/gi, "")
+    .replace(/\[Agent:\s*[^\]]+\]/gi, "")
+    .trim();
+
+  if (!clean && fallbackNotes) {
+    clean = fallbackNotes
+      .replace(/\[Artist:\s*[^\]]+\]/gi, "")
+      .replace(/\[Agent:\s*[^\]]+\]/gi, "")
+      .replace(/\[Items:\s*\[.*?\]\s*\]/gis, "")
+      .trim();
+  }
+
+  return { cleanNotes: clean, itemsSummary, itemCount };
+}
+
+function getProjectStageBadgeStyle(stageName?: string | null): string {
+  const s = (stageName || "").toLowerCase();
+  if (s.includes("delivered") || s.includes("completed") || s.includes("done")) {
+    return "bg-[#E8F9ED] text-[#28C76F] dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/50";
+  }
+  if (s.includes("hold") || s.includes("denied") || s.includes("cancelled")) {
+    return "bg-[#FDE8E8] text-[#EF1E1E] dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200/50 dark:border-rose-800/50";
+  }
+  if (s.includes("design") || s.includes("creative")) {
+    return "bg-[#E0F2FE] text-[#0284C7] dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/50 dark:border-sky-800/50";
+  }
+  if (s.includes("co clearance")) {
+    return "bg-[#FFF7ED] text-[#EA580C] dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/50";
+  }
+  if (s.includes("cr clearance") || s.includes("review")) {
+    return "bg-[#EEF2FF] text-[#6366F1] dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50";
+  }
+  if (s.includes("logistics") || s.includes("print")) {
+    return "bg-[#F3E8FF] text-[#9333EA] dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/50 dark:border-purple-800/50";
+  }
+  return "bg-[#EBF5FF] text-[#2563EB] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/50";
 }
 
 function renderProjectLogo(title: string, index: number) {
@@ -219,7 +331,25 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
     paid_amount: 150000,
     due_amount: 200000,
     progress: 100,
+    order_date: "2023-10-01",
     deadline: "2023-10-15",
+    assignees: [
+      {
+        id: "artist-1",
+        name: "Artist One",
+        avatar:
+          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
+        role: "artist",
+      },
+      {
+        id: "agent-1",
+        name: "Agent One",
+        avatar:
+          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+        role: "agent",
+      },
+    ],
+    assigned_user_ids: ["artist-1", "agent-1"],
     notes: "Kofejob is a freelancers marketplace where you can post projects & get instant help.",
     created_at: "2023-10-01T00:00:00.000Z",
     updated_at: "2023-10-01T00:00:00.000Z",
@@ -258,7 +388,18 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
     paid_amount: 100000,
     due_amount: 115000,
     progress: 80,
+    order_date: "2023-10-01",
     deadline: "2023-10-19",
+    assignees: [
+      {
+        id: "artist-2",
+        name: "Artist Two",
+        avatar:
+          "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
+        role: "artist",
+      },
+    ],
+    assigned_user_ids: ["artist-2"],
     notes: "Kofejob is a freelancers marketplace where you can post projects & get instant help.",
     created_at: "2023-10-01T00:00:00.000Z",
     updated_at: "2023-10-01T00:00:00.000Z",
@@ -297,7 +438,10 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
     paid_amount: 80000,
     due_amount: 65000,
     progress: 75,
+    order_date: "2023-10-01",
     deadline: "2023-10-12",
+    assignees: [],
+    assigned_user_ids: [],
     notes: "Kofejob is a freelancers marketplace where you can post projects & get instant help.",
     created_at: "2023-10-01T00:00:00.000Z",
     updated_at: "2023-10-01T00:00:00.000Z",
@@ -336,7 +480,10 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
     paid_amount: 120000,
     due_amount: 95000,
     progress: 75,
+    order_date: "2023-10-01",
     deadline: "2023-10-24",
+    assignees: [],
+    assigned_user_ids: [],
     notes: "Kofejob is a freelancers marketplace where you can post projects & get instant help.",
     created_at: "2023-10-01T00:00:00.000Z",
     updated_at: "2023-10-01T00:00:00.000Z",
@@ -344,6 +491,7 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
 ];
 
 export default function ProjectsPage() {
+  const router = useRouter();
   const { user, profile, isAdmin } = useAuth();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
@@ -359,7 +507,7 @@ export default function ProjectsPage() {
     project: null,
   });
 
-  const [detailModal, setDetailModal] = useState<{
+  const [deleteModal, setDeleteModal] = useState<{
     open: boolean;
     project: CrmProjectItem | null;
   }>({
@@ -367,7 +515,7 @@ export default function ProjectsPage() {
     project: null,
   });
 
-  const [deleteModal, setDeleteModal] = useState<{
+  const [assignModal, setAssignModal] = useState<{
     open: boolean;
     project: CrmProjectItem | null;
   }>({
@@ -381,6 +529,9 @@ export default function ProjectsPage() {
 
   const { data: usersData } = useQuery(crmUsersQueryOptions());
   const { data: servicesData } = useQuery(servicesQueryOptions());
+  const { data: prospectsData } = useQuery(
+    prospectsQuery({ page: 1, pageSize: 500 }, user?.id || "", isAdmin),
+  );
 
   const projects = useMemo(() => projectsData?.projects || [], [projectsData]);
   const activeProjects = useMemo(
@@ -397,10 +548,12 @@ export default function ProjectsPage() {
     return map;
   }, [users]);
   const services = useMemo(() => servicesData || [], [servicesData]);
+  const prospects = useMemo(() => prospectsData?.data || [], [prospectsData]);
 
   const saveProjectMutation = useSaveProjectMutation();
   const updateStatusMutation = useUpdateProjectStatusMutation();
   const deleteProjectMutation = useDeleteProjectMutation();
+  const updateAssigneesMutation = useUpdateProjectAssigneesMutation();
 
   const toggleFavorite = (projectId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -698,6 +851,11 @@ export default function ProjectsPage() {
             const isFav =
               favorites[project.id] !== undefined ? Boolean(favorites[project.id]) : true;
             const priority = (project.priority || "High").toLowerCase();
+            const { cleanNotes } = getProjectCleanNotesAndItems(
+              project.notes,
+              project.prospect_notes,
+            );
+            const stageBadgeStyle = getProjectStageBadgeStyle(project.stage_name);
 
             const artistUser = project.assigned_artist_id
               ? usersMap.get(project.assigned_artist_id)
@@ -727,11 +885,13 @@ export default function ProjectsPage() {
             return (
               <div
                 key={project.id}
-                onClick={() => setDetailModal({ open: true, project })}
+                onClick={() => {
+                  router.push(`/projects/${project.project_code || project.id}`);
+                }}
                 className="group relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-card p-5 shadow-[0_4px_4px_0_rgba(219,219,219,0.25)] dark:shadow-none hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between cursor-pointer select-none text-[13px] text-[#707070] dark:text-slate-300"
               >
                 <div>
-                  {/* Row 1: Priority Badge, Active Badge & Golden Star */}
+                  {/* Row 1: Priority Badge, Active / Stage Badge & Golden Star */}
                   <div className="flex items-center justify-between mb-3.5">
                     <div className="flex items-center gap-1.5">
                       {/* Priority Badge */}
@@ -752,8 +912,10 @@ export default function ProjectsPage() {
                         </span>
                       )}
 
-                      {/* Active Badge */}
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-[5px] text-[12px] font-medium bg-[#16A34A] text-white">
+                      {/* Dynamic Stage Badge */}
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-[5px] text-[12px] font-medium ${stageBadgeStyle}`}
+                      >
                         {project.stage_name || "Active"}
                       </span>
                     </div>
@@ -776,21 +938,35 @@ export default function ProjectsPage() {
                   <div className="flex items-center justify-between bg-[#F8F9FA] dark:bg-slate-900/60 rounded-xl p-2.5 mb-3.5">
                     <div className="flex items-center min-w-0 flex-1 me-2">
                       <div className="size-10 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex shrink-0 items-center justify-center me-2.5 overflow-hidden shadow-2xs">
-                        {renderProjectLogo(project.title, idx)}
+                        {project.prospect_logo_url ? (
+                          <img
+                            src={project.prospect_logo_url}
+                            alt={project.client_name}
+                            className="size-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          renderProjectLogo(project.title, idx)
+                        )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <h5
                           className="font-semibold text-[14px] leading-4.25 text-[#1F2020] dark:text-slate-100 truncate mb-0.5 cursor-pointer hover:text-blue-600 transition-colors"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setDetailModal({ open: true, project });
+                            router.push(`/projects/${project.project_code || project.id}`);
                           }}
                           title={project.title}
                         >
                           {project.title}
                         </h5>
                         <p className="text-[12px] text-[#707070] dark:text-slate-400 truncate mb-0 font-normal">
-                          {project.service_name || "Web App"}
+                          {project.client_name && project.client_name !== project.title
+                            ? `${project.client_name} • `
+                            : ""}
+                          {project.service_name || "Creative Branding"}
                         </p>
                       </div>
                     </div>
@@ -824,10 +1000,21 @@ export default function ProjectsPage() {
                           className="px-3 py-1.5 rounded-lg text-[13px] text-[#707070] dark:text-slate-300 cursor-pointer flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setDetailModal({ open: true, project });
+                            router.push(`/projects/${project.project_code || project.id}`);
                           }}
                         >
                           <i className="ti ti-eye text-[#00c5fb] text-[14px]" /> View Details
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem
+                          className="px-3 py-1.5 rounded-lg text-[13px] text-[#707070] dark:text-slate-300 cursor-pointer flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/projects/${project.project_code || project.id}`);
+                          }}
+                        >
+                          <i className="ti ti-file-invoice text-indigo-500 text-[14px]" /> View
+                          Invoice
                         </DropdownMenuItem>
 
                         <DropdownMenuItem
@@ -887,16 +1074,16 @@ export default function ProjectsPage() {
                     </DropdownMenu>
                   </div>
 
-                  {/* Row 3: Description */}
+                  {/* Row 3: Project Notes */}
                   <p
                     className="text-[13px] text-[#707070] dark:text-slate-400 leading-4.75 mb-3.5 line-clamp-2 font-normal"
-                    title={
-                      project.notes ||
-                      "Kofejob is a freelancers marketplace where you can post projects & get instant help."
-                    }
+                    title={cleanNotes || "No project notes provided."}
                   >
-                    {project.notes ||
-                      "Kofejob is a freelancers marketplace where you can post projects & get instant help."}
+                    {cleanNotes || (
+                      <span className="italic text-slate-400 dark:text-slate-500">
+                        No project notes provided.
+                      </span>
+                    )}
                   </p>
 
                   {/* Row 4: Metadata Rows */}
@@ -906,8 +1093,12 @@ export default function ProjectsPage() {
                       Project ID : #{project.project_code || "12145"}
                     </p>
                     <p className="flex items-center text-[13px] text-[#707070] dark:text-slate-300 font-normal">
-                      <i className="ti ti-report-money me-2 text-[14px] text-[#707070] dark:text-slate-400 shrink-0" />
-                      Value : ${formatProjectValue(project.budget)}
+                      <i className="ti ti-report-money me-2 text-[14px] text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      Value : ৳{formatProjectValue(project.budget)}
+                    </p>
+                    <p className="flex items-center text-[13px] text-[#707070] dark:text-slate-300 font-normal">
+                      <i className="ti ti-calendar-event me-2 text-[14px] text-[#707070] dark:text-slate-400 shrink-0" />
+                      Order Date : {formatProjectCardDate(project.order_date)}
                     </p>
                     <p className="flex items-center text-[13px] text-[#707070] dark:text-slate-300 font-normal">
                       <i className="ti ti-calendar-exclamation me-2 text-[14px] text-[#707070] dark:text-slate-400 shrink-0" />
@@ -915,81 +1106,93 @@ export default function ProjectsPage() {
                     </p>
                   </div>
 
-                  {/* Row 5: Overlapping Assigned Team Avatars & Creator Avatar (By User ID) */}
-                  <div className="flex items-center justify-between mb-3.5">
-                    {/* Left: Assigned Team Avatars by User ID */}
-                    <div className="flex items-center">
-                      <div className="flex items-center -space-x-1.5">
-                        {artistName ? (
-                          <span
-                            title={`Artist / Designer: ${artistName}`}
-                            className="size-6.5 rounded-full border-2 border-white dark:border-slate-800 overflow-hidden inline-flex items-center justify-center bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[10px] font-semibold shadow-2xs cursor-pointer hover:z-10 transition-transform hover:scale-105"
-                          >
-                            {artistAvatar ? (
-                              <img
-                                src={artistAvatar}
-                                alt={artistName}
-                                className="size-full object-cover rounded-full"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                  if (e.currentTarget.nextElementSibling) {
-                                    (
-                                      e.currentTarget.nextElementSibling as HTMLElement
-                                    ).style.display = "flex";
-                                  }
+                  {/* Row 5: Assigned Team Members (Multi-User) & Project Creator */}
+                  <div className="flex items-center justify-between">
+                    {/* Left: Multiple Assigned Team Members */}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {project.assignees && project.assignees.length > 0 ? (
+                        <div className="flex items-center">
+                          <div className="flex items-center -space-x-1.5">
+                            {project.assignees.slice(0, 3).map((assignee) => (
+                              <span
+                                key={assignee.id}
+                                title={`${assignee.name}${assignee.role ? ` (${assignee.role})` : ""}`}
+                                className="size-6.5 rounded-full border-2 border-white dark:border-slate-800 overflow-hidden inline-flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[10px] font-semibold shadow-2xs cursor-pointer hover:z-10 transition-transform hover:scale-105"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setAssignModal({ open: true, project });
                                 }}
-                              />
-                            ) : null}
-                            <span className={artistAvatar ? "hidden" : "flex"}>
-                              {artistName.charAt(0).toUpperCase()}
-                            </span>
-                          </span>
-                        ) : null}
+                              >
+                                {assignee.avatar ? (
+                                  <img
+                                    src={assignee.avatar}
+                                    alt={assignee.name}
+                                    className="size-full object-cover rounded-full"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = "none";
+                                      if (e.currentTarget.nextElementSibling) {
+                                        (
+                                          e.currentTarget.nextElementSibling as HTMLElement
+                                        ).style.display = "flex";
+                                      }
+                                    }}
+                                  />
+                                ) : null}
+                                <span className={assignee.avatar ? "hidden" : "flex"}>
+                                  {assignee.name.charAt(0).toUpperCase()}
+                                </span>
+                              </span>
+                            ))}
 
-                        {agentName ? (
-                          <span
-                            title={`Account Agent: ${agentName}`}
-                            className="size-6.5 rounded-full border-2 border-white dark:border-slate-800 overflow-hidden inline-flex items-center justify-center bg-blue-100 dark:bg-sky-950/60 text-blue-700 dark:text-sky-300 text-[10px] font-semibold shadow-2xs cursor-pointer hover:z-10 transition-transform hover:scale-105"
-                          >
-                            {agentAvatar ? (
-                              <img
-                                src={agentAvatar}
-                                alt={agentName}
-                                className="size-full object-cover rounded-full"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                  if (e.currentTarget.nextElementSibling) {
-                                    (
-                                      e.currentTarget.nextElementSibling as HTMLElement
-                                    ).style.display = "flex";
-                                  }
+                            {project.assignees.length > 3 && (
+                              <span
+                                title={`+${project.assignees.length - 3} more assigned members`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setAssignModal({ open: true, project });
                                 }}
-                              />
-                            ) : null}
-                            <span className={agentAvatar ? "hidden" : "flex"}>
-                              {agentName.charAt(0).toUpperCase()}
-                            </span>
-                          </span>
-                        ) : null}
+                                className="size-6.5 rounded-full border-2 border-white dark:border-slate-800 bg-[#E8F9ED] text-[#28C76F] dark:bg-emerald-950/60 dark:text-emerald-400 text-[9px] font-bold inline-flex items-center justify-center shadow-2xs cursor-pointer hover:z-10"
+                              >
+                                +{project.assignees.length - 3}
+                              </span>
+                            )}
+                          </div>
 
-                        {!artistName && !agentName ? (
-                          <span
-                            title="Unassigned Team"
-                            className="size-6.5 rounded-full border-2 border-white dark:border-slate-800 overflow-hidden inline-flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] font-semibold shadow-2xs"
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAssignModal({ open: true, project });
+                            }}
+                            className="size-6.5 rounded-full border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:text-[#67B239] hover:border-[#67B239] flex items-center justify-center cursor-pointer transition-colors shadow-2xs ms-1.5"
+                            title="Manage / Add Team Assignees"
                           >
-                            <User className="size-3 text-slate-400" />
-                          </span>
-                        ) : null}
-                      </div>
+                            <UserPlus className="size-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAssignModal({ open: true, project });
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:border-[#67B239] hover:text-[#67B239] transition-all cursor-pointer shadow-2xs"
+                          title="Assign multiple users to this project"
+                        >
+                          <UserPlus className="size-3 text-[#67B239]" />
+                          <span>Assign Team</span>
+                        </button>
+                      )}
                     </div>
 
                     {/* Right: Project Creator Avatar by User ID */}
                     <div
                       className="size-8 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden flex items-center justify-center bg-slate-100 dark:bg-slate-800 shadow-2xs shrink-0 cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 transition-colors"
-                      title={`Added by: ${creatorName}`}
+                      title={`Added by Agent: ${creatorName}`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        toast.info(`Project added by: ${creatorName}`);
+                        toast.info(`Project added by Agent: ${creatorName}`);
                       }}
                     >
                       {creatorAvatar ? (
@@ -1016,46 +1219,26 @@ export default function ProjectsPage() {
                     </div>
                   </div>
                 </div>
-
-                {/* Row 6: Card Footer (Total Hours Badge, WeChat & Subtask Counts) */}
-                <div className="flex justify-between items-center pt-3 border-t border-[#F1F5F9] dark:border-slate-800">
-                  <span className="bg-[#EBF5FF] dark:bg-sky-950/60 text-[#2563EB] dark:text-sky-300 rounded-[5px] px-2.5 py-1 text-[12px] font-medium inline-flex items-center gap-1.5">
-                    <i className="ti ti-clock-stop text-[13px]" />
-                    Total Hours : {idx === 0 ? 100 : idx === 1 ? 80 : 75}
-                  </span>
-
-                  <div className="flex items-center gap-3 text-[13px] text-[#707070] dark:text-slate-400 font-normal">
-                    <span className="inline-flex items-center gap-1">
-                      <i className="ti ti-brand-wechat text-[14px]" />
-                      02
-                    </span>
-                    <span
-                      className="inline-flex items-center gap-1 cursor-pointer hover:text-blue-600 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDetailModal({ open: true, project });
-                      }}
-                      title="Subtasks"
-                    >
-                      <i className="ti ti-subtask text-[14px]" />
-                      04
-                    </span>
-                  </div>
-                </div>
               </div>
             );
           })}
         </div>
       )}
 
-      {/* 5. Offcanvas Drawer Form (Add / Edit Project) */}
-      <ProjectOffcanvasDrawer
+      {/* 5. Add / Edit Project Dialog (ERPAPP standard) */}
+      <ProjectFormDialog
+        key={
+          projectModal.open
+            ? `proj-modal-${projectModal.project?.id || "new"}-${projectModal.project?.paid_amount ?? ""}-${projectModal.project?.updated_at ?? ""}`
+            : "proj-modal-closed"
+        }
         open={projectModal.open}
         onOpenChange={(open: boolean) => setProjectModal({ open, project: null })}
         project={projectModal.project}
         stages={stages}
         users={users}
         services={services}
+        prospects={prospects}
         onSave={async (data) => {
           await saveProjectMutation.mutateAsync(data);
           setProjectModal({ open: false, project: null });
@@ -1063,717 +1246,2060 @@ export default function ProjectsPage() {
         isSaving={saveProjectMutation.isPending}
       />
 
-      {/* 6. Project Details Modal */}
-      {detailModal.open && detailModal.project && (
-        <ProjectDetailModal
-          open={detailModal.open}
-          onOpenChange={(open: boolean) => setDetailModal({ open, project: null })}
-          project={detailModal.project}
-          stages={stages}
-          onEdit={() => {
-            const prj = detailModal.project;
-            setDetailModal({ open: false, project: null });
-            if (prj) setProjectModal({ open: true, project: prj });
-          }}
-          onStageChange={async (stageId: string, stageName: string) => {
-            if (detailModal.project) {
-              await updateStatusMutation.mutateAsync({
-                id: detailModal.project.id,
-                stage_id: stageId,
-                stage_name: stageName,
-              });
-              setDetailModal((prev) =>
-                prev.project
-                  ? {
-                      ...prev,
-                      project: {
-                        ...prev.project,
-                        stage_id: stageId,
-                        stage_name: stageName,
-                      },
-                    }
-                  : prev,
-              );
-            }
-          }}
-        />
-      )}
-
-      {/* 7. Delete Project Dialog (Dreamstechnologies #delete_project Spec) */}
+      {/* 7. Delete Project Dialog (Exact Match to User Snippet) */}
       <AlertDialog
         open={deleteModal.open}
-        onOpenChange={(open: boolean) => setDeleteModal({ open, project: null })}
+        onOpenChange={(open: boolean) => {
+          if (!deleteProjectMutation.isPending) {
+            setDeleteModal({ open, project: null });
+          }
+        }}
       >
-        <AlertDialogContent className="max-w-sm rounded-[10px] p-6 text-center border-slate-200 dark:border-slate-800">
-          <div className="mx-auto mb-3 size-14 rounded-full bg-[#FDE9E9] text-[#EF1E1E] flex items-center justify-center">
-            <i className="ti ti-trash text-[24px]" />
-          </div>
-          <AlertDialogHeader className="text-center sm:text-center">
-            <AlertDialogTitle className="text-base font-semibold text-center text-slate-900 dark:text-slate-100">
-              Delete Confirmation
+        <AlertDialogContent className="w-full max-w-lg bg-[#EEEFF2] dark:bg-slate-900 border border-[#E1E7EF] dark:border-slate-800 rounded-2xl p-6 shadow-lg gap-4 text-slate-900 dark:text-slate-100">
+          <AlertDialogHeader className="flex flex-col space-y-2 text-left sm:text-left">
+            <AlertDialogTitle className="text-lg font-semibold flex items-center gap-2 text-[#0f1729] dark:text-slate-100">
+              <TriangleAlert className="h-6 w-6 text-[#dc2626] shrink-0 stroke-2" />
+              Are you absolutely sure?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs text-slate-500 dark:text-slate-400 text-center leading-relaxed">
-              Are you sure you want to remove project{" "}
-              <strong className="text-slate-900 dark:text-slate-100">
-                "{deleteModal.project?.project_code} - {deleteModal.project?.title}"
-              </strong>
-              ?
+            <AlertDialogDescription className="text-sm text-[#94a3b8] dark:text-slate-400 text-left mt-2 leading-5">
+              This action cannot be undone. This will permanently delete the project for &quot;
+              <span className="font-semibold text-[#94a3b8] dark:text-slate-300">
+                {deleteModal.project?.title || deleteModal.project?.project_code || "this project"}
+              </span>
+              &quot;.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex items-center justify-center gap-2 sm:justify-center mt-4">
-            <AlertDialogCancel className="w-full text-xs h-9 font-medium">Cancel</AlertDialogCancel>
+
+          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-0">
+            <AlertDialogCancel
+              disabled={deleteProjectMutation.isPending}
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors h-10 px-4 py-2 mt-2 sm:mt-0 bg-[#EEEFF2] dark:bg-slate-800 border border-[#E1E7EF] dark:border-slate-700 text-[#0f1729] dark:text-slate-200 hover:bg-[#E1E7EF]/80 dark:hover:bg-slate-700 rounded-[10px] shadow-none cursor-pointer"
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              className="w-full bg-[#EF1E1E] hover:bg-red-700 text-white text-xs font-semibold h-9"
-              onClick={async () => {
+              disabled={deleteProjectMutation.isPending}
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors h-10 px-4 py-2 bg-[#dc2626] hover:bg-[#dc2626]/90 text-[#fafafa] rounded-[10px] shadow-none cursor-pointer border-0"
+              onClick={async (e) => {
+                e.preventDefault();
                 if (deleteModal.project) {
                   await deleteProjectMutation.mutateAsync(deleteModal.project.id);
                   setDeleteModal({ open: false, project: null });
                 }
               }}
             >
-              {deleteProjectMutation.isPending ? "Deleting..." : "Yes, Delete"}
+              {deleteProjectMutation.isPending ? "Deleting..." : "Yes, delete project"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 8. Assign Team Members Dialog (Card Multi-User Assignment) */}
+      {assignModal.open && assignModal.project && (
+        <ProjectAssigneesDialog
+          open={assignModal.open}
+          onOpenChange={(open: boolean) => setAssignModal({ open, project: null })}
+          project={assignModal.project}
+          users={users}
+          onSave={async (userIds) => {
+            if (assignModal.project) {
+              await updateAssigneesMutation.mutateAsync({
+                projectId: assignModal.project.id,
+                userIds,
+              });
+              setAssignModal({ open: false, project: null });
+            }
+          }}
+          isSaving={updateAssigneesMutation.isPending}
+        />
+      )}
     </div>
   );
 }
 
 /* =========================================================================
-   Offcanvas Drawer Form Component (offcanvas_add & offcanvas_edit standard)
+   Project Assignees Dialog Component (Assign Multiple Users from Card)
    ========================================================================= */
-interface ProjectOffcanvasDrawerProps {
+interface ProjectAssigneesDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  project: CrmProjectItem | null;
+  users: CrmUser[];
+  onSave: (userIds: string[]) => Promise<void>;
+  isSaving: boolean;
+}
+
+function ProjectAssigneesDialog({
+  open,
+  onOpenChange,
+  project,
+  users,
+  onSave,
+  isSaving,
+}: ProjectAssigneesDialogProps) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+
+  useEffect(() => {
+    if (open && project) {
+      const initIds = project.assignees ? project.assignees.map((a) => a.id) : [];
+      setSelectedIds(initIds);
+      setSearchQuery("");
+      setRoleFilter("all");
+    }
+  }, [open, project]);
+
+  const toggleUser = (userId: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
+  };
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      if (roleFilter !== "all") {
+        const r = (u.role || "").toLowerCase();
+        if (roleFilter === "artist" && r !== "artist") return false;
+        if (roleFilter === "agent" && r !== "agent") return false;
+        if (roleFilter === "admin" && r !== "admin") return false;
+      }
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        u.name.toLowerCase().includes(q) ||
+        (u.email && u.email.toLowerCase().includes(q)) ||
+        (u.role && u.role.toLowerCase().includes(q))
+      );
+    });
+  }, [users, searchQuery, roleFilter]);
+
+  const handleSave = async () => {
+    await onSave(selectedIds);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden">
+        <DialogHeader className="px-5 pt-5 pb-3 border-b">
+          <DialogTitle className="text-base font-bold flex items-center gap-2">
+            <Users className="size-4.5 text-[#67B239]" /> Assign Team Members
+          </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground truncate">
+            {project?.project_code ? `#${project.project_code} • ` : ""}
+            {project?.title || "Project"}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="p-4 space-y-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search team member by name or role..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 text-xs h-9"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 pb-1">
+            {["all", "artist", "agent", "admin"].map((r) => (
+              <Button
+                key={r}
+                type="button"
+                variant={roleFilter === r ? "default" : "outline"}
+                size="sm"
+                className={`h-6 text-[11px] px-2.5 rounded-full capitalize cursor-pointer ${
+                  roleFilter === r
+                    ? "bg-[#67B239] hover:bg-[#5aa030] text-white"
+                    : "text-muted-foreground"
+                }`}
+                onClick={() => setRoleFilter(r)}
+              >
+                {r === "all" ? "All Roles" : r}
+              </Button>
+            ))}
+          </div>
+
+          <div className="max-h-[300px] overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+            {filteredUsers.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">No users found.</p>
+            ) : (
+              filteredUsers.map((u) => {
+                const isSelected = selectedIds.includes(u.id);
+                return (
+                  <div
+                    key={u.id}
+                    onClick={() => toggleUser(u.id)}
+                    className={cn(
+                      "flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors border text-xs",
+                      isSelected
+                        ? "bg-[#67B239]/10 border-[#67B239]/40 dark:bg-emerald-950/30"
+                        : "border-transparent hover:bg-muted/50",
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Avatar className="size-7 rounded-full shrink-0">
+                        <AvatarImage src={u.avatar_url || undefined} alt={u.name} />
+                        <AvatarFallback className="text-[10px] font-semibold">
+                          {u.name.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground truncate leading-tight">
+                          {u.name}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {u.email || u.role || "User"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {u.role && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[9px] uppercase px-1.5 py-0 font-semibold"
+                        >
+                          {u.role}
+                        </Badge>
+                      )}
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleUser(u.id)}
+                        className="cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="px-5 py-3 border-t bg-muted/20 flex flex-row items-center justify-between sm:justify-between">
+          <span className="text-xs text-muted-foreground">
+            <span className="font-bold text-foreground">{selectedIds.length}</span> assigned
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              disabled={isSaving}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="bg-[#67B239] hover:bg-[#5aa030] text-white text-xs h-8 cursor-pointer gap-1.5"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" /> Saving...
+                </>
+              ) : (
+                "Save Assignees"
+              )}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* =========================================================================
+   Project Form Dialog (1000% Same to Same ERPAPP Create & Edit Order Dialog)
+   ========================================================================= */
+interface DialogOrderItem {
+  id: string;
+  model: string;
+  quantity: string;
+  lamination?: string | undefined;
+  variation?: string | undefined;
+  unit?: string | undefined;
+  unitPrice: number | null;
+  lineItemTotalPrice: number | null;
+  isGift?: boolean | undefined;
+}
+
+const formatCurrencyBdt = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) return "N/A";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "BDT" }).format(value);
+};
+
+const DEFAULT_SERVICE_MODELS = [
+  { id: "srv-6", name: "TVC", sellingPrice: 1000 },
+  { id: "srv-2", name: "Graphics Design", sellingPrice: 1000 },
+  { id: "srv-12", name: "Logo Design", sellingPrice: 1000 },
+  { id: "srv-1", name: "Product Photography", sellingPrice: 1000 },
+  { id: "srv-11", name: "Motion Video Ads", sellingPrice: 1000 },
+  { id: "srv-5", name: "Celebrity Video Ads", sellingPrice: 1000 },
+  { id: "srv-7", name: "OVC", sellingPrice: 1000 },
+  { id: "srv-8", name: "Voice-Over Video Ads", sellingPrice: 1000 },
+  { id: "srv-9", name: "Corporate AV", sellingPrice: 1000 },
+  { id: "srv-10", name: "Influencer Video Ads", sellingPrice: 1000 },
+  { id: "srv-4", name: "Website Development", sellingPrice: 1000 },
+  { id: "srv-3", name: "Monthly Plan", sellingPrice: 1000 },
+];
+
+const DEFAULT_LAMINATIONS = [
+  { id: "lam-1", name: "Standard" },
+  { id: "lam-2", name: "Matt" },
+  { id: "lam-3", name: "Glossy" },
+  { id: "lam-4", name: "Velvet" },
+];
+
+const DEFAULT_PAYMENT_METHODS = [
+  { id: "pm-1", name: "bKash" },
+  { id: "pm-2", name: "Nagad" },
+  { id: "pm-3", name: "Rocket" },
+  { id: "pm-4", name: "Bank Transfer" },
+  { id: "pm-5", name: "Cash" },
+  { id: "pm-6", name: "Card" },
+  { id: "pm-7", name: "Other" },
+];
+
+const initialOrderItemState: DialogOrderItem = {
+  id: "item-init",
+  model: "TVC",
+  quantity: "1",
+  lamination: "Standard",
+  unitPrice: 1000,
+  lineItemTotalPrice: 1000,
+  isGift: false,
+};
+
+function parseProjectPayments(
+  notes: string | null | undefined,
+  paidAmount: number,
+  projectDate?: string | null,
+  advancePayments?: AdvancePaymentRecord[] | string | null,
+): AdvancePaymentRecord[] {
+  // 1a. Array of advance_payments
+  if (advancePayments && Array.isArray(advancePayments) && advancePayments.length > 0) {
+    return advancePayments.map((p, idx) => ({
+      id: p.id || `payment-${idx + 1}`,
+      amount: Number(p.amount) || 0,
+      date:
+        p.date ||
+        (projectDate
+          ? format(new Date(projectDate), "yyyy-MM-dd")
+          : format(new Date(), "yyyy-MM-dd")),
+      paymentMethod: p.paymentMethod || "Cash",
+      notes: p.notes || "",
+      recordedByUserId: p.recordedByUserId || null,
+      recordedByUserName: p.recordedByUserName || null,
+      status: p.status || "Approved",
+    }));
+  }
+
+  // 1b. JSON string of advance_payments
+  if (typeof advancePayments === "string" && advancePayments.trim().startsWith("[")) {
+    try {
+      const parsed = JSON.parse(advancePayments);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((p: any, idx: number) => ({
+          id: p.id || `payment-${idx + 1}`,
+          amount: Number(p.amount) || 0,
+          date:
+            p.date ||
+            (projectDate
+              ? format(new Date(projectDate), "yyyy-MM-dd")
+              : format(new Date(), "yyyy-MM-dd")),
+          paymentMethod: p.paymentMethod || p.method || "Cash",
+          notes: p.notes || p.ref || "",
+          recordedByUserId: p.recordedByUserId || null,
+          recordedByUserName: p.recordedByUserName || null,
+          status: p.status || "Approved",
+        }));
+      }
+    } catch {
+      // ignore invalid json string
+    }
+  }
+
+  if (notes) {
+    const match = notes.match(/\[Payments:\s*(\[[\s\S]*?\])\]/);
+    if (match && match[1]) {
+      try {
+        const parsed = JSON.parse(match[1]);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((p: any, idx: number) => ({
+            id: p.id || `payment-${idx + 1}`,
+            amount: Number(p.amount) || 0,
+            date:
+              p.date ||
+              (projectDate
+                ? format(new Date(projectDate), "yyyy-MM-dd")
+                : format(new Date(), "yyyy-MM-dd")),
+            paymentMethod: p.paymentMethod || p.method || "Cash",
+            notes: p.notes || p.ref || "",
+            recordedByUserId: p.recordedByUserId || null,
+            recordedByUserName: p.recordedByUserName || null,
+            status: p.status || "Approved",
+          }));
+        }
+      } catch (e) {
+        console.error("Failed to parse [Payments] tag", e);
+      }
+    }
+  }
+
+  if (notes) {
+    const paymentRegex = /\[Payment:\s*([^,\]]+)(?:,\s*Ref:\s*([^\]]+))?\]/g;
+    const allMatches = Array.from(notes.matchAll(paymentRegex));
+    if (allMatches.length > 0) {
+      const totalPaid = Number(paidAmount) || 0;
+      const count = allMatches.length;
+      const splitAmount = totalPaid > 0 ? Math.round((totalPaid / count) * 100) / 100 : 0;
+      return allMatches.map((m, idx) => ({
+        id: `legacy-payment-${idx + 1}`,
+        amount:
+          idx === count - 1 && totalPaid > 0
+            ? Number((totalPaid - splitAmount * (count - 1)).toFixed(2))
+            : splitAmount,
+        date: projectDate
+          ? format(new Date(projectDate), "yyyy-MM-dd")
+          : format(new Date(), "yyyy-MM-dd"),
+        paymentMethod: m[1]?.trim() || "Nagad",
+        notes: m[2]?.trim() || "",
+        status: "Approved" as const,
+      }));
+    }
+  }
+
+  if (paidAmount && paidAmount > 0) {
+    return [
+      {
+        id: "legacy-advance-001",
+        amount: Number(paidAmount),
+        date: projectDate
+          ? format(new Date(projectDate), "yyyy-MM-dd")
+          : format(new Date(), "yyyy-MM-dd"),
+        paymentMethod: "bKash",
+        notes: "Initial advance payment",
+        status: "Approved",
+      },
+    ];
+  }
+
+  return [];
+}
+
+function cleanProjectNotes(rawNotes: string | null | undefined): string {
+  if (!rawNotes) return "";
+  return rawNotes
+    .replace(/\[Payments?:\s*\[[\s\S]*?\]\]/gis, "")
+    .replace(/\[Payments?:\s*[^\]]+\]/gis, "")
+    .replace(/\[Discount:\s*[^\]]+\]/gis, "")
+    .replace(/\[Shipping:\s*[^\]]+\]/gis, "")
+    .replace(/\[Items:\s*\[[\s\S]*?\]\]/gis, "")
+    .replace(/\[Artist:\s*[^\]]+\]/gis, "")
+    .replace(/\[Agent:\s*[^\]]+\]/gis, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+const formatDateForDialogInput = (dateString: string | Date | undefined | null): string => {
+  if (!dateString) return "N/A";
+  try {
+    const date = typeof dateString === "string" ? new Date(dateString) : dateString;
+    return isNaN(date.getTime()) ? String(dateString) : format(date, "PPP");
+  } catch {
+    return "Invalid Date";
+  }
+};
+
+function formatDateForHistory(dateVal?: string | Date | null): string {
+  if (!dateVal) return "N/A";
+  try {
+    const d = typeof dateVal === "string" ? new Date(dateVal) : dateVal;
+    return isNaN(d.getTime()) ? String(dateVal) : format(d, "MMM d, yyyy");
+  } catch {
+    return String(dateVal);
+  }
+}
+
+interface ProjectFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   project: CrmProjectItem | null;
   stages: Stage[];
-  users: Array<{ id: string; name: string; email?: string; role?: string }>;
+  users: CrmUser[];
   services: Array<{ id: string; name: string }>;
+  prospects: Prospect[];
   onSave: (data: SaveProjectPayload) => Promise<void>;
   isSaving: boolean;
 }
 
-function ProjectOffcanvasDrawer({
+function ProjectFormDialog({
   open,
   onOpenChange,
   project,
   stages,
   users,
   services,
+  prospects,
   onSave,
   isSaving,
-}: ProjectOffcanvasDrawerProps) {
+}: ProjectFormDialogProps) {
   const { user } = useAuth();
-  const [title, setTitle] = useState(project?.title || "");
-  const [projectCode, setProjectCode] = useState(project?.project_code || "");
-  const [clientName, setClientName] = useState(project?.client_name || "");
-  const [clientPhone, setClientPhone] = useState(project?.client_phone || "");
-  const [clientEmail, setClientEmail] = useState(project?.client_email || "");
-  const [serviceId, setServiceId] = useState(project?.service_id || "none");
-  const [stageId, setStageId] = useState<string>(
-    project?.stage_id || stages[0]?.id || "CR Clearance",
-  );
-  const [priority, setPriority] = useState<string>(project?.priority || "Medium");
-  const [assignedArtistId, setAssignedArtistId] = useState(project?.assigned_artist_id || "none");
-  const [assignedAgentId, setAssignedAgentId] = useState(project?.assigned_agent_id || "none");
-  const [budget, setBudget] = useState(project?.budget ? String(project.budget) : "");
-  const [paidAmount, setPaidAmount] = useState(
-    project?.paid_amount ? String(project.paid_amount) : "",
-  );
-  const [progress, setProgress] = useState(
-    project?.progress !== undefined ? String(project.progress) : "0",
-  );
-  const [deadline, setDeadline] = useState(project?.deadline || "");
-  const [notes, setNotes] = useState(project?.notes || "");
 
+  const [jobId, setJobId] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [address, setAddress] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [initialStatusId, setInitialStatusId] = useState<string>("");
+  const [advancePaymentAmount, setAdvancePaymentAmount] = useState<string>("");
+  const [advancePaymentMethod, setAdvancePaymentMethod] = useState<string>("");
+  const [showCustomPaymentInput, setShowCustomPaymentInput] = useState(false);
+  const [customPaymentMethodText, setCustomPaymentMethodText] = useState("");
+  const [isStarred, setIsStarred] = useState<number>(0);
+  const [isOrderDatePopoverOpen, setIsOrderDatePopoverOpen] = useState(false);
+  const [isDeliveryDatePopoverOpen, setIsDeliveryDatePopoverOpen] = useState(false);
+  const [isPaymentMethodPopoverOpen, setIsPaymentMethodPopoverOpen] = useState(false);
+  const [isAutoFilled, setIsAutoFilled] = useState(false);
+  const [newAdvancePaymentNotes, setNewAdvancePaymentNotes] = useState("");
+
+  const [agentId, setAgentId] = useState<string>(() => {
+    return project?.created_by || project?.assigned_agent_id || user?.id || "";
+  });
+
+  const [existingAdvancePayments, setExistingAdvancePayments] = useState<AdvancePaymentRecord[]>(
+    () => {
+      if (!project) return [];
+      return parseProjectPayments(
+        project.notes,
+        Number(project.paid_amount || 0),
+        project.order_date || project.created_at,
+        project.advance_payments,
+      );
+    },
+  );
+  const [totalExistingAdvancePaid, setTotalExistingAdvancePaid] = useState<number>(() => {
+    if (!project) return 0;
+    const initialPayments = parseProjectPayments(
+      project.notes,
+      Number(project.paid_amount || 0),
+      project.order_date || project.created_at,
+      project.advance_payments,
+    );
+    return initialPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  });
+  const [paymentToDelete, setPaymentToDelete] = useState<AdvancePaymentRecord | null>(null);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editingAmount, setEditingAmount] = useState<string>("");
+  const [editingMethod, setEditingMethod] = useState<string>("");
+  const [editingNotes, setEditingNotes] = useState<string>("");
+  const amountInputRef = useRef<HTMLInputElement>(null);
+
+  const [specialClientDiscount, setSpecialClientDiscount] = useState<string>(() => {
+    if (!project?.notes) return "";
+    const m = project.notes.match(/\[Discount:\s*([^\]]+)\]/);
+    return m && m[1] ? m[1].trim() : "";
+  });
+  const [shippingCharge, setShippingCharge] = useState<string>(() => {
+    if (!project?.notes) return "";
+    const m = project.notes.match(/\[Shipping:\s*([^\]]+)\]/);
+    return m && m[1] ? m[1].trim() : "";
+  });
+  const [orderNotes, setOrderNotes] = useState<string>(() => {
+    return project ? cleanProjectNotes(project.notes) : "";
+  });
+
+  const [orderItems, setOrderItems] = useState<DialogOrderItem[]>([
+    { ...initialOrderItemState, id: generateUUID() },
+  ]);
+  const [orderItemsTotal, setOrderItemsTotal] = useState<number>(0);
+  const [calculatedDiscountAmount, setCalculatedDiscountAmount] = useState<number>(0);
+  const [netPayable, setNetPayable] = useState<number>(0);
+  const [amountDue, setAmountDue] = useState<number>(0);
+
+  const jobIdInputRef = useRef<HTMLInputElement>(null);
+  const [popoverOpenStates, setPopoverOpenStates] = useState<Record<string, boolean>>({});
+  const [isProspectPopoverOpen, setIsProspectPopoverOpen] = useState(false);
+  const [currentOrderDate, setCurrentOrderDate] = useState<Date | undefined>(new Date());
+  const [acceptedDeliveryDate, setAcceptedDeliveryDate] = useState<Date | undefined>(undefined);
+
+  // Priority: system services that we already have in CRM
+  const modelOptions = useMemo(() => {
+    if (services && services.length > 0) {
+      return services.map((srv) => ({
+        id: srv.id,
+        name: srv.name,
+        sellingPrice:
+          "price" in srv && Number((srv as Record<string, unknown>)["price"]) > 0
+            ? Number((srv as Record<string, unknown>)["price"])
+            : 1000,
+      }));
+    }
+    return DEFAULT_SERVICE_MODELS;
+  }, [services]);
+
+  const laminationOptions = DEFAULT_LAMINATIONS;
+  const paymentMethodOptions = DEFAULT_PAYMENT_METHODS;
+
+  const agentOptions = useMemo(() => {
+    const filtered = users.filter((u) => {
+      const r = (u.role || "").toLowerCase();
+      return r === "agent" || r === "admin";
+    });
+    return filtered.length > 0 ? filtered : users;
+  }, [users]);
+
+  // Reset or Populate form
   useEffect(() => {
     if (open) {
-      setTitle(project?.title || "");
-      setProjectCode(project?.project_code || `PRJ-${Math.floor(1000 + Math.random() * 9000)}`);
-      setClientName(project?.client_name || "");
-      setClientPhone(project?.client_phone || "");
-      setClientEmail(project?.client_email || "");
-      setServiceId(project?.service_id || "none");
-      setStageId(project?.stage_id || stages[0]?.id || "CR Clearance");
-      setPriority(project?.priority || "Medium");
-      setAssignedArtistId(project?.assigned_artist_id || "none");
-      setAssignedAgentId(project?.assigned_agent_id || "none");
-      setBudget(project?.budget ? String(project.budget) : "");
-      setPaidAmount(project?.paid_amount ? String(project.paid_amount) : "");
-      setProgress(project?.progress !== undefined ? String(project.progress) : "0");
-      setDeadline(project?.deadline || "");
-      setNotes(project?.notes || "");
+      if (project) {
+        setJobId(project.project_code || "");
+        setCompanyName(project.client_name || project.title || "");
+        setAddress(project.client_address || "Dhaka, Bangladesh");
+        setPhoneNumber(project.client_phone || "");
+        setInitialStatusId(project.stage_id || stages[0]?.id || "CR Clearance");
+
+        const payments = parseProjectPayments(
+          project.notes,
+          Number(project.paid_amount || 0),
+          project.order_date || project.created_at,
+          project.advance_payments,
+        );
+        setExistingAdvancePayments(payments);
+        setTotalExistingAdvancePaid(payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0));
+        setAdvancePaymentAmount("");
+        setAdvancePaymentMethod("");
+        setNewAdvancePaymentNotes("");
+        setShowCustomPaymentInput(false);
+        setCustomPaymentMethodText("");
+        setOrderNotes(cleanProjectNotes(project.notes));
+        setEditingPaymentId(null);
+
+        const discountMatch = project.notes?.match(/\[Discount:\s*([^\]]+)\]/);
+        if (discountMatch && discountMatch[1]) {
+          setSpecialClientDiscount(discountMatch[1].trim());
+        } else {
+          setSpecialClientDiscount("");
+        }
+
+        const shippingMatch = project.notes?.match(/\[Shipping:\s*([^\]]+)\]/);
+        if (shippingMatch && shippingMatch[1]) {
+          setShippingCharge(shippingMatch[1].trim());
+        } else {
+          setShippingCharge("");
+        }
+
+        setIsStarred(project.priority === "Urgent" ? 5 : project.priority === "High" ? 3 : 1);
+        setCurrentOrderDate(project.order_date ? new Date(project.order_date) : new Date());
+        setAcceptedDeliveryDate(project.deadline ? new Date(project.deadline) : undefined);
+        setAgentId(project.created_by || project.assigned_agent_id || user?.id || "");
+        setIsAutoFilled(false);
+
+        // Resolve the true CRM service that already exists
+        const linkedProspect = prospects.find(
+          (p) =>
+            p.id === project.prospect_id ||
+            (project.client_name &&
+              (p.business_name?.toLowerCase() === project.client_name.toLowerCase() ||
+                p.contact_name?.toLowerCase() === project.client_name.toLowerCase())),
+        );
+        const prospectServiceName =
+          linkedProspect?.service_name ||
+          services.find((s) => s.id === linkedProspect?.service_id)?.name;
+
+        const currentProjectService =
+          (project.service_name && project.service_name !== "Design Charge"
+            ? project.service_name
+            : null) ||
+          services.find(
+            (s) =>
+              (s.id === project.service_id ||
+                s.name.toLowerCase() === project.service_id?.toLowerCase()) &&
+              s.name !== "Design Charge",
+          )?.name ||
+          prospectServiceName ||
+          services.find((s) => s.id === project.service_id)?.name ||
+          project.service_name ||
+          services[0]?.name ||
+          "TVC";
+
+        const itemsMatch = project.notes?.match(/\[Items:\s*(\[[\s\S]*?\])\]/);
+        let itemsLoaded = false;
+        if (itemsMatch && itemsMatch[1]) {
+          try {
+            const parsedItems = JSON.parse(itemsMatch[1]);
+            if (Array.isArray(parsedItems) && parsedItems.length > 0) {
+              const sanitizedItems = parsedItems.map((it: DialogOrderItem) => {
+                const isDummy =
+                  !it.model ||
+                  it.model === "Design Charge" ||
+                  it.model === "Menu Book" ||
+                  it.model === "Pizza Box" ||
+                  it.model === "Business Card" ||
+                  it.model === "Visiting Card";
+                return {
+                  ...it,
+                  model: isDummy && currentProjectService ? currentProjectService : it.model,
+                };
+              });
+              setOrderItems(sanitizedItems);
+              itemsLoaded = true;
+            }
+          } catch {
+            // fallback below
+          }
+        }
+
+        if (!itemsLoaded) {
+          const itemBudget = project.budget || 1000;
+          setOrderItems([
+            {
+              id: generateUUID(),
+              model: currentProjectService,
+              quantity: "1",
+              lamination: "Standard",
+              unitPrice: itemBudget,
+              lineItemTotalPrice: itemBudget,
+              isGift: false,
+            },
+          ]);
+        }
+      } else {
+        setJobId(`JOB-${Math.floor(10000 + Math.random() * 90000)}`);
+        setCompanyName("");
+        setAddress("");
+        setPhoneNumber("");
+        setInitialStatusId(stages[0]?.id || "CR Clearance");
+        setExistingAdvancePayments([]);
+        setAdvancePaymentAmount("");
+        setAdvancePaymentMethod("");
+        setSpecialClientDiscount("");
+        setShippingCharge("");
+        setShowCustomPaymentInput(false);
+        setCustomPaymentMethodText("");
+        setOrderNotes("");
+        setNewAdvancePaymentNotes("");
+        setEditingPaymentId(null);
+        setIsStarred(0);
+        setCurrentOrderDate(new Date());
+        setAcceptedDeliveryDate(undefined);
+        setAgentId(user?.id || (agentOptions[0]?.id ?? ""));
+        setIsAutoFilled(false);
+        const defaultService = services[0]?.name || modelOptions[0]?.name || "TVC";
+        setOrderItems([
+          {
+            id: generateUUID(),
+            model: defaultService,
+            quantity: "1",
+            lamination: "Standard",
+            unitPrice: 1000,
+            lineItemTotalPrice: 1000,
+            isGift: false,
+          },
+        ]);
+      }
+      setTimeout(() => {
+        jobIdInputRef.current?.focus();
+      }, 100);
     }
-  }, [open, project, stages]);
+  }, [open, project, stages, modelOptions, agentOptions, user, services, prospects]);
+
+  // Pricing calculations identical to erpapp
+  useEffect(() => {
+    const currentItemsTotal = orderItems.reduce(
+      (sum, item) => sum + (item.isGift ? 0 : item.lineItemTotalPrice || 0),
+      0,
+    );
+    setOrderItemsTotal(currentItemsTotal);
+
+    let discountNum = 0;
+    const discountStr = specialClientDiscount.trim();
+    if (discountStr.endsWith("%")) {
+      const percentage = parseFloat(discountStr.substring(0, discountStr.length - 1));
+      if (!isNaN(percentage) && percentage >= 0) {
+        discountNum = (percentage / 100) * currentItemsTotal;
+      }
+    } else {
+      const fixedAmount = parseFloat(discountStr);
+      if (!isNaN(fixedAmount) && fixedAmount >= 0) {
+        discountNum = fixedAmount;
+      }
+    }
+    discountNum = Math.min(discountNum, currentItemsTotal);
+    setCalculatedDiscountAmount(discountNum);
+
+    const currentNetPayable = Math.max(0, currentItemsTotal - discountNum);
+    setNetPayable(currentNetPayable);
+
+    const totalExistingAdvance = existingAdvancePayments.reduce(
+      (sum, record) => sum + (Number(record.amount) || 0),
+      0,
+    );
+    setTotalExistingAdvancePaid(totalExistingAdvance);
+
+    const shippingNum = parseFloat(shippingCharge) || 0;
+    const newAdvanceNum = parseFloat(advancePaymentAmount) || 0;
+    const totalPaid = totalExistingAdvance + newAdvanceNum;
+    setAmountDue(Math.max(0, currentNetPayable + shippingNum - totalPaid));
+  }, [
+    orderItems,
+    specialClientDiscount,
+    shippingCharge,
+    advancePaymentAmount,
+    existingAdvancePayments,
+  ]);
+
+  const handleAddItem = () => {
+    const defaultModel = modelOptions[0];
+    const newItem: DialogOrderItem = {
+      id: generateUUID(),
+      model: defaultModel ? defaultModel.name : "",
+      quantity: "1",
+      lamination: laminationOptions[0]?.name || "Matt",
+      unitPrice: defaultModel ? defaultModel.sellingPrice : 0,
+      lineItemTotalPrice: defaultModel ? defaultModel.sellingPrice : 0,
+      isGift: false,
+    };
+    setOrderItems((prev) => [...prev, newItem]);
+  };
+
+  const handleRemoveItem = (itemId: string) => {
+    if (orderItems.length <= 1) return;
+    setOrderItems((prev) => prev.filter((item) => item.id !== itemId));
+  };
+
+  const handleToggleGift = (itemId: string) => {
+    setOrderItems((prev) =>
+      prev.map((item) => (item.id === itemId ? { ...item, isGift: !item.isGift } : item)),
+    );
+  };
+
+  const togglePopover = (itemId: string, openVal: boolean) => {
+    setPopoverOpenStates((prev) => ({ ...prev, [itemId]: openVal }));
+  };
+
+  const handleItemChange = (
+    itemId: string,
+    field: keyof DialogOrderItem | "modelName",
+    value: string | number | null,
+  ) => {
+    setOrderItems((prevItems) =>
+      prevItems.map((item) => {
+        if (item.id === itemId) {
+          const updatedItem = { ...item };
+          if (field === "modelName") {
+            const selectedModel = modelOptions.find((opt) => opt.name === value);
+            updatedItem.model = selectedModel ? selectedModel.name : (value as string);
+            updatedItem.unitPrice = selectedModel ? selectedModel.sellingPrice : 500;
+          } else if (field === "quantity") {
+            updatedItem.quantity = value as string;
+          } else if (field === "lamination") {
+            updatedItem.lamination = value as string;
+          }
+          const q = parseInt(updatedItem.quantity, 10);
+          const p = updatedItem.unitPrice || 0;
+          updatedItem.lineItemTotalPrice = !isNaN(q) && q > 0 ? q * p : p;
+          return updatedItem;
+        }
+        return item;
+      }),
+    );
+  };
+
+  const handleDiscountChange = (val: string) => {
+    setSpecialClientDiscount(val);
+    let discountVal = 0;
+    const discountStr = val.trim();
+    if (discountStr.endsWith("%")) {
+      const percentage = parseFloat(discountStr.substring(0, discountStr.length - 1));
+      if (!isNaN(percentage) && percentage >= 0) {
+        discountVal = (percentage / 100) * orderItemsTotal;
+      }
+    } else {
+      const fixedAmount = parseFloat(discountStr);
+      if (!isNaN(fixedAmount) && fixedAmount >= 0) {
+        discountVal = fixedAmount;
+      }
+    }
+    if (discountVal > orderItemsTotal && orderItemsTotal > 0) {
+      toast.error(
+        `Special Client Discount (${formatCurrencyBdt(discountVal)}) cannot exceed total items price of ${formatCurrencyBdt(orderItemsTotal)}.`,
+      );
+    }
+  };
+
+  const handleSelectProspect = (p: Prospect) => {
+    const company = p.business_name || p.contact_name || "";
+    setCompanyName(company);
+    setPhoneNumber(p.phone || "");
+    setAddress(p.address || "Dhaka, Bangladesh");
+    if (p.notes) {
+      setOrderNotes(cleanProjectNotes(p.notes));
+    }
+    if (p.service_name || p.service_id) {
+      const srvName = p.service_name || services.find((s) => s.id === p.service_id)?.name;
+      if (srvName) {
+        setOrderItems([
+          {
+            id: generateUUID(),
+            model: srvName,
+            quantity: "1",
+            lamination: "Matt",
+            unitPrice: 1000,
+            lineItemTotalPrice: 1000,
+            isGift: false,
+          },
+        ]);
+      }
+    }
+    setIsAutoFilled(true);
+    setIsProspectPopoverOpen(false);
+  };
+
+  const giftTotal = orderItems.reduce(
+    (sum, item) => sum + (item.isGift ? item.lineItemTotalPrice || 0 : 0),
+    0,
+  );
+
+  const isAdvancePaymentEntered =
+    !isNaN(parseFloat(advancePaymentAmount)) && parseFloat(advancePaymentAmount) > 0;
+
+  const grandTotal = useMemo(() => {
+    const shippingNum = parseFloat(shippingCharge) || 0;
+    return netPayable + shippingNum;
+  }, [netPayable, shippingCharge]);
+
+  const totalAdvanceAfterNew = useMemo(() => {
+    return totalExistingAdvancePaid + (parseFloat(advancePaymentAmount) || 0);
+  }, [totalExistingAdvancePaid, advancePaymentAmount]);
+
+  const isAdvPaymentOver = useMemo(() => {
+    return grandTotal > 0 && totalAdvanceAfterNew > grandTotal;
+  }, [grandTotal, totalAdvanceAfterNew]);
+
+  const isAdvPaymentValid = useMemo(() => {
+    return grandTotal === 0 || totalAdvanceAfterNew <= grandTotal;
+  }, [grandTotal, totalAdvanceAfterNew]);
+
+  useEffect(() => {
+    if (!open) {
+      toast.dismiss("advance-over-amount");
+      return;
+    }
+    if (isAdvPaymentOver) {
+      const overAmount = totalAdvanceAfterNew - grandTotal;
+      toast.error("Advance Payment Limit Exceeded", {
+        id: "advance-over-amount",
+        description: `Total payment (${formatCurrencyBdt(totalAdvanceAfterNew)}) exceeds Grand Total of ${formatCurrencyBdt(grandTotal)} by ${formatCurrencyBdt(overAmount)}. Please adjust the amount.`,
+        duration: 4000,
+      });
+    } else {
+      toast.dismiss("advance-over-amount");
+    }
+  }, [open, isAdvPaymentOver, totalAdvanceAfterNew, grandTotal]);
+
+  const isDiscountValid = useMemo(() => {
+    return orderItemsTotal === 0 || calculatedDiscountAmount <= orderItemsTotal;
+  }, [orderItemsTotal, calculatedDiscountAmount]);
+
+  const canSubmit = useMemo(() => {
+    if (
+      isSaving ||
+      companyName.trim().length === 0 ||
+      phoneNumber.trim().length === 0 ||
+      orderItems.length === 0
+    ) {
+      return false;
+    }
+    return true;
+  }, [isSaving, companyName, phoneNumber, orderItems]);
+
+  const handleStartEditPayment = (payment: AdvancePaymentRecord) => {
+    setEditingPaymentId(payment.id);
+    setEditingAmount(payment.amount.toString());
+    setEditingMethod(payment.paymentMethod || "bKash");
+    setEditingNotes(payment.notes || "");
+    setTimeout(() => {
+      amountInputRef.current?.focus();
+      amountInputRef.current?.select();
+    }, 50);
+  };
+
+  const handleSavePaymentEdit = (paymentId: string) => {
+    const newAmount = parseFloat(editingAmount);
+    if (isNaN(newAmount) || newAmount < 0) {
+      toast.error("Please enter a valid positive number for the payment.");
+      return;
+    }
+    const updatedPayments = existingAdvancePayments.map((p) =>
+      p.id === paymentId ? { ...p, amount: newAmount } : p,
+    );
+    const totalUpdated = updatedPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const shippingNum = parseFloat(shippingCharge) || 0;
+    const currentGrandTotal = netPayable + shippingNum;
+    if (totalUpdated > currentGrandTotal && currentGrandTotal > 0) {
+      toast.error("Advance Payment Limit Exceeded", {
+        id: "advance-over-amount",
+        description: `Total payment (${formatCurrencyBdt(totalUpdated)}) exceeds Grand Total of ${formatCurrencyBdt(currentGrandTotal)} by ${formatCurrencyBdt(totalUpdated - currentGrandTotal)}.`,
+        duration: 5000,
+      });
+      return;
+    }
+    setExistingAdvancePayments((prev) =>
+      prev.map((p) =>
+        p.id === paymentId
+          ? {
+              ...p,
+              amount: newAmount,
+              paymentMethod: editingMethod,
+              notes: editingNotes.trim(),
+            }
+          : p,
+      ),
+    );
+    setEditingPaymentId(null);
+    toast.success("Payment record updated.");
+  };
+
+  const handleCancelPaymentEdit = () => {
+    setEditingPaymentId(null);
+  };
+
+  const confirmDeletePayment = () => {
+    if (!paymentToDelete) return;
+    setExistingAdvancePayments((prev) => prev.filter((p) => p.id !== paymentToDelete.id));
+    toast.success(`Deleted payment of ${formatCurrencyBdt(paymentToDelete.amount)}`);
+    setPaymentToDelete(null);
+  };
+
+  const handleAdvancePaymentAmountChange = (value: string) => {
+    setAdvancePaymentAmount(value);
+    const numericValue = parseFloat(value);
+    const shippingNum = parseFloat(shippingCharge) || 0;
+    const currentGrandTotal = netPayable + shippingNum;
+    const currentTotalAfter = totalExistingAdvancePaid + (numericValue || 0);
+
+    if (!isNaN(numericValue) && currentGrandTotal > 0 && currentTotalAfter > currentGrandTotal) {
+      const overAmount = currentTotalAfter - currentGrandTotal;
+      toast.error("Advance Payment Limit Exceeded", {
+        id: "advance-over-amount",
+        description: `Total payment (${formatCurrencyBdt(currentTotalAfter)}) exceeds Grand Total of ${formatCurrencyBdt(currentGrandTotal)} by ${formatCurrencyBdt(overAmount)}.`,
+        duration: 4000,
+      });
+    } else {
+      toast.dismiss("advance-over-amount");
+    }
+
+    if (!value || parseFloat(value) <= 0) {
+      setAdvancePaymentMethod("");
+      setNewAdvancePaymentNotes("");
+      setShowCustomPaymentInput(false);
+      setCustomPaymentMethodText("");
+    }
+  };
+
+  const handleAdvancePaymentBlur = () => {
+    const numericValue = parseFloat(advancePaymentAmount);
+    const shippingNum = parseFloat(shippingCharge) || 0;
+    const currentGrandTotal = netPayable + shippingNum;
+    const currentTotalAfter = totalExistingAdvancePaid + (numericValue || 0);
+
+    if (!isNaN(numericValue) && currentGrandTotal > 0 && currentTotalAfter > currentGrandTotal) {
+      const overAmount = currentTotalAfter - currentGrandTotal;
+      toast.error("Advance Payment Limit Exceeded", {
+        id: "advance-over-amount",
+        description: `Total payment (${formatCurrencyBdt(currentTotalAfter)}) exceeds Grand Total of ${formatCurrencyBdt(currentGrandTotal)} by ${formatCurrencyBdt(overAmount)}. Please reduce the amount.`,
+        duration: 5000,
+      });
+    }
+  };
+
+  const handleAdvancePaymentMethodChange = (value: string) => {
+    setAdvancePaymentMethod(value);
+    if (value.toLowerCase() === "other") {
+      setShowCustomPaymentInput(true);
+    } else {
+      setShowCustomPaymentInput(false);
+      setCustomPaymentMethodText("");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !clientName.trim()) {
-      toast.error("Project title and client name are required.");
+    if (isAdvPaymentOver) {
+      const overAmount = totalAdvanceAfterNew - grandTotal;
+      toast.error("Advance Payment Limit Exceeded", {
+        id: "advance-over-amount",
+        description: `Total payment (${formatCurrencyBdt(totalAdvanceAfterNew)}) exceeds Grand Total of ${formatCurrencyBdt(grandTotal)} by ${formatCurrencyBdt(overAmount)}. Please adjust the amount before saving.`,
+        duration: 5000,
+      });
+      return;
+    }
+    if (!isDiscountValid) {
+      toast.error("Special Client Discount Limit Exceeded", {
+        description: `Special Client Discount cannot exceed total items price of ${formatCurrencyBdt(orderItemsTotal)}.`,
+      });
+      return;
+    }
+    if (isAdvancePaymentEntered) {
+      if (!advancePaymentMethod.trim()) {
+        toast.error("Payment Method Required", {
+          description: "Please select a payment method for the advance payment.",
+        });
+        return;
+      }
+      if (advancePaymentMethod.toLowerCase() === "other" && !customPaymentMethodText.trim()) {
+        toast.error("Custom Method Required", {
+          description: "Please specify the custom payment method.",
+        });
+        return;
+      }
+      if (newAdvancePaymentNotes.trim().length < 4) {
+        toast.error("Payment Reference Required", {
+          description: "Payment reference/notes must be at least 4 characters.",
+        });
+        return;
+      }
+    }
+    if (!canSubmit) {
+      toast.error("Please fill all required fields correctly.");
       return;
     }
 
+    const priorityLabel = isStarred >= 4 ? "Urgent" : isStarred >= 2 ? "High" : "Medium";
+
+    const newAdvanceNum = parseFloat(advancePaymentAmount) || 0;
+    const finalPayments = [...existingAdvancePayments];
+
+    if (newAdvanceNum > 0 && advancePaymentMethod) {
+      finalPayments.push({
+        id: generateUUID(),
+        amount: newAdvanceNum,
+        date: format(new Date(), "yyyy-MM-dd"),
+        paymentMethod:
+          advancePaymentMethod === "Other" && customPaymentMethodText
+            ? customPaymentMethodText
+            : advancePaymentMethod,
+        notes: newAdvancePaymentNotes.trim() || undefined,
+        recordedByUserId: user?.id || null,
+        recordedByUserName: user
+          ? typeof user["name"] === "string"
+            ? (user["name"] as string)
+            : (user.email ?? null)
+          : null,
+        status: "Approved",
+      });
+    }
+
+    const totalPaidAmount = finalPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const shippingNum = parseFloat(shippingCharge) || 0;
+    const totalBudget = netPayable > 0 ? netPayable + shippingNum : orderItemsTotal;
+
+    const cleanedNotes = cleanProjectNotes(orderNotes);
+
+    const notesPayload = [
+      cleanedNotes,
+      specialClientDiscount ? `[Discount: ${specialClientDiscount}]` : null,
+      shippingNum > 0 ? `[Shipping: ${shippingCharge.trim()}]` : null,
+      orderItems.length > 0 ? `[Items: ${JSON.stringify(orderItems)}]` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
     await onSave({
       id: project?.id || null,
-      project_code: projectCode.trim() || null,
-      title: title.trim(),
-      client_name: clientName.trim(),
-      client_phone: clientPhone.trim() || null,
-      client_email: clientEmail.trim() || null,
-      service_id: serviceId && serviceId !== "none" ? serviceId : null,
-      stage_id: stageId && stageId !== "none" ? stageId : "CR Clearance",
-      priority,
-      assigned_artist_id: assignedArtistId && assignedArtistId !== "none" ? assignedArtistId : null,
-      assigned_agent_id: assignedAgentId && assignedAgentId !== "none" ? assignedAgentId : null,
-      created_by: project ? project.created_by || user?.id || null : user?.id || null,
-      budget: budget ? parseFloat(budget) : 0,
-      paid_amount: paidAmount ? parseFloat(paidAmount) : 0,
-      progress: progress ? parseInt(progress, 10) : 0,
-      deadline: deadline || null,
-      notes: notes.trim() || null,
+      project_code: jobId.trim() || project?.project_code || null,
+      prospect_id: project?.prospect_id || null,
+      title: companyName.trim(),
+      client_name: companyName.trim(),
+      client_phone: phoneNumber.trim() || null,
+      client_email: project?.client_email || null,
+      service_id: orderItems[0]?.model || null,
+      stage_id: initialStatusId || "CR Clearance",
+      priority: priorityLabel,
+      assigned_artist_id: null, // rule: "default assign thakbe nah"
+      assigned_agent_id: agentId || null,
+      created_by: agentId || user?.id || null, // rule: "need to select agent coz je add korbe tar id db te add hobe"
+      budget: totalBudget,
+      paid_amount: totalPaidAmount,
+      progress: project?.progress || 0,
+      order_date: currentOrderDate
+        ? format(currentOrderDate, "yyyy-MM-dd")
+        : format(new Date(), "yyyy-MM-dd"),
+      deadline: acceptedDeliveryDate ? format(acceptedDeliveryDate, "yyyy-MM-dd") : null,
+      notes: notesPayload || null,
+      advance_payments: finalPayments,
     });
   };
 
-  const artists = useMemo(() => {
-    const matched = users.filter((u) => {
-      const role = (u.role || "").toUpperCase();
-      return role === "ARTIST" || role === "CREATIVE" || role === "GRAPHIC_DESIGNER";
-    });
-    return matched.length > 0 ? matched : users;
-  }, [users]);
-
-  const agents = useMemo(() => {
-    const matched = users.filter((u) => {
-      const role = (u.role || "").toUpperCase();
-      return role === "AGENT" || role === "SALES" || role === "ADMIN";
-    });
-    return matched.length > 0 ? matched : users;
-  }, [users]);
-
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-187.5 lg:max-w-200 p-0 flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 border-l border-slate-200 dark:border-slate-800 shadow-2xl focus:outline-none"
-      >
-        <SheetHeader className="sr-only">
-          <SheetTitle>{project ? "Edit Project" : "Add New Project"}</SheetTitle>
-          <SheetDescription>Project details and production assignments</SheetDescription>
-        </SheetHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="w-[95vw] sm:w-full max-w-[95vw] sm:max-w-lg md:max-w-xl lg:max-w-3xl xl:max-w-4xl max-h-[92vh] sm:max-h-[90vh] p-3.5 sm:p-6 overflow-hidden flex flex-col">
+          <DialogHeader className="pb-1 sm:pb-2 pr-8 sm:pr-0">
+            <DialogTitle className="text-base sm:text-lg">
+              {project ? (
+                <>
+                  Edit Order:{" "}
+                  <span className="font-normal">{project.client_name || project.title}</span>
+                </>
+              ) : (
+                "Create New Order"
+              )}
+            </DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              {project ? (
+                <>
+                  Modify details for order ID:{" "}
+                  <span className="font-mono">{project.project_code || project.id}</span>.
+                </>
+              ) : (
+                "Enter company details and add order items. Required fields are marked with *."
+              )}
+            </DialogDescription>
+          </DialogHeader>
 
-        {/* Header Bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-card shrink-0">
-          <div>
-            <h3 className="text-[18px] font-semibold text-slate-900 dark:text-slate-100 leading-tight">
-              {project ? `Edit Project: #${project.project_code}` : "Add New Project"}
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {project
-                ? "Update project scope, deliverables, team assignments, and financials."
-                : "Fill in project details and team assignments."}
-            </p>
-          </div>
-        </div>
-
-        {/* Scrollable Form Body */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
-          <form id="project-drawer-form" onSubmit={handleSubmit} className="space-y-4">
-            {/* Section 1: Basic Information */}
-            <div className="border border-slate-200 dark:border-slate-800 rounded-[5px] bg-white dark:bg-card overflow-hidden shadow-2xs">
-              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
-                <span className="size-7.5 rounded-[5px] bg-[#67B239] text-white flex items-center justify-center shrink-0 shadow-2xs">
-                  <DraftingCompass className="size-4" />
-                </span>
-                <span className="text-[14px] font-semibold text-slate-900 dark:text-slate-100">
-                  Basic Information
-                </span>
-              </div>
-
-              <div className="p-5 space-y-4 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2 space-y-1.5">
-                    <Label htmlFor="drawer_title" className="text-xs font-semibold">
-                      Project Name / Title <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="drawer_title"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="e.g. Apex Footwear E-Commerce Video Shoot"
-                      className="text-xs h-9"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="drawer_code" className="text-xs font-semibold">
-                      Project ID <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="drawer_code"
-                      value={projectCode}
-                      onChange={(e) => setProjectCode(e.target.value)}
-                      placeholder="e.g. PRJ-1001"
-                      className="text-xs h-9"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="drawer_client" className="text-xs font-semibold">
-                    Client / Company Name <span className="text-red-500">*</span>
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-col flex-1 overflow-hidden w-full max-w-full min-w-0"
+          >
+            <div className="grid gap-3 sm:gap-4 py-2 sm:py-4 max-h-[68vh] sm:max-h-[70vh] overflow-y-auto overflow-x-hidden w-full max-w-full min-w-0 pr-1 sm:pr-2 custom-scrollbar">
+              {/* Row 1: Job ID & Company Name */}
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full min-w-0">
+                <div className="space-y-1 min-w-0">
+                  <Label htmlFor="jobId" className="text-xs sm:text-sm truncate block">
+                    Job ID
                   </Label>
                   <Input
-                    id="drawer_client"
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    placeholder="e.g. Apex Footwear Ltd."
-                    className="text-xs h-9"
+                    id="jobId"
+                    ref={jobIdInputRef}
+                    value={jobId}
+                    onChange={(e) => setJobId(e.target.value)}
+                    placeholder="Leave blank"
+                    className="w-full text-xs sm:text-sm h-9"
+                    disabled={isSaving}
+                  />
+                </div>
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="companyName" className="text-xs sm:text-sm truncate block">
+                      Company Name *
+                    </Label>
+                    {prospects.length > 0 && !project && (
+                      <Popover open={isProspectPopoverOpen} onOpenChange={setIsProspectPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="text-[11px] text-[#67B239] hover:underline font-medium cursor-pointer"
+                          >
+                            {isAutoFilled ? "✓ Change Lead" : "Select Lead"}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72 p-0 z-60" align="end">
+                          <Command>
+                            <CommandInput placeholder="Search lead..." className="h-8 text-xs" />
+                            <CommandList className="max-h-56 overflow-y-auto">
+                              <CommandEmpty>No lead found.</CommandEmpty>
+                              <CommandGroup>
+                                {prospects.map((p) => (
+                                  <CommandItem
+                                    key={p.id}
+                                    value={p.business_name || p.contact_name}
+                                    onSelect={() => handleSelectProspect(p)}
+                                    className="cursor-pointer text-xs"
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "size-3.5 mr-1.5",
+                                        companyName === (p.business_name || p.contact_name)
+                                          ? "opacity-100"
+                                          : "opacity-0",
+                                      )}
+                                    />
+                                    <span className="truncate">
+                                      {p.business_name || p.contact_name}
+                                    </span>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
+                  <Input
+                    id="companyName"
+                    value={companyName}
+                    onChange={(e) => {
+                      setCompanyName(e.target.value);
+                      setIsAutoFilled(false);
+                    }}
                     required
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="drawer_phone" className="text-xs font-semibold">
-                      Client Phone
-                    </Label>
-                    <Input
-                      id="drawer_phone"
-                      value={clientPhone}
-                      onChange={(e) => setClientPhone(e.target.value)}
-                      placeholder="e.g. +880 1700-000000"
-                      className="text-xs h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="drawer_email" className="text-xs font-semibold">
-                      Client Email
-                    </Label>
-                    <Input
-                      id="drawer_email"
-                      type="email"
-                      value={clientEmail}
-                      onChange={(e) => setClientEmail(e.target.value)}
-                      placeholder="e.g. client@company.com"
-                      className="text-xs h-9"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Service Package / Category</Label>
-                    <Select value={serviceId} onValueChange={setServiceId}>
-                      <SelectTrigger className="text-xs h-9">
-                        <SelectValue placeholder="Select Service" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">-- None --</SelectItem>
-                        {services.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Priority</Label>
-                    <Select value={priority} onValueChange={setPriority}>
-                      <SelectTrigger className="text-xs h-9">
-                        <SelectValue placeholder="Select Priority" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="High">High</SelectItem>
-                        <SelectItem value="Medium">Medium</SelectItem>
-                        <SelectItem value="Low">Low</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Section 2: Stage & Financials */}
-            <div className="border border-slate-200 dark:border-slate-800 rounded-[5px] bg-white dark:bg-card overflow-hidden shadow-2xs">
-              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
-                <span className="size-7.5 rounded-[5px] bg-[#0a2e5c] text-white flex items-center justify-center shrink-0 shadow-2xs">
-                  <Receipt className="size-4" />
-                </span>
-                <span className="text-[14px] font-semibold text-slate-900 dark:text-slate-100">
-                  Stage & Financials
-                </span>
-              </div>
-
-              <div className="p-5 space-y-4 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Production Stage</Label>
-                    <Select value={stageId} onValueChange={setStageId}>
-                      <SelectTrigger className="text-xs h-9">
-                        <SelectValue placeholder="Select Stage" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {stages.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Due Date</Label>
-                    <Input
-                      type="date"
-                      value={deadline}
-                      onChange={(e) => setDeadline(e.target.value)}
-                      className="text-xs h-9"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Budget Value (৳)</Label>
-                    <Input
-                      type="number"
-                      value={budget}
-                      onChange={(e) => setBudget(e.target.value)}
-                      placeholder="e.g. 50000"
-                      className="text-xs h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Paid Amount (৳)</Label>
-                    <Input
-                      type="number"
-                      value={paidAmount}
-                      onChange={(e) => setPaidAmount(e.target.value)}
-                      placeholder="e.g. 25000"
-                      className="text-xs h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Progress (%)</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={progress}
-                      onChange={(e) => setProgress(e.target.value)}
-                      placeholder="0 - 100"
-                      className="text-xs h-9"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Section 3: Team Assignment & Specifications */}
-            <div className="border border-slate-200 dark:border-slate-800 rounded-[5px] bg-white dark:bg-card overflow-hidden shadow-2xs">
-              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
-                <span className="size-7.5 rounded-[5px] bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                  <User className="size-4" />
-                </span>
-                <span className="text-[14px] font-semibold text-slate-900 dark:text-slate-100">
-                  Team Assignment & Specifications
-                </span>
-              </div>
-
-              <div className="p-5 space-y-4 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold flex items-center gap-1">
-                      <Sparkles className="size-3.5 text-amber-500" />
-                      Responsible Artist / Designer
-                    </Label>
-                    <Select value={assignedArtistId} onValueChange={setAssignedArtistId}>
-                      <SelectTrigger className="text-xs h-9">
-                        <SelectValue placeholder="Select Artist" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">-- None --</SelectItem>
-                        {artists.map((u) => (
-                          <SelectItem key={u.id} value={u.id}>
-                            {u.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold flex items-center gap-1">
-                      <User className="size-3.5 text-blue-500" />
-                      Account Agent / Team Leader
-                    </Label>
-                    <Select value={assignedAgentId} onValueChange={setAssignedAgentId}>
-                      <SelectTrigger className="text-xs h-9">
-                        <SelectValue placeholder="Select Agent" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">-- None --</SelectItem>
-                        {agents.map((u) => (
-                          <SelectItem key={u.id} value={u.id}>
-                            {u.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Description & Deliverable Notes</Label>
-                  <Textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Project deliverables, video resolution, script requirements, handover notes..."
-                    rows={3}
-                    className="text-xs resize-none"
+                    placeholder="e.g., Color Hut"
+                    className={cn("w-full text-xs sm:text-sm h-9", isAutoFilled && "bg-muted/50")}
+                    disabled={isSaving}
                   />
                 </div>
               </div>
-            </div>
-          </form>
-        </div>
 
-        {/* Sticky Action Footer */}
-        <div className="p-4 px-6 bg-white dark:bg-card border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5 shrink-0 shadow-xs">
-          <Button
-            type="button"
-            variant="outline"
-            className="text-xs h-9 px-4 rounded-[6px] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="project-drawer-form"
-            disabled={isSaving || !title.trim() || !clientName.trim()}
-            className="text-xs h-9 px-5 font-semibold bg-[#67B239] hover:bg-[#5aa030] text-white rounded-[6px] shadow-xs cursor-pointer"
-          >
-            {isSaving ? "Saving..." : project ? "Save Changes" : "Create Project"}
-          </Button>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
+              {/* Row 2: Address */}
+              <div className="space-y-1 min-w-0">
+                <Label htmlFor="address" className="text-xs sm:text-sm">
+                  Address *
+                </Label>
+                <Textarea
+                  id="address"
+                  value={address}
+                  onChange={(e) => {
+                    setAddress(e.target.value);
+                    setIsAutoFilled(false);
+                  }}
+                  required
+                  placeholder="Client address or location..."
+                  className={cn(
+                    "w-full text-xs sm:text-sm min-h-[60px]",
+                    isAutoFilled && "bg-muted/50",
+                  )}
+                  disabled={isSaving}
+                />
+              </div>
 
-/* =========================================================================
-   Project Detail Modal Component
-   ========================================================================= */
-interface ProjectDetailModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  project: CrmProjectItem;
-  stages: Stage[];
-  onEdit: () => void;
-  onStageChange: (stageId: string, stageName: string) => Promise<void>;
-}
-
-function ProjectDetailModal({
-  open,
-  onOpenChange,
-  project,
-  stages,
-  onEdit,
-  onStageChange,
-}: ProjectDetailModalProps) {
-  const stageColor = project.stage_color || resolveProjectStageColor(project.stage_name);
-  const currentStage = stages.find(
-    (s) => s.id === project.stage_id || s.name.toLowerCase() === project.stage_name.toLowerCase(),
-  );
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl p-0 overflow-hidden">
-        <div className="px-6 py-5 text-white" style={{ backgroundColor: stageColor }}>
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-xs font-bold px-2.5 py-1 rounded bg-black/25">
-              #{project.project_code}
-            </span>
-            <Badge
-              variant="secondary"
-              className="bg-white text-slate-900 font-bold text-xs gap-1 shadow-2xs"
-            >
-              <CheckCircle2 className="size-3.5 text-emerald-600" /> {project.stage_name}
-            </Badge>
-          </div>
-          <h2 className="text-lg font-bold mt-2.5 leading-snug">{project.title}</h2>
-          <p className="text-xs opacity-90 mt-1 flex items-center gap-1.5">
-            <Building2 className="size-3.5" /> {project.client_name}
-          </p>
-        </div>
-
-        <div className="p-6 space-y-5 text-xs">
-          {/* Move Stage Quick Picker */}
-          <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2">
-            <Label className="text-xs font-semibold flex items-center gap-1.5">
-              <ArrowRight className="size-3.5 text-[#67B239]" /> Move Project Stage:
-            </Label>
-            <div className="flex flex-wrap gap-1.5">
-              {stages.map((s) => {
-                const sColor = resolveProjectStageColor(s.name);
-                const isSelected =
-                  s.id === project.stage_id ||
-                  s.name.toLowerCase() === project.stage_name.toLowerCase();
-
-                return (
-                  <Button
-                    key={s.id}
-                    size="sm"
-                    variant={isSelected ? "default" : "outline"}
-                    style={isSelected ? { backgroundColor: sColor, color: "#fff" } : {}}
-                    className={`text-[11px] h-7 px-2.5 rounded-lg font-medium ${
-                      isSelected ? "" : "border-border/60 hover:bg-muted"
-                    }`}
-                    onClick={() => onStageChange(s.id, s.name)}
+              {/* Row 3: Phone Number, Order Date, Delivery Date, Priority Star */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 w-full min-w-0">
+                <div className="space-y-1 min-w-0">
+                  <Label
+                    htmlFor="phoneNumber"
+                    className="text-xs sm:text-sm h-5 flex items-center truncate"
                   >
-                    {s.name}
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
+                    Phone Number *
+                  </Label>
+                  <Input
+                    id="phoneNumber"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => {
+                      const numericValue = e.target.value.replace(/[^0-9]/g, "");
+                      if (numericValue.length <= 11) {
+                        setPhoneNumber(numericValue);
+                        setIsAutoFilled(false);
+                      }
+                    }}
+                    required
+                    pattern="0\d{10}"
+                    maxLength={11}
+                    title="Phone number must be an 11-digit number starting with 0."
+                    placeholder="01xxxxxxxxx"
+                    className={cn("w-full text-xs sm:text-sm h-9", isAutoFilled && "bg-muted/50")}
+                    disabled={isSaving}
+                  />
+                </div>
 
-          {/* KPI Tiles */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-muted/30 border border-border/60 rounded-xl p-2.5">
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                Budget
-              </span>
-              <p className="font-bold text-sm text-foreground mt-0.5">
-                ৳{project.budget.toLocaleString()}
-              </p>
-            </div>
-            <div className="bg-muted/30 border border-border/60 rounded-xl p-2.5">
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                Paid
-              </span>
-              <p className="font-bold text-sm text-green-600 mt-0.5">
-                ৳{project.paid_amount.toLocaleString()}
-              </p>
-            </div>
-            <div className="bg-muted/30 border border-border/60 rounded-xl p-2.5">
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Due</span>
-              <p className="font-bold text-sm text-red-500 mt-0.5">
-                ৳{project.due_amount.toLocaleString()}
-              </p>
-            </div>
-            <div className="bg-muted/30 border border-border/60 rounded-xl p-2.5">
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                Progress
-              </span>
-              <p className="font-bold text-sm text-[#67B239] mt-0.5">{project.progress}%</p>
-            </div>
-          </div>
+                <div className="space-y-1 min-w-0">
+                  <Label
+                    htmlFor="orderDate"
+                    className="text-xs sm:text-sm h-5 flex items-center truncate"
+                  >
+                    Order Date *
+                  </Label>
+                  <Popover open={isOrderDatePopoverOpen} onOpenChange={setIsOrderDatePopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal min-w-0 text-xs sm:text-sm h-9 px-2.5",
+                          !currentOrderDate && "text-muted-foreground",
+                        )}
+                        disabled={isSaving}
+                      >
+                        <CalendarDays className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">
+                          {currentOrderDate ? format(currentOrderDate, "PP") : "Pick a date"}
+                        </span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={currentOrderDate}
+                        onSelect={(date) => {
+                          setCurrentOrderDate(date);
+                          setIsOrderDatePopoverOpen(false);
+                        }}
+                        initialFocus
+                        disabled={isSaving}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
 
-          {/* Team Members & Creator */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="border border-border/60 rounded-xl p-3 space-y-1">
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                Assigned Artist
-              </span>
-              <p className="font-semibold text-foreground flex items-center gap-1.5">
-                <Sparkles className="size-3.5 text-amber-500" />
-                {project.assigned_artist_name || "Not assigned"}
-              </p>
-            </div>
+                <div className="space-y-1 min-w-0">
+                  <Label
+                    htmlFor="acceptedDeliveryDate"
+                    className="text-xs sm:text-sm h-5 flex items-center truncate"
+                  >
+                    Delivery Date
+                  </Label>
+                  <Popover
+                    open={isDeliveryDatePopoverOpen}
+                    onOpenChange={setIsDeliveryDatePopoverOpen}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal min-w-0 text-xs sm:text-sm h-9 px-2.5",
+                          !acceptedDeliveryDate && "text-muted-foreground",
+                        )}
+                        disabled={isSaving}
+                      >
+                        <CalendarDays className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">
+                          {acceptedDeliveryDate
+                            ? format(acceptedDeliveryDate, "PP")
+                            : "Pick a date"}
+                        </span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={acceptedDeliveryDate}
+                        onSelect={(date) => {
+                          setAcceptedDeliveryDate(date);
+                          setIsDeliveryDatePopoverOpen(false);
+                        }}
+                        initialFocus
+                        disabled={isSaving}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
 
-            <div className="border border-border/60 rounded-xl p-3 space-y-1">
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                Account Agent
-              </span>
-              <p className="font-semibold text-foreground flex items-center gap-1.5">
-                <User className="size-3.5 text-blue-500" />
-                {project.assigned_agent_name || "Not assigned"}
-              </p>
-            </div>
+                <div className="space-y-1 min-w-0">
+                  <Label className="flex items-center gap-1.5 h-5 cursor-pointer text-xs sm:text-sm truncate">
+                    <Star
+                      className={cn(
+                        "h-3.5 w-3.5 shrink-0 transition-all",
+                        isStarred > 0
+                          ? "fill-amber-500 text-amber-500 scale-110"
+                          : "text-muted-foreground",
+                      )}
+                    />
+                    <span className="truncate">Priority Star</span>
+                  </Label>
+                  <div className="flex items-center justify-between h-9 px-2 sm:px-3 border rounded-md bg-background">
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((starIndex) => {
+                        const isFull = isStarred >= starIndex;
+                        const isHalf = !isFull && isStarred >= starIndex - 0.5;
 
-            <div className="border border-border/60 rounded-xl p-3 space-y-1">
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                Project Creator
-              </span>
-              <p className="font-semibold text-foreground flex items-center gap-1.5">
-                <User className="size-3.5 text-emerald-500" />
-                {project.creator_name || "Admin"}
-              </p>
-            </div>
-          </div>
-
-          {/* Contact Details */}
-          {(project.client_phone || project.client_email) && (
-            <div className="border border-border/60 rounded-xl p-3 space-y-1.5 bg-muted/10">
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                Client Contact Information
-              </span>
-              <div className="flex flex-wrap items-center gap-4 text-xs">
-                {project.client_phone && (
-                  <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                    <Phone className="size-3.5 text-slate-500" />
-                    <span>{project.client_phone}</span>
+                        return (
+                          <button
+                            key={starIndex}
+                            type="button"
+                            onClick={() => {
+                              if (isStarred === starIndex) {
+                                setIsStarred(0);
+                              } else if (isStarred === starIndex - 0.5) {
+                                setIsStarred(starIndex);
+                              } else {
+                                setIsStarred(starIndex - 0.5);
+                              }
+                            }}
+                            className="relative cursor-pointer transition-transform hover:scale-110 active:scale-95 shrink-0 outline-none"
+                          >
+                            {isFull ? (
+                              <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
+                            ) : isHalf ? (
+                              <div className="relative">
+                                <Star className="h-4 w-4 text-muted-foreground/30 dark:text-muted-foreground/20" />
+                                <div className="absolute top-0 left-0 overflow-hidden w-[50%] h-full">
+                                  <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
+                                </div>
+                              </div>
+                            ) : (
+                              <Star className="h-4 w-4 text-muted-foreground/30 dark:text-muted-foreground/20 hover:text-amber-400" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                )}
-                {project.client_email && (
-                  <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                    <Mail className="size-3.5 text-slate-500" />
-                    <span>{project.client_email}</span>
+                </div>
+              </div>
+
+              {/* Row 4: Order Notes */}
+              <div className="space-y-1">
+                <Label htmlFor="orderNotes" className="text-xs sm:text-sm">
+                  Order Notes (Optional)
+                </Label>
+                <Textarea
+                  id="orderNotes"
+                  value={orderNotes}
+                  onChange={(e) => setOrderNotes(e.target.value)}
+                  placeholder="Add any specific instructions or notes for this order..."
+                  rows={3}
+                  className="w-full text-xs sm:text-sm min-h-[60px]"
+                  disabled={isSaving}
+                />
+              </div>
+
+              {/* Row 5: Order Items * (100% ERPAPP Table) */}
+              <div className="space-y-3 mt-4 border-t border-border pt-4 w-full min-w-0">
+                <Label className="text-base sm:text-lg font-semibold">Order Items *</Label>
+                <div className="w-full max-w-full overflow-x-auto rounded-md border bg-background custom-scrollbar">
+                  <Table className="w-full min-w-[620px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[55%]">Service *</TableHead>
+                        <TableHead className="w-[20%]">Quantity *</TableHead>
+                        <TableHead className="w-[20%] text-right pr-4">Total Price</TableHead>
+                        <TableHead className="w-[5%] text-right"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orderItems.map((item) => (
+                        <TableRow key={item.id} className="hover:bg-muted/30">
+                          <TableCell className="p-2 align-middle">
+                            <div className="flex items-center gap-1.5">
+                              <Popover
+                                open={popoverOpenStates[item.id] || false}
+                                onOpenChange={(openVal) => togglePopover(item.id, openVal)}
+                              >
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={popoverOpenStates[item.id] || false}
+                                    className="flex-1 min-w-0 justify-between bg-background text-xs sm:text-sm h-9"
+                                    disabled={isSaving}
+                                  >
+                                    <span className="truncate">
+                                      {item.model || "Select service..."}
+                                    </span>
+                                    <ChevronsUpDown className="ml-1.5 h-3 w-3 shrink-0 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  className="min-w-[var(--radix-popover-trigger-width)] w-max max-w-lg p-0 z-[60]"
+                                  align="start"
+                                >
+                                  <Command className="max-h-96 overflow-hidden flex flex-col">
+                                    <CommandInput
+                                      placeholder="Search service..."
+                                      className="h-8 text-xs"
+                                    />
+                                    <CommandList className="max-h-80 overflow-y-auto">
+                                      <CommandEmpty>No service found.</CommandEmpty>
+                                      <CommandGroup>
+                                        {modelOptions.map((option) => (
+                                          <CommandItem
+                                            key={option.id}
+                                            value={option.name}
+                                            onSelect={() => {
+                                              handleItemChange(item.id, "modelName", option.name);
+                                              togglePopover(item.id, false);
+                                            }}
+                                            className="flex items-center gap-2 cursor-pointer text-xs"
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "h-4 w-4 shrink-0",
+                                                item.model === option.name
+                                                  ? "opacity-100"
+                                                  : "opacity-0",
+                                              )}
+                                            />
+                                            <span className="flex-1 truncate">{option.name}</span>
+                                            {option.sellingPrice && (
+                                              <span className="ml-auto text-xs text-muted-foreground">
+                                                (৳{option.sellingPrice})
+                                              </span>
+                                            )}
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                          </TableCell>
+                          <TableCell className="p-2 align-middle">
+                            <Input
+                              id={`quantity-${item.id}`}
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) =>
+                                handleItemChange(item.id, "quantity", e.target.value)
+                              }
+                              placeholder="e.g., 100"
+                              min="1"
+                              required
+                              className="bg-background text-xs sm:text-sm h-9"
+                              disabled={isSaving}
+                            />
+                          </TableCell>
+                          <TableCell
+                            className="p-2 align-middle text-right pr-4 font-semibold text-xs sm:text-sm whitespace-nowrap cursor-pointer select-none"
+                            onDoubleClick={() => handleToggleGift(item.id)}
+                            title="Double-click to toggle Gift"
+                          >
+                            <span
+                              style={
+                                item.isGift
+                                  ? {
+                                      textDecoration: "line-through",
+                                      textDecorationColor: "#ef4444",
+                                      color: "#6b7280",
+                                    }
+                                  : undefined
+                              }
+                            >
+                              {formatCurrencyBdt(item.lineItemTotalPrice)}
+                            </span>
+                            {item.isGift && " (Gift)"}
+                          </TableCell>
+                          <TableCell className="p-2 align-middle text-right">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveItem(item.id)}
+                              disabled={isSaving || orderItems.length <= 1}
+                              className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive-foreground cursor-pointer"
+                              title="Remove item"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleAddItem}
+                  className="mt-2 text-xs h-8 cursor-pointer"
+                  disabled={isSaving}
+                >
+                  <PlusCircle className="mr-1.5 h-3.5 w-3.5" /> Add Another Item
+                </Button>
+              </div>
+
+              <Separator className="my-4" />
+
+              {/* Row 6: Special Client Discount & Shipping Charge (100% ERPAPP) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+                <div className="space-y-1">
+                  <Label htmlFor="specialClientDiscount">Special Client Discount</Label>
+                  <div className="relative">
+                    <Input
+                      id="specialClientDiscount"
+                      type="text"
+                      value={specialClientDiscount}
+                      onChange={(e) => handleDiscountChange(e.target.value)}
+                      placeholder="e.g., 100 or 10%"
+                      disabled={isSaving}
+                      className="pl-7"
+                    />
+                    <Percent className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="shippingCharge">Shipping Charge</Label>
+                  <Input
+                    id="shippingCharge"
+                    type="number"
+                    value={shippingCharge}
+                    onChange={(e) => setShippingCharge(e.target.value)}
+                    placeholder="0"
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
+
+              {/* Payment History Table (100% ERPAPP edit-order-dialog.tsx match) */}
+              <div className="mt-4 space-y-2 w-full min-w-0">
+                <div className="flex items-center justify-between">
+                  <Label className="text-md font-semibold flex items-center">
+                    <ReceiptText className="mr-2 h-5 w-5 text-primary/80" />
+                    Payment History{" "}
+                    {existingAdvancePayments.length > 0 && (
+                      <span className="ml-1 text-xs text-muted-foreground font-normal">
+                        ({existingAdvancePayments.length})
+                      </span>
+                    )}
+                  </Label>
+                  {existingAdvancePayments.length > 0 && (
+                    <span className="text-[11px] text-muted-foreground font-normal hidden sm:inline">
+                      Double-click row to edit
+                    </span>
+                  )}
+                </div>
+
+                {existingAdvancePayments.length > 0 ? (
+                  <div className="w-full max-w-full max-h-48 overflow-y-auto overflow-x-auto rounded-md border bg-muted/20 p-2 custom-scrollbar">
+                    <Table className="w-full min-w-[450px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="h-8 text-xs">Date</TableHead>
+                          <TableHead className="h-8 text-xs">Amount</TableHead>
+                          <TableHead className="h-8 text-xs">Method</TableHead>
+                          <TableHead className="h-8 text-xs">Reference/Notes</TableHead>
+                          <TableHead className="h-8 text-right text-xs">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {existingAdvancePayments.map((record) => (
+                          <TableRow
+                            key={record.id}
+                            className="group hover:bg-muted/40 transition-colors"
+                            onDoubleClick={() => {
+                              if (!editingPaymentId) handleStartEditPayment(record);
+                            }}
+                          >
+                            <TableCell className="text-xs py-1.5 whitespace-nowrap">
+                              {formatDateForDialogInput(record.date)}
+                            </TableCell>
+                            <TableCell className="text-xs py-1.5 font-medium whitespace-nowrap">
+                              {editingPaymentId === record.id ? (
+                                <Input
+                                  ref={amountInputRef}
+                                  type="number"
+                                  value={editingAmount}
+                                  onChange={(e) => setEditingAmount(e.target.value)}
+                                  className="h-7 text-xs w-28"
+                                />
+                              ) : (
+                                formatCurrencyBdt(record.amount)
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs py-1.5">
+                              {editingPaymentId === record.id ? (
+                                <Select
+                                  value={editingMethod}
+                                  onValueChange={(value) => setEditingMethod(value)}
+                                >
+                                  <SelectTrigger className="h-7 text-xs w-28">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {paymentMethodOptions.map((pm) => (
+                                      <SelectItem key={pm.id} value={pm.name}>
+                                        {pm.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                record.paymentMethod || "N/A"
+                              )}
+                            </TableCell>
+                            <TableCell
+                              className="text-xs text-muted-foreground py-1.5 max-w-[150px] truncate"
+                              title={record.notes || undefined}
+                            >
+                              {editingPaymentId === record.id ? (
+                                <Input
+                                  value={editingNotes}
+                                  onChange={(e) => setEditingNotes(e.target.value)}
+                                  className="h-7 text-xs"
+                                  placeholder="Notes/Ref"
+                                />
+                              ) : (
+                                record.notes || "N/A"
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right py-1.5">
+                              {editingPaymentId === record.id ? (
+                                <div className="flex gap-1 justify-end">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-green-600 hover:bg-green-100 cursor-pointer"
+                                    onClick={() => handleSavePaymentEdit(record.id)}
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:bg-muted cursor-pointer"
+                                    onClick={handleCancelPaymentEdit}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPaymentToDelete(record);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-dashed border-border/80 p-3 text-center bg-muted/10">
+                    <p className="text-xs text-muted-foreground">
+                      No payment history recorded yet. Add an advance payment below.
+                    </p>
                   </div>
                 )}
               </div>
+
+              {/* Adjustment / Advance Payment Input Row (100% ERPAPP) */}
+              <div className="mt-4 border-t border-border pt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+                <div className="space-y-1">
+                  <Label htmlFor="newAdvanceAmount">
+                    {existingAdvancePayments.length > 0 ? "Adjustment Payment" : "Advance Payment"}
+                  </Label>
+                  <Input
+                    id="newAdvanceAmount"
+                    type="number"
+                    value={advancePaymentAmount}
+                    onChange={(e) => handleAdvancePaymentAmountChange(e.target.value)}
+                    onBlur={handleAdvancePaymentBlur}
+                    placeholder="Amount (BDT)"
+                    min="0"
+                    step="0.01"
+                    disabled={isSaving}
+                  />
+                </div>
+                {isAdvancePaymentEntered && (
+                  <div className="space-y-1">
+                    <Label htmlFor="newAdvancePaymentMethod">Payment Method *</Label>
+                    <Popover
+                      open={isPaymentMethodPopoverOpen}
+                      onOpenChange={setIsPaymentMethodPopoverOpen}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between bg-background"
+                          disabled={isSaving}
+                        >
+                          <span className="flex-1 text-left whitespace-nowrap">
+                            {advancePaymentMethod
+                              ? paymentMethodOptions.find(
+                                  (opt) => opt.name === advancePaymentMethod,
+                                )?.name || advancePaymentMethod
+                              : "Select method..."}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="min-w-[var(--radix-popover-trigger-width)] w-max max-w-md p-0">
+                        <Command>
+                          <CommandInput placeholder="Search method..." />
+                          <CommandList>
+                            <CommandEmpty>No method found.</CommandEmpty>
+                            <CommandGroup>
+                              {paymentMethodOptions.map((opt) => (
+                                <CommandItem
+                                  key={opt.id}
+                                  value={opt.name}
+                                  onSelect={(val) => {
+                                    handleAdvancePaymentMethodChange(
+                                      paymentMethodOptions.find(
+                                        (o) => o.name.toLowerCase() === val.toLowerCase(),
+                                      )?.name || val,
+                                    );
+                                    setIsPaymentMethodPopoverOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      advancePaymentMethod === opt.name
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                  <span className="whitespace-nowrap">{opt.name}</span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {showCustomPaymentInput && (
+                      <div className="mt-2 space-y-1">
+                        <Label htmlFor="customPaymentMethodText">Specify Other Method *</Label>
+                        <Input
+                          id="customPaymentMethodText"
+                          value={customPaymentMethodText}
+                          onChange={(e) => setCustomPaymentMethodText(e.target.value)}
+                          required={advancePaymentMethod.toLowerCase() === "other"}
+                          disabled={isSaving}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isAdvancePaymentEntered && (
+                  <div className="space-y-1">
+                    <Label htmlFor="newAdvancePaymentNotes">Reference/Notes *</Label>
+                    <Input
+                      id="newAdvancePaymentNotes"
+                      value={newAdvancePaymentNotes}
+                      onChange={(e) => setNewAdvancePaymentNotes(e.target.value)}
+                      placeholder="Reference or Transaction ID"
+                      required={isAdvancePaymentEntered}
+                      minLength={4}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Order Summary Box (100% ERPAPP Styling) */}
+              <div className="mt-4 p-4 border rounded-md bg-muted/30 space-y-2">
+                <h4 className="text-md font-semibold text-foreground mb-2">Order Summary</h4>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Order Items Total:</span>
+                  <span className="font-medium text-foreground">
+                    {formatCurrencyBdt(orderItemsTotal)}
+                  </span>
+                </div>
+                {giftTotal > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground flex items-center">
+                      <Gift className="h-4 w-4 mr-1 text-yellow-500" />
+                      Gift Value:
+                    </span>
+                    <span className="font-medium text-yellow-500">
+                      {formatCurrencyBdt(giftTotal)}
+                    </span>
+                  </div>
+                )}
+                {(calculatedDiscountAmount || 0) > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Discount:</span>
+                    <span className="font-medium text-red-600">
+                      - {formatCurrencyBdt(calculatedDiscountAmount)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Net Payable:</span>
+                  <span className="font-semibold text-foreground">
+                    {formatCurrencyBdt(netPayable)}
+                  </span>
+                </div>
+                {(parseFloat(shippingCharge) || 0) > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Shipping Charge:</span>
+                    <span className="font-medium text-foreground">
+                      + {formatCurrencyBdt(parseFloat(shippingCharge))}
+                    </span>
+                  </div>
+                )}
+                {totalExistingAdvancePaid + (parseFloat(advancePaymentAmount) || 0) > 0 && (
+                  <div className="flex justify-between text-sm mt-1 pt-1 border-t border-dashed border-border">
+                    <span className="text-muted-foreground">Total Paid:</span>
+                    <span className="font-medium text-green-600">
+                      -{" "}
+                      {formatCurrencyBdt(
+                        totalExistingAdvancePaid + (parseFloat(advancePaymentAmount) || 0),
+                      )}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-lg font-bold mt-1 pt-1 border-t border-border">
+                  <span className="text-primary">Amount Due:</span>
+                  <span className="text-primary">{formatCurrencyBdt(amountDue)}</span>
+                </div>
+              </div>
             </div>
-          )}
 
-          {/* Notes */}
-          {project.notes && (
-            <div className="border border-border/60 rounded-xl p-3 space-y-1 bg-muted/10">
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                Creative Notes & Deliverables
-              </span>
-              <p className="text-xs text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                {project.notes}
-              </p>
-            </div>
-          )}
+            {/* Dialog Footer (Exact to ERPAPP) */}
+            <DialogFooter className="pt-3 sm:pt-4 border-t flex flex-col-reverse sm:flex-row gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isSaving}
+                className="text-xs sm:text-sm"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!canSubmit || isSaving}
+                className="bg-[#67B239] hover:bg-[#5aa030] text-white text-xs sm:text-sm cursor-pointer gap-1.5"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {project ? "Updating..." : "Creating..."}
+                  </>
+                ) : project ? (
+                  "Save Changes"
+                ) : (
+                  "Create Project"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border/60">
-            <span>Created: {formatCrmDate(project.created_at)}</span>
-            <span>Deadline: {project.deadline || "None"}</span>
-          </div>
-        </div>
-
-        <DialogFooter className="px-6 py-3 border-t border-border/60 bg-muted/10">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="text-xs rounded-xl"
-            onClick={() => onOpenChange(false)}
-          >
-            Close
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="text-xs font-semibold bg-[#67B239] hover:bg-[#5aa030] text-white rounded-xl gap-1.5 cursor-pointer"
-            onClick={onEdit}
-          >
-            <Pencil className="size-3.5" /> Edit Project
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {/* Payment Deletion Confirmation Alert Dialog (Exact to ERPAPP) */}
+      {paymentToDelete && (
+        <AlertDialog
+          open={!!paymentToDelete}
+          onOpenChange={(open) => !open && setPaymentToDelete(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action will permanently delete the payment of{" "}
+                {formatCurrencyBdt(paymentToDelete.amount)} made on{" "}
+                {formatDateForDialogInput(paymentToDelete.date)}.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setPaymentToDelete(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeletePayment}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+    </>
   );
 }
+
+const ProjectOffcanvasDrawer = ProjectFormDialog;

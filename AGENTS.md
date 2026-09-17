@@ -269,3 +269,187 @@ Welcome to the **Brandium CRM** repository.
 - **Projects Brand Color UI Standardization**:
   - Primary call-to-actions on `/projects` (`src/app/(authenticated)/projects/page.tsx`), specifically the `+ Add New Project` button, strictly use Brandium Growth Green (`bg-[#67B239] hover:bg-[#5aa030] text-white`).
   - Active filter indicators and interactive reset links follow the same brand palette (`bg-[#67B239]`, `text-[#67B239] hover:text-[#5aa030]`), and the header project counter badge renders in soft green (`bg-[#67B239]/15 text-[#55962e] dark:bg-[#67B239]/25 dark:text-[#7ac142]`) ensuring complete visual alignment with the Brandium CRM design system.
+
+- **Color Hut / Radix Alert Delete Confirmation Dialog Specification**:
+  - Across CRM entity deletion dialogs (e.g. `ProjectsPage` in `src/app/(authenticated)/projects/page.tsx` and `DeleteProspectDialog` in `src/components/delete-prospect-dialog.tsx`), implement the exact dialog layout, color, and CSS specifications:
+    - **Container**: `w-full max-w-[512px] bg-[#EEEFF2] dark:bg-slate-900 border border-[#E1E7EF] dark:border-slate-800 rounded-[12px] p-6 shadow-lg gap-4 text-slate-900 dark:text-slate-100` (`box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)`).
+    - **Header**: Left-aligned (`flex flex-col space-y-2 text-left sm:text-left`).
+      - Title: `text-lg font-semibold flex items-center gap-2 text-[#0f1729] dark:text-slate-100` with Lucide `TriangleAlert` (`size-6 text-[#dc2626] stroke-[2]`).
+      - Text: `"Are you absolutely sure?"`
+      - Subtitle: `text-sm text-[#94a3b8] dark:text-slate-400 text-left mt-2 leading-5` -> `"This action cannot be undone. This will permanently delete the [entity] for \"[Name]\"."` with `font-semibold text-[#94a3b8] dark:text-slate-300` for the entity title/name.
+    - **Footer**: `flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-0` (or `gap-2`).
+      - **Cancel Button**: `h-10 px-4 py-2 mt-2 sm:mt-0 bg-[#EEEFF2] dark:bg-slate-800 border border-[#E1E7EF] dark:border-slate-700 text-[#0f1729] dark:text-slate-200 hover:bg-[#E1E7EF]/80 dark:hover:bg-slate-700 rounded-[10px] text-sm font-medium shadow-none cursor-pointer`.
+      - **Delete Button**: `h-10 px-4 py-2 bg-[#dc2626] hover:bg-[#dc2626]/90 text-[#fafafa] rounded-[10px] text-sm font-medium shadow-none cursor-pointer border-0` with label `"Yes, delete [entity]"`.
+
+- **Projects Prospect Integration & Auto-Fill Standard**:
+  - In `ProjectOffcanvasDrawer` (`src/app/(authenticated)/projects/page.tsx`), project creation integrates a dedicated **Select Prospect / Lead** selector at the top of Basic Information.
+  - Selecting a prospect automatically populates `client_name`, `client_phone`, `client_email`, `service_id`, `assigned_artist_id`, `assigned_agent_id`, `notes`, auto-suggests project title, links `prospect_id` in the database, and provides fallback to custom projects when unlinked.
+
+- **ERPAPP Add/Edit Project Dialog UI Standard (`ProjectFormDialog`)**:
+  - In `src/app/(authenticated)/projects/page.tsx`, the Add/Edit Project interface uses a centered modal dialog (`Dialog`) strictly mirroring the layout, dimensions, UX conventions, and aesthetics of ERPAPP's `create-order-dialog.tsx` and `edit-order-dialog.tsx`:
+    - **Modal Container**: `<DialogContent className="w-[95vw] sm:w-full max-w-[95vw] sm:max-w-lg md:max-w-xl lg:max-w-3xl xl:max-w-4xl max-h-[92vh] sm:max-h-[90vh] p-3.5 sm:p-6 overflow-hidden flex flex-col">`.
+    - **Header**: Compact `DialogHeader` (`pb-1 sm:pb-2 pr-8 sm:pr-0`), `DialogTitle` (`text-base sm:text-lg`) showing "Create New Project" or `Edit Project: <span className="font-normal">{title}</span>`, and `DialogDescription` (`text-xs sm:text-sm`).
+    - **Scrollable Form Body**: `<div className="grid gap-3 sm:gap-4 py-2 sm:py-4 max-h-[68vh] sm:max-h-[70vh] overflow-y-auto overflow-x-hidden w-full max-w-full min-w-0 pr-1 sm:pr-2 custom-scrollbar">`.
+    - **Prospect / Lead Quick Autofill (Create Mode)**: Minimal search combobox at the top showing company logo/avatar and business name only (`show business name & logo only`). Selecting automatically populates Client Name, Phone, Email, Service Category, Assigned Artist, and Account Agent with an active "✓ Autofilled from lead" indicator.
+    - **Row 1**: Project Code & Project Name / Title (grid-cols-1 sm:grid-cols-2).
+    - **Row 2**: Client / Company Name & Phone Number (grid-cols-1 sm:grid-cols-2).
+    - **Row 3**: Client Email, Delivery Date (Calendar popover with `CalendarDays` icon), and interactive ERPAPP 5-star Priority Rating component (supporting half and full amber stars synced with High/Medium/Low priority).
+    - **Row 4 & 5**: Service Category, Production Stage, Responsible Artist, and Account Agent selectors.
+    - **Row 6**: Total Budget, Advance / Paid Amount, and Progress % inputs.
+    - **ERPAPP Financial Summary Box**: Compact summary card (`p-3.5 sm:p-4 border rounded-md bg-muted/30 space-y-2`) displaying Total Budget, Advance / Paid Amount, production completion progress bar, and Remaining Due amount (highlighted in rose for positive due or emerald for zero balance).
+    - **Footer**: `DialogFooter` (`pt-3 sm:pt-4 border-t flex flex-col-reverse sm:flex-row gap-2 sm:gap-0`) with Cancel (`variant="outline"`) and Brandium Growth Green submit button (`bg-[#67B239] hover:bg-[#5aa030] text-white`) featuring a `Loader2` spinning indicator during mutation saving.
+
+- **ERPAPP Order Items Table Standard for Project Dialog (`Order Items *`)**:
+  - In `src/app/(authenticated)/projects/page.tsx`, the single `Service Category` dropdown is transformed into an itemized *_"Order Items *"*_ table mirroring ERPAPP's `create-order-dialog.tsx`:
+    - **Header**: Section label `Order Items *`.
+    - **Table Columns**:
+      - `Service *` (width ~45%): Dropdown populated with services from the database and creative models (`Select service...`).
+      - `Quantity *` (width ~15%): Numeric input defaulting to `1`, minimum `1`.
+      - `Charge *` (width ~20%): Number input for item unit charge / price (`placeholder="0"`).
+      - `Total Price` (width ~15%, text-right): Real-time calculated line item total price (`৳${quantity * charge}`) or `N/A`.
+      - Delete action button (width ~5%): Red `Trash2` button (`text-rose-500`) to remove item rows.
+    - **Add Another Item**: `+ Add Another Item` button with `PlusCircle` icon.
+    - **Auto-Sync Budget**: Entering item charges and quantities automatically calculates line totals and seamlessly syncs with `budget` if empty or 0.
+    - **Persistence**: Order item collection is safely serialized and persisted into `project.notes` with `[Items: ...]` tag while syncing `orderItems[0].model` with `service_id` for backward database compatibility.
+    - **Form Flow Simplification**: The redundant middle row containing `Production Stage`, `Responsible Artist`, and `Account Agent` dropdowns is removed from the dialog form per user request, flowing cleanly directly from the `Order Items *` table into the Financials Grid and Financial Summary box.
+
+- **Projects Card Data Accuracy & Presentation Standardization**:
+  - In `src/app/(authenticated)/projects/page.tsx`:
+    - **Project Notes Priority & Prospect Fallback**: In Row 3 of each project card, strictly display the actual project notes (`cleanNotes`), stripping internal `[Items: ...]` JSON payloads and tag markers. When standalone project notes are empty or only contained serialized order items, fallback dynamically to the linked prospect's notes (`project.prospect_notes` joined in `projectsQuery`). Row 3 strictly displays clean project notes or a muted `"No project notes provided."` fallback, completely eliminating the redundant `Items: ...` fallback (since items are already summarized in the footer `{count} Item` badge and service subtitle).
+    - **Currency & Budget Formatting**: Format project value with Bangladeshi Taka `৳` (`৳{formatProjectValue(project.budget)}`) without foreign `$` dollar signs or artificial leading zeros.
+    - **Dynamic Stage Soft Badges**: Replace static solid green badges with dynamic soft color palettes via `getProjectStageBadgeStyle(stage_name)` (e.g. indigo for CR Clearance, sky blue for On Design, amber for CO Clearance, rose for On Hold, emerald for Delivered).
+    - **Due Date Resilience**: When `deadline` is null, display `"Not set"` instead of legacy template default dates.
+    - **Card Footer Real Data**: Replace dummy static metrics (`Total Hours : 100`, `WeChat : 02`, `Subtasks : 04`) with genuine project metrics: real production completion progress badge (`Progress : {progress}%`), dynamic outstanding due badge (`Due : ৳...`) or emerald `Paid` badge, and order items count badge (`{count} Items` with `ti ti-box` icon).
+    - **Dynamic Client Logo**: Display client/prospect business logo in the 40px avatar via `project.prospect_logo_url` with dynamic fallback to creative geometric agency logos.
+
+- **Payment History Table in Project / Order Dialog Standard**:
+  - In `src/app/(authenticated)/projects/page.tsx` within `ProjectFormDialog`, render an interactive **Payment History** table directly above `Special Client Discount` and below `<Separator className="my-4" />` whenever `existingAdvancePayments.length > 0`:
+    - Displays `Date`, `Amount` (formatted BDT currency), `Method` (badge), `Reference/Notes`, and `Actions`.
+    - Double-click or click `Pencil` allows inline editing of amount, payment method dropdown, and notes with `Check` and `X` action buttons.
+    - `Trash2` action button allows removing individual payment records with instant recalculation of total advance paid and amount due in Order Summary.
+    - When existing payments exist, the advance payment input label dynamically switches to `"New Advance Payment"`, and entering a new payment seamlessly appends to the payment collection upon saving.
+    - Automatically parses payment history from `project.notes` (`[Payments: [...]]`) with graceful fallback to single legacy advance payment (`project.paid_amount`) and cleans technical tags from the user's notes field.
+
+- **Exact Optional Property Types Compatibility (TS2379 & sonner toast)**:
+  - In interfaces like `ExistingPaymentRecord` or `AdvancePaymentRecord`, always declare optional properties as `field?: type | undefined` to satisfy `exactOptionalPropertyTypes: true`.
+  - When importing `toast` from `sonner`, ensure it is only imported once per file to avoid TS2300 duplicate identifier errors.
+
+- **Native Multi-Installment Advance Payment Persistence (`projects.advance_payments` JSON Column)**:
+  - Table `projects` in MySQL stores multi-installment advance payments directly in dedicated column `advance_payments LONGTEXT NULL`.
+  - Schema bootstrapping in `src/lib/auth.functions.ts` automatically provisions and maintains `{ table: "projects", column: "advance_payments", def: "LONGTEXT NULL" }`.
+  - TypeScript interface `AdvancePaymentRecord` in `src/lib/projects.ts` standardizes payment installments across the application:
+    `{ id: string; amount: number; date: string; paymentMethod: string; notes?: string | null | undefined; recordedByUserId?: string | null | undefined; recordedByUserName?: string | null | undefined; documentUrl?: string | null | undefined; status?: "Pending" | "Approved" | "Declined" | undefined; }`.
+  - In `projectsQuery` and `/projects/[invoiceid]/page.tsx`, queries select `prj.advance_payments` directly with layered fallback parsing: first `project.advance_payments`, second `[Payments: [...]]` tag in `notes`, and third single legacy `paid_amount`.
+  - In `useSaveProjectMutation`, mutations persist `advance_payments: payload.advance_payments ? JSON.stringify(payload.advance_payments) : null` in both `UPDATE` and `INSERT` SQL statements, while syncing the total sum into `paid_amount`.
+  - In `ProjectFormDialog`, `parseProjectPayments` loads existing installments into the interactive editable Payment History table, and `handleSubmit` adds new payments and updates `advance_payments` seamlessly.
+
+- **ERPAPP 100% Identical Payment Section & Order Summary Standard**:
+  - In `src/app/(authenticated)/projects/page.tsx` within `ProjectFormDialog`, the payment and order summary section strictly matches ERPAPP's `edit-order-dialog.tsx` (lines 970-1219):
+    - **Separator**: Clean horizontal separator `<Separator className="my-4" />`.
+    - **Row 1 - Discounts & Shipping**: Grid `grid grid-cols-1 md:grid-cols-2 gap-4`:
+      - Left: `Special Client Discount` input with `Percent` icon inside (`pl-7`).
+      - Right: `Shipping Charge` numeric input (`min="0" step="0.01" placeholder="0"`).
+    - **Row 2 - Payment History Table** (renders when `existingAdvancePayments.length > 0`):
+      - Header: `<ReceiptText className="mr-2 h-5 w-5 text-primary/80" />Payment History`.
+      - Styled table (`border rounded-md overflow-hidden bg-background`):
+        - Column widths: `Date` (w-[180px]), `Amount` (w-[140px]), `Method`, `Reference/Notes`, and `Actions` (w-[90px] text-right).
+        - Date rendered via `formatDateForDialogInput(p.date)` using `format(date, "PPP")` (e.g. "Sep 15th, 2026").
+        - Amount rendered via `formatCurrencyBdt(p.amount)`.
+        - Method and Notes rendered as plain text (no badges).
+        - Inline editing on double click or pencil click with focused amount input (`amountInputRef`), select dropdown for payment method, input for reference/notes, and green check (`Check`) / muted cancel (`X`) buttons.
+        - Delete trash button (`group-hover:opacity-100`) sets `paymentToDelete` triggering the ERPAPP `AlertDialog` confirmation ("This action will permanently delete the payment of {amount} made on {date}.").
+    - **Row 3 - Adjustment / Advance Payment Input** (`mt-4 border-t border-border pt-4`):
+      - Label: `{existingAdvancePayments.length > 0 ? "Adjustment Payment" : "Advance Payment"}`.
+      - Input: `Amount (BDT)` with step 0.01.
+      - When an amount is entered (`isAdvancePaymentEntered`):
+        - `Payment Method *` with search combobox popover (`Popover`, `Command`, `CommandInput`, `CommandList`, `Check`, `ChevronsUpDown`).
+        - "Specify Other Method *" input when "Other" is selected.
+        - `Reference/Notes *` input (`placeholder="Reference or Transaction ID"`).
+    - **Row 4 - Order Summary Box** (`p-4 border rounded-md bg-muted/40 space-y-2 mt-4`):
+      - `Order Items Total:`, `Gift Value:` (when any), `Discount:` (`- BDT ...` in text-destructive), `Net Payable:`, `Shipping Charge:` (`+ BDT ...`), `Total Paid:` (`- BDT ...` with top dashed border in text-green-600), and `Amount Due:` (`BDT ...` in text-base font-bold text-primary).
+- **Persistent Payment History Section & Eager State Initialization Standard**:
+  - In both `ProjectFormDialog` (Edit Order Dialog) and `ProjectDetailModal` (View Details Modal), Payment History is always rendered in the UI with a persistent header and counter (`Payment History (n)`).
+  - When no advance payments exist yet, it displays a friendly dashed placeholder (`No payment history recorded yet. Add an advance payment below.`) instead of hiding the entire section.
+  - All modal payment states (`existingAdvancePayments`, `totalExistingAdvancePaid`, `specialClientDiscount`, `shippingCharge`, `orderNotes`) are eagerly initialized directly from `project` props via lazy `useState` callbacks, combined with dynamic `key` remounting on the dialog container to guarantee 0ms instant display without depending on asynchronous `useEffect` re-render cycles.
+  - In `parseProjectPayments`, supports both parsed array, raw JSON string (`typeof advancePayments === "string"`), multiple legacy note tags (`[Payment: Method, Ref: Ref]`), and legacy `paid_amount` fallbacks.
+
+- **Order Notes Payment Tag Sanitization & Redundant Injection Prevention**:
+  - Technical payment tags (`[Payment: ...]`, `[Payments: ...]`) must NEVER be injected into the `Order Notes (Optional)` textarea or saved into the `notes` column, as all installment payments are natively stored in the dedicated MySQL column `projects.advance_payments`.
+  - In `handleSubmit` in `src/app/(authenticated)/projects/page.tsx`, `notesPayload` must only combine cleaned order notes (`cleanProjectNotes(orderNotes)`), `[Discount: ...]`, `[Shipping: ...]`, and `[Items: ...]`, completely omitting any `[Payment: ...]` or `[Payments: ...]` injection.
+  - In `cleanProjectNotes`, use `[Payments?:\s*\[[\s\S]*?\]\]` and `[Payments?:\s*[^\]]+\]` with `gis` flags to sanitize any legacy tags from existing database records, ensuring the user's notes textarea displays only clean, human-readable creative instructions.
+
+- **Over-Amount Detection & Toast-Only Notification Standard**:
+  - In `ProjectFormDialog` (both Create and Edit Order dialogs in `src/app/(authenticated)/projects/page.tsx`), total payments (`totalAdvanceAfterNew = totalExistingAdvancePaid + newAdvanceAmount`) must never exceed the order's grand total (`netPayable + shippingCharge`).
+  - **Clean Dialog UI (No Intrusive Inline Red Clutter)**:
+    - Never render inline red warning badges, red text paragraphs, or red borders inside the dialog form or Order Summary (`Total Paid` remains cleanly formatted in standard green text).
+  - **Toast-Driven Warning Feedback**:
+    - When an over-amount occurs (`isAdvPaymentOver`), trigger an informative Sonner toast alert (`toast.error("Advance Payment Limit Exceeded", { id: "advance-over-amount", description: ... })`) detailing the exact overpaid difference and grand total.
+    - Automatically dismiss the toast via `toast.dismiss("advance-over-amount")` as soon as the amount is corrected or when the dialog closes.
+    - On blur of the advance payment input or when attempting to save with an over-amount, block submission in `handleSubmit` and show the over-amount error toast immediately.
+    - Also enforce boundary validation for `Special Client Discount` (cannot exceed `orderItemsTotal`) and inline payment edits in the Payment History table via Sonner toast alerts.
+
+- **Project Form Order Items Service Resolution Standard**:
+  - In `ProjectFormDialog` (`src/app/(authenticated)/projects/page.tsx`), the `Service *` selector inside `Order Items *` must strictly display and select real Brandium CRM services (`TVC`, `Graphics Design`, `Product Photography`, `Logo Design`, `Video Ads`, etc.) from the `services` table.
+  - Never populate `modelOptions` with hardcoded print-shop models (such as `"Design Charge"`, `"Menu Book"`, or `"Pizza Box"`).
+  - When editing a project, dynamically resolve its actual service from `project.service_name`, linked prospect (`prospect_id`), or system `services` map, automatically sanitizing any legacy dummy items so the combobox immediately shows the client's genuine service (e.g. `TVC` for `color hut`).
+  - In `projectsQuery` (`src/lib/projects.ts`), join `services` on both `(prj.service_id = srv.id OR prj.service_id = srv.name)` and fallback to `p.service_id` to guarantee `service_name` is always accurately populated across views.
+
+- **Project Card Direct Navigation & Detail Modal Removal Standard**:
+  - In `src/app/(authenticated)/projects/page.tsx`, removed the legacy redundant `ProjectDetailModal` popup.
+  - Clicking a project card, project title, or selecting "View Details" from the 3-dot dropdown now navigates directly to the dedicated full project & invoice page (`/projects/${project.project_code || project.id}`) via Next.js `useRouter`.
+  - Eliminates intermediate popups, close button badge overlaps, and provides a seamless fullscreen project overview.
+
+- **Next.js Dev Server `.next` Cache Invalidation During Concurrent Production Build (`ENOENT: routes-manifest.json`)**:
+  - Running `npm run build` (`next build`) while a Next.js development server (`next dev`) is concurrently active in the background overwrites and deletes dev cache manifests (`.next/routes-manifest.json` and in-memory Webpack chunks like `./[chunkId].js`), causing the running dev server to return `500 Internal Server Error` on subsequent HTTP requests.
+  - **Prevention / Resolution**: Always restart the background dev server process after running a production build or avoid running concurrent `next build` commands against the same `.next` directory to keep hot module replacement (HMR) and route manifests intact.
+
+- **Project Invoice Status Header Card Standard (`/projects/[invoiceid]`)**:
+  - In `src/app/(authenticated)/projects/[invoiceid]/page.tsx`, embedded the ERPAPP Status Header Card matching the user's HTML specification directly above the main invoice card.
+  - Features the circular SVG Lottie status icon, dynamic stage color badge (using `resolveProjectStageColor(project.status)`), and relative update timestamp (`Last status update: {formatRelativeTime(project.updated_at || project.created_at)} by {creator_name}`).
+  - Formatted with `print:hidden` so it renders seamlessly on screen while keeping invoice printouts and PDF downloads 100% clean.
+  - Aligned table `prospects` address column to `p.address` (avoiding invalid `p.location`).
+
+- **Project Order Status History Timeline Section Standard (`/projects/[invoiceid]`)**:
+  - In `src/app/(authenticated)/projects/[invoiceid]/page.tsx`, implemented the authentic ERPAPP Status History card section (`text-card-foreground shadow-2xl border border-border/40 bg-card hover:shadow-primary/10 rounded-xl`) placed below the invoice card with `print:hidden`.
+  - Displays the timeline of order progress with dynamic left border line (`border-l-2 border-zinc-400 dark:border-zinc-600`), circular status icons with contrasting badge backgrounds and rings, stage titles, formatted dates, changer names, and update notes.
+  - Supports proof image detection with inline "View Proof Image" action button and image preview modal dialog.
+  - Backed by local MySQL `prospect_stage_history` queries joined with `stages`, `profiles`, and `users` with fallback demo entries ensuring resilient display.
+
+- **Project Real Status History Database Persistence & Elimination of Fake Future Stages**:
+  - In `brandium_crm` MySQL database, table `projects` contains `status_history LONGTEXT NULL` storing serialized JSON entries for each stage advancement (`id`, `status`, `timestamp`, `changedByUserName`, `notes`, `proofUrl`).
+  - In `src/app/(authenticated)/projects/[invoiceid]/page.tsx`, `statusHistoryList` dynamically prioritizes `project.status_history`, followed by `prospect_stage_history`, and falls back to `buildRealProjectHistory(project)` which dynamically slices the chronological stages up to `project.status`. This completely eliminates hardcoded dummy stages (e.g., showing `Logistics` or `Delivered` on projects that are only at `CO Clearance` or `On Design`).
+  - In `src/lib/projects.ts`, `useUpdateProjectStatusMutation` appends a new chronological entry to `projects.status_history` on every stage mutation, and invalidates both `crm-projects-with-stages` and `project-invoice-details` query caches.
+
+- **Brandium Invoice Background Letterhead Integration Standard (`brandium_invoice_bg.jpg`)**:
+  - In `src/app/(authenticated)/projects/[invoiceid]/page.tsx`, the primary invoice card container (`.invoice-page`) renders the official `public/brandium_invoice_bg.jpg` letterhead background using `backgroundImage: "url('/brandium_invoice_bg.jpg')"`, `backgroundSize: "100% 100%"`, `backgroundRepeat: "no-repeat"`, and `backgroundPosition: "center top"`.
+  - Includes a dark theme overlay (`hidden dark:block absolute inset-0 bg-slate-950/80 pointer-events-none print:hidden`) and `relative z-10` content wrapper, preserving pristine contrast and readability in both dark and light modes.
+  - Table containers use `bg-background/85 backdrop-blur-xs` allowing the branding curves and textures to shine through gracefully.
+  - Configured `@media print { .invoice-page { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }` in `src/styles.css` and removed `print:bg-transparent` so paper prints and PDF exports retain the full-resolution letterhead background.
+
+- **Tailwind CSS v4 Utility Class Optimization & Formatting Standards**:
+  - Replace arbitrary bracket sizing like `h-[30px]` with standard Tailwind scale `h-7.5` (4px basis).
+  - Replace arbitrary margin brackets like `ml-[44px]` and `sm:ml-[56px]` with `ml-11` and `sm:ml-14`.
+  - Replace arbitrary rem positions like `-left-[2.25rem]` and `sm:-left-[2.625rem]` with standard fractional/integer utilities `-left-9` and `sm:-left-10.5`.
+  - Replace CSS transform degree brackets like `-rotate-[20deg]` with `rotate-[-20deg]`.
+  - Prefer standard utility `shrink-0` instead of legacy `flex-shrink-0`.
+- **runMySQLQuery API Response Unpacking Standard**:
+  - In `src/lib/mysql-api.ts`, `runMySQLQuery<T>()` returns `{ success: boolean; data?: T; error?: string }` (modeled as an API response wrapper). Always unpack query rows via `const res = await runMySQLQuery<Record<string, unknown>[]>(sql, params); const rows = (res.data || []) as Record<string, unknown>[];` rather than assuming `runMySQLQuery` returns a bare array directly.
+
+- **Qualified Leads, Follow Up, and Expenses Architecture Standard**:
+  - **Qualified Leads** (`/qualified-leads`): Fetches vetted prospects where `is_qualified = 1` or stage contains `qualif`, `opportunity`, or `meeting`. Features KPI cards, dynamic contact cards with Golos Text, communication shortcuts, and fast qualification toggle.
+  - **Follow Up** (`/follow-up`): Unifies `/follow-up` and `/follow-ups` routes so both singular and plural endpoints resolve cleanly.
+  - **Expenses** (`/expenses`): Backed by MySQL table `expenses` with schema bootstrapping in `ensureMySQLTablesExist()`, KPI spend metrics (monthly, all-time, transaction count, top category), and full Add/Edit/Delete lifecycle with Radix Alert confirmation.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked using local Markdown files under `.scratch/` and GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.

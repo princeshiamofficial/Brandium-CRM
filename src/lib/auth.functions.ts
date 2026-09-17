@@ -341,9 +341,11 @@ export async function ensureMySQLTablesExist(
           \`status\` VARCHAR(50) NOT NULL DEFAULT 'CR Clearance',
           \`assigned_agent_id\` VARCHAR(36) NULL,
           \`assigned_artist_id\` VARCHAR(36) NULL,
+          \`assigned_user_ids\` TEXT NULL,
           \`budget\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
           \`paid_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
           \`progress\` INT NOT NULL DEFAULT 0,
+          \`order_date\` DATE NULL,
           \`deadline\` DATE NULL,
           \`notes\` TEXT NULL,
           \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -354,6 +356,43 @@ export async function ensureMySQLTablesExist(
           KEY \`idx_projects_prospect\` (\`prospect_id\`),
           KEY \`idx_projects_artist\` (\`assigned_artist_id\`),
           KEY \`idx_projects_agent\` (\`assigned_agent_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS \`project_assignees\` (
+          \`id\` VARCHAR(36) NOT NULL,
+          \`project_id\` VARCHAR(36) NOT NULL,
+          \`user_id\` VARCHAR(36) NOT NULL,
+          \`role\` VARCHAR(50) NULL,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`idx_proj_user\` (\`project_id\`, \`user_id\`),
+          KEY \`idx_proj_assignee_project\` (\`project_id\`),
+          KEY \`idx_proj_assignee_user\` (\`user_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      // 18. \`expenses\` table — Finance & Operating Expense Management
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS \`expenses\` (
+          \`id\` VARCHAR(36) NOT NULL,
+          \`title\` VARCHAR(255) NOT NULL,
+          \`category\` VARCHAR(100) NOT NULL,
+          \`amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`payment_method\` VARCHAR(100) NOT NULL DEFAULT 'Cash',
+          \`expense_date\` DATE NOT NULL,
+          \`vendor\` VARCHAR(255) NULL,
+          \`reference_no\` VARCHAR(100) NULL,
+          \`receipt_url\` TEXT NULL,
+          \`notes\` TEXT NULL,
+          \`recorded_by\` VARCHAR(36) NULL,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          KEY \`idx_expenses_category\` (\`category\`),
+          KEY \`idx_expenses_date\` (\`expense_date\`),
+          KEY \`idx_expenses_recorded\` (\`recorded_by\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `);
 
@@ -548,12 +587,21 @@ export async function ensureMySQLTablesExist(
         { table: "projects", column: "deadline", def: "DATE NULL" },
         { table: "projects", column: "notes", def: "TEXT NULL" },
         { table: "projects", column: "created_by", def: "VARCHAR(36) NULL" },
+        { table: "projects", column: "advance_payments", def: "LONGTEXT NULL" },
         // users & profiles
         { table: "users", column: "phone", def: "VARCHAR(50) NULL" },
         { table: "users", column: "avatar_url", def: "TEXT NULL" },
         { table: "users", column: "status", def: "VARCHAR(20) NOT NULL DEFAULT 'active'" },
         { table: "profiles", column: "phone", def: "VARCHAR(50) NULL" },
         { table: "profiles", column: "avatar_url", def: "TEXT NULL" },
+        // prospects qualification
+        { table: "prospects", column: "is_qualified", def: "TINYINT(1) NOT NULL DEFAULT 0" },
+        { table: "prospects", column: "estimated_budget", def: "DECIMAL(12, 2) NULL" },
+        { table: "prospects", column: "qualification_notes", def: "TEXT NULL" },
+        // expenses
+        { table: "expenses", column: "receipt_url", def: "TEXT NULL" },
+        { table: "expenses", column: "reference_no", def: "VARCHAR(100) NULL" },
+        { table: "expenses", column: "vendor", def: "VARCHAR(255) NULL" },
       ];
 
       for (const col of ensureColumns) {
