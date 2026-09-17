@@ -95,6 +95,20 @@ const formatDate = (dateString?: string | null): string => {
   }
 };
 
+const formatDateOnly = (dateString?: string | null): string => {
+  if (!dateString) return "N/A";
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return String(dateString);
+    const day = d.getDate();
+    const month = d.toLocaleString("en-US", { month: "short" });
+    const year = d.getFullYear();
+    return `${day} ${month}, ${year}`;
+  } catch {
+    return String(dateString);
+  }
+};
+
 const formatRelativeTime = (dateString?: string | null): string => {
   if (!dateString) return "recently";
   try {
@@ -106,10 +120,50 @@ const formatRelativeTime = (dateString?: string | null): string => {
   }
 };
 
-const FALLBACK_DEMO_PROJECT = {
+export interface ProjectRecord {
+  id: string;
+  project_code: string;
+  title: string;
+  prospect_id?: string | null;
+  client_name: string;
+  client_phone?: string | null;
+  client_email?: string | null;
+  client_address?: string | null;
+  prospect_logo_url?: string | null;
+  service_id?: string | null;
+  service_name?: string | null;
+  status: string;
+  priority: string;
+  assigned_agent_id?: string | null;
+  assigned_artist_id?: string | null;
+  assigned_user_ids?: string | null;
+  created_by?: string | null;
+  creator_name?: string | null;
+  creator_avatar?: string | null;
+  agent_name?: string | null;
+  agent_avatar?: string | null;
+  artist_name?: string | null;
+  artist_avatar?: string | null;
+  budget: number | string;
+  paid_amount: number | string;
+  due_amount?: number | string;
+  progress?: number | string;
+  order_date?: string | null;
+  deadline?: string | null;
+  notes?: string | null;
+  prospect_notes?: string | null;
+  advance_payments?: string | any[] | null;
+  status_history?: string | any[] | null;
+  is_active?: number | boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+const FALLBACK_DEMO_PROJECT: ProjectRecord = {
   id: "demo-prj-1",
   project_code: "12145",
   title: "Color Hut Printing & Design",
+  prospect_id: "0009",
   client_name: "Color Hut",
   client_phone: "01919760626",
   client_email: "colorhut.official@gmail.com",
@@ -130,6 +184,8 @@ const FALLBACK_DEMO_PROJECT = {
   deadline: "2026-09-25",
   notes: "Urgent design delivery required. Client requested premium finish.",
   created_at: "2026-09-15T01:25:00.000Z",
+  updated_at: "2026-09-15T04:30:00.000Z",
+  advance_payments: null,
   status_history: JSON.stringify([
     {
       id: "sh-demo-1",
@@ -338,13 +394,13 @@ export default function ProjectInvoicePage() {
 
   const barcodeRef = useRef<SVGSVGElement>(null);
 
-  // Fetch project by project_code OR id
-  const { data: projectData, isLoading } = useQuery({
+  // Fetch project by project_code, id, prospect_id, or fallback to latest real project
+  const { data: projectData, isLoading } = useQuery<ProjectRecord | null>({
     queryKey: ["project-invoice-details", invoiceIdParam],
-    queryFn: async () => {
-      if (!invoiceIdParam) return null;
+    queryFn: async (): Promise<ProjectRecord | null> => {
+      const cleanParam = (invoiceIdParam || "").trim();
 
-      const sql = `
+      const baseSelect = `
         SELECT 
           prj.id,
           prj.project_code,
@@ -374,7 +430,7 @@ export default function ProjectInvoicePage() {
           prj.is_active,
           prj.created_at,
           prj.updated_at,
-          srv.name AS service_name,
+          COALESCE(srv.name, prj.service_id, 'Design & Creative Service') AS service_name,
           COALESCE(prof_artist.full_name, u_artist.name) AS artist_name,
           prof_artist.avatar_url AS artist_avatar,
           COALESCE(prof_agent.full_name, u_agent.name) AS agent_name,
@@ -383,33 +439,125 @@ export default function ProjectInvoicePage() {
           COALESCE(prof_creator.avatar_url, u_creator.avatar_url, prof_agent.avatar_url, u_agent.avatar_url) AS creator_avatar
         FROM projects prj
         LEFT JOIN prospects p ON prj.prospect_id = p.id
-        LEFT JOIN services srv ON prj.service_id = srv.id
+        LEFT JOIN services srv ON (prj.service_id = srv.id OR prj.service_id = srv.name)
         LEFT JOIN users u_artist ON prj.assigned_artist_id = u_artist.id
         LEFT JOIN profiles prof_artist ON prj.assigned_artist_id = prof_artist.id
         LEFT JOIN users u_agent ON prj.assigned_agent_id = u_agent.id
         LEFT JOIN profiles prof_agent ON prj.assigned_agent_id = prof_agent.id
         LEFT JOIN users u_creator ON prj.created_by = u_creator.id
         LEFT JOIN profiles prof_creator ON prj.created_by = prof_creator.id
-        WHERE prj.project_code = ? OR prj.id = ?
-        LIMIT 1;
       `;
 
-      const res = await runMySQLQuery(sql, [invoiceIdParam, invoiceIdParam]);
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        return res.data[0];
+      // 1. Try matching specific project by code, id, or prospect_id
+      if (
+        cleanParam &&
+        cleanParam.toLowerCase() !== "id" &&
+        cleanParam !== "undefined" &&
+        cleanParam !== "null"
+      ) {
+        const sqlMatch = `
+          ${baseSelect}
+          WHERE prj.project_code = ? 
+             OR prj.id = ? 
+             OR prj.prospect_id = ?
+             OR prj.project_code = CONCAT('PRJ-', ?)
+             OR REPLACE(prj.project_code, 'PRJ-', '') = ?
+             OR prj.project_code LIKE CONCAT('%', ?, '%')
+             OR prj.title LIKE CONCAT('%', ?, '%')
+             OR prj.client_name LIKE CONCAT('%', ?, '%')
+          LIMIT 1;
+        `;
+
+        const res = await runMySQLQuery<ProjectRecord[]>(sqlMatch, [
+          cleanParam,
+          cleanParam,
+          cleanParam,
+          cleanParam,
+          cleanParam,
+          cleanParam,
+          cleanParam,
+          cleanParam,
+        ]);
+
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          return res.data[0] as unknown as ProjectRecord;
+        }
+
+        // 2. Check if param matches a prospect in prospects table
+        const prospectSql = `
+          SELECT 
+            p.id AS prospect_id,
+            CONCAT('PRJ-', SUBSTRING(REPLACE(p.id, '-', ''), -4)) AS project_code,
+            COALESCE(p.business_name, p.contact_name, 'New Project') AS title,
+            COALESCE(p.business_name, p.contact_name, 'Client') AS client_name,
+            p.phone AS client_phone,
+            p.email AS client_email,
+            COALESCE(p.address, 'Dhaka, Bangladesh') AS client_address,
+            p.logo_url AS prospect_logo_url,
+            p.service_id,
+            COALESCE(st.name, p.stage_id, 'CR Clearance') AS status,
+            'Medium' AS priority,
+            p.assigned_to AS assigned_agent_id,
+            p.assigned_artist_id,
+            p.created_by,
+            0 AS budget,
+            0 AS paid_amount,
+            0 AS progress,
+            DATE(p.created_at) AS order_date,
+            DATE(DATE_ADD(p.created_at, INTERVAL 10 DAY)) AS deadline,
+            p.notes,
+            NULL AS advance_payments,
+            NULL AS status_history,
+            p.notes AS prospect_notes,
+            1 AS is_active,
+            p.created_at,
+            p.updated_at,
+            COALESCE(srv.name, p.service_id, 'Design Service') AS service_name,
+            COALESCE(prof_artist.full_name, u_artist.name) AS artist_name,
+            prof_artist.avatar_url AS artist_avatar,
+            COALESCE(prof_agent.full_name, u_agent.name) AS agent_name,
+            prof_agent.avatar_url AS agent_avatar,
+            COALESCE(prof_creator.full_name, u_creator.name) AS creator_name,
+            COALESCE(prof_creator.avatar_url, u_creator.avatar_url) AS creator_avatar
+          FROM prospects p
+          LEFT JOIN services srv ON (p.service_id = srv.id OR p.service_id = srv.name)
+          LEFT JOIN stages st ON (p.stage_id = st.id OR p.stage_id = st.name)
+          LEFT JOIN users u_artist ON p.assigned_artist_id = u_artist.id
+          LEFT JOIN profiles prof_artist ON p.assigned_artist_id = prof_artist.id
+          LEFT JOIN users u_agent ON p.assigned_to = u_agent.id
+          LEFT JOIN profiles prof_agent ON p.assigned_to = prof_agent.id
+          LEFT JOIN users u_creator ON p.created_by = u_creator.id
+          LEFT JOIN profiles prof_creator ON p.created_by = prof_creator.id
+          WHERE p.id = ? OR p.phone = ? OR p.email = ?
+          LIMIT 1;
+        `;
+        const prospectRes = await runMySQLQuery<ProjectRecord[]>(prospectSql, [
+          cleanParam,
+          cleanParam,
+          cleanParam,
+        ]);
+        if (prospectRes.success && Array.isArray(prospectRes.data) && prospectRes.data.length > 0) {
+          return prospectRes.data[0] as unknown as ProjectRecord;
+        }
       }
 
-      // Fallback: check if matches demo project code
-      if (invoiceIdParam === "12145" || invoiceIdParam.toLowerCase().includes("demo")) {
-        return FALLBACK_DEMO_PROJECT;
+      // 3. Fallback: Query the latest real active project from MySQL
+      const fallbackSql = `
+        ${baseSelect}
+        ORDER BY prj.updated_at DESC, prj.created_at DESC
+        LIMIT 1;
+      `;
+      const fallbackRes = await runMySQLQuery<ProjectRecord[]>(fallbackSql);
+      if (fallbackRes.success && Array.isArray(fallbackRes.data) && fallbackRes.data.length > 0) {
+        return fallbackRes.data[0] as unknown as ProjectRecord;
       }
 
       return null;
     },
-    enabled: Boolean(invoiceIdParam),
+    enabled: true,
   });
 
-  const project = projectData || (isLoading ? null : FALLBACK_DEMO_PROJECT);
+  const project: ProjectRecord | null = projectData || (isLoading ? null : FALLBACK_DEMO_PROJECT);
   const stageColor = project?.status ? resolveProjectStageColor(project.status) : "#16A34A";
   const [previewDocumentUrl, setPreviewDocumentUrl] = useState<string | null>(null);
 
@@ -427,7 +575,7 @@ export default function ProjectInvoicePage() {
           psh.prospect_id,
           psh.from_stage_id,
           psh.to_stage_id,
-          COALESCE(psh.note, psh.notes) AS note,
+          psh.note AS note,
           COALESCE(psh.changed_at, psh.created_at) AS timestamp,
           COALESCE(st_to.name, psh.to_stage_id) AS stage_name,
           COALESCE(prof.full_name, u.name, 'Sayma Jahan') AS changed_by_name
@@ -710,7 +858,7 @@ export default function ProjectInvoicePage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+      <div className="w-full max-w-[210mm] mx-auto p-4 sm:p-6 space-y-6">
         <div className="flex justify-between items-center pb-4 border-b">
           <Skeleton className="h-10 w-40" />
           <Skeleton className="h-8 w-32" />
@@ -745,7 +893,7 @@ export default function ProjectInvoicePage() {
     <div className="selection:bg-primary/20 selection:text-primary print:p-0 print:m-0 print:bg-white pt-0 pb-6 -mt-1 sm:-mt-2">
       {/* Current Status Header Card (Screen Only - Hidden in Print) */}
       {project && (
-        <div className="max-w-4xl mx-auto mb-4 px-2 sm:px-0 print:hidden">
+        <div className="w-full max-w-[210mm] mx-auto mb-4 px-2 sm:px-0 print:hidden">
           <div className="shadow-2xl overflow-hidden border border-border/40 bg-card hover:shadow-primary/10 transition-shadow duration-300 rounded-xl">
             <CardHeader className="bg-card py-2.5 px-3 sm:py-3 sm:px-4 border-b border-border/40">
               <div className="flex items-start gap-2.5">
@@ -979,338 +1127,307 @@ export default function ProjectInvoicePage() {
         </div>
       )}
 
-      {/* Main Invoice Card (100% ERPAPP Exact Dimension & Typography with Brandium Invoice Background) */}
-      <div
-        className="relative max-w-4xl mx-auto p-4 sm:p-8 bg-card border border-border/40 rounded-xl shadow-2xl invoice-page print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full print:text-[13px] print:leading-tight overflow-hidden bg-cover bg-no-repeat bg-center"
-        style={{
-          backgroundImage: "url('/brandium_invoice_bg.jpg')",
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: "center top",
-        }}
-      >
-        {/* Subtle Dark Mode Overlay so text remains 100% readable in dark theme */}
-        <div className="hidden dark:block absolute inset-0 bg-slate-950/80 pointer-events-none z-0 print:hidden" />
+      {/* Main Invoice Card - Fixed A4 Dimensions (210mm x 297mm) */}
+      <div className="w-full overflow-x-auto py-2 sm:py-4 flex justify-center print:p-0 print:overflow-visible print:block">
+        <div
+          className="relative w-[210mm] min-h-[297mm] mx-auto bg-card border border-border/40 rounded-xl shadow-2xl invoice-page overflow-hidden bg-cover bg-no-repeat bg-center print:shadow-none print:border-none print:rounded-none print:m-0 print:p-0 print:w-[210mm] print:h-[297mm] print:text-[13px] print:leading-tight pt-[38mm] pb-[30mm] px-[16mm] flex flex-col justify-between"
+          style={{
+            width: "210mm",
+            minHeight: "297mm",
+            backgroundImage: "url('/brandium_invoice_bg.jpg')",
+            backgroundSize: "100% 100%",
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center top",
+          }}
+        >
+          {/* Subtle Dark Mode Overlay so text remains 100% readable in dark theme */}
+          <div className="hidden dark:block absolute inset-0 bg-slate-950/80 pointer-events-none z-0 print:hidden" />
 
-        <div className="relative z-10">
-          {/* Row 1: Header (Logo & Company Details | Invoice # & Barcode) */}
-          <div className="flex flex-col sm:flex-row justify-between items-start mb-4 pb-4 border-b border-border/30 print:mb-2 print:pb-2 print:border-border/50 print:break-inside-avoid">
+          <div className="relative z-10 flex-1 flex flex-col justify-between">
             <div>
-              <div className="mb-2">
-                <Image
-                  src="/logo.png"
-                  alt="Brandium CRM Logo"
-                  width={160}
-                  height={40}
-                  priority
-                  className="object-contain print:w-32 print:h-auto"
-                  onError={(e) => {
-                    // Fallback to text logo if image fails
-                    e.currentTarget.style.display = "none";
-                  }}
-                />
-              </div>
-              <p className="text-muted-foreground text-xs">
-                House No. 14, Road No. A, Block A, Sontek Area, South Kajla, Jatrabari, Dhaka - 1236
-              </p>
-              <p className="text-muted-foreground text-xs">
-                colorhut.official@gmail.com | +8801919-760626
-              </p>
-            </div>
-
-            <div className="text-left sm:text-right mt-4 sm:mt-0">
-              <p className="text-base font-semibold">
-                Invoice #: <span className="text-foreground font-mono">{codeToRender}</span>
-              </p>
-              <div className="text-xs text-muted-foreground">
-                Order Date: {formatDate(project.order_date || project.created_at)}
-              </div>
-              {project.deadline && (
-                <div className="text-xs text-muted-foreground">
-                  Delivery Date: {formatDate(project.deadline)}
+              {/* Row 2: Bill To & Invoice Meta (Clean Transparent Letterhead Design) */}
+              <div className="grid grid-cols-2 gap-6 mb-6 pb-4 border-b border-border/20 print:mb-3 print:pb-2 print:break-inside-avoid items-start">
+                {/* Bill To Info */}
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Building className="h-3.5 w-3.5 text-[#67B239]" />
+                    <span>Bill To:</span>
+                  </div>
+                  <p className="text-base sm:text-lg font-bold text-foreground">
+                    {project.client_name || project.title}
+                  </p>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    {project.client_address && (
+                      <p className="flex items-start gap-1.5 leading-relaxed">
+                        <MapPin className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
+                        <span>{project.client_address}</span>
+                      </p>
+                    )}
+                    {project.client_phone && (
+                      <p className="flex items-center gap-1.5">
+                        <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span>{project.client_phone}</span>
+                      </p>
+                    )}
+                    {project.client_email && (
+                      <p className="flex items-center gap-1.5">
+                        <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span>{project.client_email}</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
-              )}
-              <div className="mt-1.5 flex sm:justify-end">
-                <svg ref={barcodeRef} className="object-contain h-7.5 max-w-full" />
-              </div>
-            </div>
-          </div>
 
-          {/* Row 2: Bill To & Assignees Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6 print:mb-2 print:break-inside-avoid">
-            {/* Bill To Card */}
-            <div className="space-y-1.5 p-3 sm:p-4 bg-secondary/40 border border-border/20 rounded-lg shadow-2xs print:p-2">
-              <h4 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-2">
-                <Building className="h-4 w-4" /> Bill To:
-              </h4>
-              <p className="text-base font-bold text-foreground">
-                {project.client_name || project.title}
-              </p>
-              {project.client_address && (
-                <p className="text-foreground/90 text-sm flex items-start gap-2">
-                  <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                  <span>{project.client_address}</span>
-                </p>
-              )}
-              {project.client_phone && (
-                <p className="text-foreground/90 text-sm flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span>{project.client_phone}</span>
-                </p>
-              )}
-              {project.client_email && (
-                <p className="text-foreground/90 text-sm flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span>{project.client_email}</span>
-                </p>
-              )}
-            </div>
-
-            {/* CRM Responsible Staff & Assignees */}
-            <div className="space-y-3 p-3 sm:p-4 bg-secondary/40 border border-border/20 rounded-lg shadow-2xs print:p-2">
-              {/* Responsible Agent / CR Manager */}
-              <div className="space-y-1">
-                <h4 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                  Responsible Agent / CR Manager:
-                </h4>
-                <div className="flex items-center gap-2 mt-1">
-                  <Avatar className="h-6 w-6">
-                    <AvatarImage
-                      src={project.creator_avatar || project.agent_avatar || undefined}
-                      alt={project.creator_name || "Agent"}
-                    />
-                    <AvatarFallback className="text-[9px] font-medium bg-primary/10 text-primary">
-                      {(project.creator_name || project.agent_name || "CR")
-                        .slice(0, 2)
-                        .toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-semibold text-foreground">
-                    {project.creator_name || project.agent_name || "Assigned Agent"}
-                  </span>
-                </div>
-              </div>
-
-              {/* Assigned Designer / Artist */}
-              {project.artist_name && (
-                <div className="space-y-1">
-                  <h4 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                    Assigned Designer:
-                  </h4>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Avatar className="h-6 w-6">
-                      <AvatarImage
-                        src={project.artist_avatar || undefined}
-                        alt={project.artist_name}
-                      />
-                      <AvatarFallback className="text-[9px] font-medium bg-primary/10 text-primary">
-                        {project.artist_name.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm font-semibold text-foreground">
-                      {project.artist_name}
+                {/* Invoice Meta Info */}
+                <div className="flex flex-col items-end justify-start space-y-2 text-right">
+                  <div className="inline-flex items-center gap-2">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                      Invoice No:
                     </span>
+                    <span className="font-mono font-bold text-base text-primary bg-primary/5 px-2.5 py-0.5 rounded border border-primary/20">
+                      #{project.project_code || project.id}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 text-xs">
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5 text-[#67B239] shrink-0" />
+                        <span>Invoice Date:</span>
+                      </span>
+                      <span className="font-semibold text-foreground whitespace-nowrap">
+                        {formatDate(project.order_date || project.created_at)}
+                      </span>
+                    </div>
+
+                    {project.deadline && (
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="text-muted-foreground flex items-center gap-1">
+                          <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span>Delivery Date:</span>
+                        </span>
+                        <span className="font-semibold text-foreground whitespace-nowrap">
+                          {formatDateOnly(project.deadline)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 3: Order Items Table */}
+              <div className="mb-6 print:mb-2 print:break-inside-auto">
+                <h3 className="text-base font-semibold mb-3 print:mb-1 text-foreground flex items-center">
+                  Order Items
+                </h3>
+                <div className="overflow-x-auto rounded-lg border border-border/30 bg-background/85 backdrop-blur-xs shadow-2xs">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground w-[52%]">
+                          Service
+                        </TableHead>
+                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-center whitespace-nowrap w-[16%]">
+                          Quantity
+                        </TableHead>
+                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right whitespace-nowrap w-[16%]">
+                          Unit Price
+                        </TableHead>
+                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right whitespace-nowrap pr-4 w-[16%]">
+                          Total Price
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orderItems.map((item, index) => (
+                        <TableRow
+                          key={item.id || index}
+                          className="hover:bg-muted/50 transition-colors"
+                        >
+                          <TableCell className="font-medium text-card-foreground">
+                            {item.model}
+                          </TableCell>
+                          <TableCell className="text-center text-card-foreground whitespace-nowrap">
+                            {item.quantity}
+                          </TableCell>
+                          <TableCell className="text-right text-card-foreground whitespace-nowrap">
+                            {formatCurrencyBdt(item.unitPrice)}
+                          </TableCell>
+                          <TableCell
+                            className="text-right font-semibold text-card-foreground whitespace-nowrap pr-4"
+                            style={
+                              item.isGift
+                                ? {
+                                    textDecoration: "line-through",
+                                    textDecorationColor: "#ef4444",
+                                    color: "#6b7280",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {formatCurrencyBdt(item.lineItemTotalPrice)}
+                            {item.isGift && " (Gift)"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Row 4: Order Notes (if any) */}
+              {cleanNotes && (
+                <div className="mb-6 print:mb-2">
+                  <h3 className="text-base font-semibold text-foreground mb-2 print:mb-1 flex items-center">
+                    <StickyNote className="mr-2 h-4 w-4 text-[#67B239]" /> Order Notes:
+                  </h3>
+                  <Card className="bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-700/40 shadow-2xs">
+                    <CardContent className="p-4 print:p-2 text-sm text-amber-800 dark:text-amber-200 whitespace-pre-wrap">
+                      {cleanNotes}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* Row 5: Payments History (if advance paid) */}
+              {paymentsHistory.length > 0 && (
+                <div className="mb-6 print:mb-2">
+                  <h3 className="text-base font-semibold text-foreground mb-3 print:mb-1 flex items-center">
+                    <ReceiptText className="mr-2 h-4 w-4 text-[#67B239]" /> Payments History
+                  </h3>
+                  <div className="overflow-x-auto rounded-lg border border-border/30 bg-background/85 backdrop-blur-xs shadow-2xs print:shadow-none">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-border/40 hover:bg-transparent">
+                          <TableHead className="text-xs font-semibold text-muted-foreground whitespace-nowrap h-9 px-3">
+                            Date
+                          </TableHead>
+                          <TableHead className="text-xs font-semibold text-muted-foreground whitespace-nowrap h-9 px-3">
+                            Amount
+                          </TableHead>
+                          <TableHead className="text-xs font-semibold text-muted-foreground whitespace-nowrap h-9 px-3">
+                            Method
+                          </TableHead>
+                          <TableHead className="text-xs font-semibold text-muted-foreground whitespace-nowrap h-9 px-3">
+                            Notes
+                          </TableHead>
+                          <TableHead className="text-xs font-semibold text-muted-foreground whitespace-nowrap h-9 px-3">
+                            Recorded By
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paymentsHistory.map((record) => (
+                          <TableRow
+                            key={record.id}
+                            className="hover:bg-muted/50 transition-colors border-border/30"
+                          >
+                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap py-2 px-3">
+                              {formatDate(record.date)}
+                            </TableCell>
+                            <TableCell className="text-xs font-semibold text-emerald-600 print:text-emerald-700 whitespace-nowrap py-2 px-3">
+                              {formatCurrencyBdt(record.amount)}
+                            </TableCell>
+                            <TableCell className="text-xs text-card-foreground whitespace-nowrap py-2 px-3">
+                              {record.paymentMethod || "N/A"}
+                            </TableCell>
+                            <TableCell
+                              className="text-xs text-muted-foreground whitespace-nowrap py-2 px-3"
+                              title={record.notes || undefined}
+                            >
+                              {record.notes || "N/A"}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap py-2 px-3">
+                              {record.recordedBy || "Agent"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Row 3: Order Items Table */}
-          <div className="mb-6 print:mb-2 print:break-inside-auto">
-            <h3 className="text-base font-semibold mb-3 print:mb-1 text-foreground flex items-center">
-              Order Items
-            </h3>
-            <div className="overflow-x-auto rounded-lg border border-border/30 bg-background/85 backdrop-blur-xs shadow-2xs">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground w-[55%]">
-                      Service
-                    </TableHead>
-                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-center w-[15%]">
-                      Quantity
-                    </TableHead>
-                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right w-[15%]">
-                      Unit Price
-                    </TableHead>
-                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right pr-4 w-[15%]">
-                      Total Price
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {orderItems.map((item, index) => (
-                    <TableRow
-                      key={item.id || index}
-                      className="hover:bg-muted/50 transition-colors"
-                    >
-                      <TableCell className="font-medium text-card-foreground">
-                        {item.model}
-                      </TableCell>
-                      <TableCell className="text-center text-card-foreground">
-                        {item.quantity}
-                      </TableCell>
-                      <TableCell className="text-right text-card-foreground">
-                        {formatCurrencyBdt(item.unitPrice)}
-                      </TableCell>
-                      <TableCell
-                        className="text-right font-semibold text-card-foreground pr-4"
-                        style={
-                          item.isGift
-                            ? {
-                                textDecoration: "line-through",
-                                textDecorationColor: "#ef4444",
-                                color: "#6b7280",
-                              }
-                            : undefined
-                        }
-                      >
-                        {formatCurrencyBdt(item.lineItemTotalPrice)}
-                        {item.isGift && " (Gift)"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-
-          {/* Row 4: Order Notes (if any) */}
-          {cleanNotes && (
-            <div className="mb-6 print:mb-2">
-              <h3 className="text-base font-semibold text-foreground mb-2 print:mb-1 flex items-center">
-                <StickyNote className="mr-2 h-4 w-4 text-[#67B239]" /> Order Notes:
-              </h3>
-              <Card className="bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-700/40 shadow-2xs">
-                <CardContent className="p-4 print:p-2 text-sm text-amber-800 dark:text-amber-200 whitespace-pre-wrap">
-                  {cleanNotes}
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* Row 5: Payments History (if advance paid) */}
-          {paymentsHistory.length > 0 && (
-            <div className="mb-6 print:mb-2">
-              <h3 className="text-base font-semibold text-foreground mb-3 print:mb-1 flex items-center">
-                <ReceiptText className="mr-2 h-4 w-4 text-[#67B239]" /> Payments History
-              </h3>
-              <div className="overflow-x-auto rounded-lg border border-border/30 bg-background/85 backdrop-blur-xs shadow-2xs print:shadow-none">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead>Notes</TableHead>
-                      <TableHead>Recorded By</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paymentsHistory.map((record) => (
-                      <TableRow key={record.id} className="hover:bg-muted/50 transition-colors">
-                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                          {formatDate(record.date)}
-                        </TableCell>
-                        <TableCell className="font-medium text-emerald-600 print:text-emerald-700">
-                          {formatCurrencyBdt(record.amount)}
-                        </TableCell>
-                        <TableCell className="text-card-foreground">
-                          {record.paymentMethod || "N/A"}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {record.notes || "N/A"}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {record.recordedBy || "Agent"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          )}
-
-          {/* Row 6: Bottom Section (Financial Summary Box) */}
-          <div className="flex justify-end items-start mt-6 pt-4 border-t border-border/30 print:mt-2 print:pt-2 print:break-inside-avoid">
-            {/* Financial Summary Box */}
-            <div className="w-full max-w-xs sm:max-w-sm relative">
-              <div className="flex justify-between mb-1">
-                <span className="text-sm text-muted-foreground">Order Items Total:</span>
-                <span className="text-sm font-medium text-foreground">
-                  {formatCurrencyBdt(orderSubtotal)}
-                </span>
-              </div>
-
-              {specialDiscount > 0 && (
+            {/* Row 6: Bottom Section (Financial Summary Box) */}
+            <div className="flex justify-end items-start mt-6 pt-4 border-t border-border/30 print:mt-2 print:pt-2 print:break-inside-avoid">
+              {/* Financial Summary Box */}
+              <div className="w-full max-w-xs sm:max-w-sm relative">
                 <div className="flex justify-between mb-1">
-                  <span className="text-sm text-muted-foreground flex items-center">
-                    <Percent className="h-3.5 w-3.5 mr-1 text-red-500" /> Special Discount:
-                  </span>
-                  <span className="text-sm font-medium text-red-500">
-                    - {formatCurrencyBdt(specialDiscount)}
+                  <span className="text-sm text-muted-foreground">Order Items Total:</span>
+                  <span className="text-sm font-medium text-foreground">
+                    {formatCurrencyBdt(orderSubtotal)}
                   </span>
                 </div>
-              )}
 
-              <div className="flex justify-between mb-2 pt-1 border-t border-dashed border-border/40">
-                <span className="text-sm font-semibold text-foreground">Net Payable:</span>
-                <span className="text-sm font-bold text-foreground">
-                  {formatCurrencyBdt(netPayable)}
-                </span>
+                {specialDiscount > 0 && (
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm text-muted-foreground flex items-center">
+                      <Percent className="h-3.5 w-3.5 mr-1 text-red-500" /> Special Discount:
+                    </span>
+                    <span className="text-sm font-medium text-red-500">
+                      - {formatCurrencyBdt(specialDiscount)}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex justify-between mb-2 pt-1 border-t border-dashed border-border/40">
+                  <span className="text-sm font-semibold text-foreground">Net Payable:</span>
+                  <span className="text-sm font-bold text-foreground">
+                    {formatCurrencyBdt(netPayable)}
+                  </span>
+                </div>
+
+                {totalPaid > 0 && (
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm text-muted-foreground">
+                      {isPaid ? "Total Paid:" : "Total Advance Paid:"}
+                    </span>
+                    <span className="text-sm font-medium text-emerald-600">
+                      - {formatCurrencyBdt(totalPaid)}
+                    </span>
+                  </div>
+                )}
+
+                {/* PAID Stamp or Amount Due */}
+                {isPaid ? (
+                  <div className="absolute -left-12 -top-10 sm:-left-20 sm:-top-14 transform rotate-[-20deg] pointer-events-none select-none">
+                    <Image
+                      src="/paid-stamp.png"
+                      alt="Paid Stamp"
+                      width={140}
+                      height={140}
+                      className="opacity-80"
+                      unoptimized
+                      onError={(e) => {
+                        // Fallback badge if stamp image doesn't render
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                  </div>
+                ) : (
+                  amountDue > 0.01 && (
+                    <>
+                      <Separator className="my-2 bg-border/50" />
+                      <div className="flex justify-between">
+                        <span className="text-base sm:text-lg font-bold text-[#EF1E1E] dark:text-red-400">
+                          Amount Due:
+                        </span>
+                        <span className="text-base sm:text-lg font-bold text-[#EF1E1E] dark:text-red-400">
+                          {formatCurrencyBdt(amountDue)}
+                        </span>
+                      </div>
+                    </>
+                  )
+                )}
               </div>
-
-              {totalPaid > 0 && (
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">
-                    {isPaid ? "Total Paid:" : "Total Advance Paid:"}
-                  </span>
-                  <span className="text-sm font-medium text-emerald-600">
-                    - {formatCurrencyBdt(totalPaid)}
-                  </span>
-                </div>
-              )}
-
-              {/* PAID Stamp or Amount Due */}
-              {isPaid ? (
-                <div className="absolute -left-12 -top-10 sm:-left-20 sm:-top-14 transform rotate-[-20deg] pointer-events-none select-none">
-                  <Image
-                    src="/paid-stamp.png"
-                    alt="Paid Stamp"
-                    width={140}
-                    height={140}
-                    className="opacity-80"
-                    unoptimized
-                    onError={(e) => {
-                      // Fallback badge if stamp image doesn't render
-                      e.currentTarget.style.display = "none";
-                    }}
-                  />
-                </div>
-              ) : (
-                amountDue > 0.01 && (
-                  <>
-                    <Separator className="my-2 bg-border/50" />
-                    <div className="flex justify-between">
-                      <span className="text-base sm:text-lg font-bold text-[#67B239]">
-                        Amount Due:
-                      </span>
-                      <span className="text-base sm:text-lg font-bold text-[#67B239]">
-                        {formatCurrencyBdt(amountDue)}
-                      </span>
-                    </div>
-                  </>
-                )
-              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Status History Section (100% ERPAPP Exact Dimension & Design) */}
-      <div className="max-w-4xl mx-auto mt-6 sm:mt-8 px-2 sm:px-0 print:hidden">
+      {/* Status History Section (Matched with Invoice Width) */}
+      <div className="w-full max-w-[210mm] mx-auto mt-6 sm:mt-8 px-2 sm:px-0 print:hidden">
         <Card className="text-card-foreground shadow-2xl border border-border/40 bg-card hover:shadow-primary/10 transition-shadow duration-300 rounded-xl overflow-hidden">
           <CardHeader className="bg-card p-6 sm:p-8 border-b border-border/40">
             <div className="flex items-center space-x-3 sm:space-x-4">

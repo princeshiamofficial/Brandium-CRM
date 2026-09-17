@@ -1090,7 +1090,9 @@ export default function ProjectsPage() {
                   <div className="space-y-2 mb-3.5">
                     <p className="flex items-center text-[13px] text-[#707070] dark:text-slate-300 font-normal">
                       <i className="ti ti-forbid-2 me-2 text-[14px] text-[#707070] dark:text-slate-400 shrink-0" />
-                      Project ID : #{project.project_code || "12145"}
+                      Project ID : #
+                      {project.project_code ||
+                        "PRJ-" + (project.id ? String(project.id).slice(-4) : "0000")}
                     </p>
                     <p className="flex items-center text-[13px] text-[#707070] dark:text-slate-300 font-normal">
                       <i className="ti ti-report-money me-2 text-[14px] text-emerald-600 dark:text-emerald-400 shrink-0" />

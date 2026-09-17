@@ -439,8 +439,22 @@ Welcome to the **Brandium CRM** repository.
   - **Qualified Leads** (`/qualified-leads`): Fetches vetted prospects where `is_qualified = 1` or stage contains `qualif`, `opportunity`, or `meeting`. Features KPI cards, dynamic contact cards with Golos Text, communication shortcuts, and fast qualification toggle.
   - **Follow Up** (`/follow-up`): Unifies `/follow-up` and `/follow-ups` routes so both singular and plural endpoints resolve cleanly.
   - **Expenses** (`/expenses`): Backed by MySQL table `expenses` with schema bootstrapping in `ensureMySQLTablesExist()`, KPI spend metrics (monthly, all-time, transaction count, top category), and full Add/Edit/Delete lifecycle with Radix Alert confirmation.
+- **Fixed A4 Invoice Sizing & Print Layout Standard**:
+  - In `src/app/(authenticated)/projects/[invoiceid]/page.tsx` and `src/styles.css`, invoice cards utilizing full-bleed A4 letterhead backgrounds (such as `/brandium_invoice_bg.jpg`) must have fixed A4 dimensions (`width: 210mm; min-height: 297mm; max-width: 210mm;`).
+  - Wrap the invoice card in `<div className="w-full overflow-x-auto py-2 sm:py-4 flex justify-center print:p-0 print:overflow-visible print:block">` to ensure horizontal scrollability and perfect aspect ratio preservation across smaller mobile screens without clipping or stretching.
+  - Set specific letterhead clearances: top padding `pt-[38mm]` to protect the header logo and artwork banner, and bottom padding `pb-[30mm]` to keep invoice totals and signatures above the footer contact details.
+  - Structure inner content with `flex-1 flex flex-col justify-between` so that the bottom financial summary box anchors professionally toward the base of the A4 sheet.
+  - In `@media print`, enforce `@page { size: A4 portrait; margin: 0; }` with `html, body { width: 210mm !important; height: 297mm !important; margin: 0 !important; }` and `.invoice-page { width: 210mm !important; height: 297mm !important; page-break-inside: avoid !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }` for pixel-perfect PDF export and printer output.
+- **Project Invoice Page Real Data Query & Multi-Layer Identifier Fallback (`/projects/[invoiceid]`)**:
+  - In `src/app/(authenticated)/projects/[invoiceid]/page.tsx`, `queryFn` executes a 3-tier database lookup directly against MySQL database `brandium_crm`:
+    1. Direct match on `prj.project_code = ? OR prj.id = ? OR prj.prospect_id = ? OR prj.project_code = CONCAT('PRJ-', ?) OR REPLACE(prj.project_code, 'PRJ-', '') = ? OR prj.project_code LIKE CONCAT('%', ?, '%')` joined with `prospects`, `services`, `users`, and `profiles`.
+    2. Prospect table match if the parameter corresponds to an existing prospect without a dedicated `projects` row yet (`p.id = ? OR p.phone = ? OR p.email = ?`).
+    3. Automatic fallback to the latest active project from table `projects` (`ORDER BY prj.updated_at DESC, prj.created_at DESC LIMIT 1`), guaranteeing authentic database records render even when visiting demo or placeholder URLs (such as `/projects/12145` or `/projects/id`).
+  - Strict TypeScript interface `ProjectRecord` ensures all project attributes (`prospect_id`, `advance_payments`, `updated_at`, `status_history`) are strongly typed without `Record<string, unknown>` property errors.
+  - In `prospect_stage_history` queries, select `psh.note AS note` (aligning with the single `note` column in table schema) rather than `COALESCE(psh.note, psh.notes)`.
 
 ## Agent skills
+
 
 ### Issue tracker
 
