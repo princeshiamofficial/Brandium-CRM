@@ -124,7 +124,7 @@ export function ActiveDealsTable({ deals = DEFAULT_DEALS }: ActiveDealsTableProp
 
   return (
     <div className="overflow-x-auto -mx-6 px-6">
-      <table className="w-full text-left border-collapse min-w-[580px]">
+      <table className="w-full text-left border-collapse min-w-145">
         <thead>
           <tr className="border-b border-transparent text-[12px] font-semibold text-slate-400 dark:text-slate-500">
             <th className="pb-3 font-semibold tracking-normal w-[36%]">Client</th>
@@ -202,7 +202,7 @@ export function ActiveDealsTable({ deals = DEFAULT_DEALS }: ActiveDealsTableProp
 
               {/* Task Title */}
               <td className="py-3.5 pr-3">
-                <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300 truncate block max-w-[220px]">
+                <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300 truncate block max-w-55">
                   {deal.task}
                 </span>
               </td>

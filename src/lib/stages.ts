@@ -801,8 +801,7 @@ export function parseNotesToItems(
                   (item["author"] as string) ||
                   fallbackAuthor ||
                   null,
-                createdByAvatar:
-                  (item["createdByAvatar"] as string) || fallbackAvatar || null,
+                createdByAvatar: (item["createdByAvatar"] as string) || fallbackAvatar || null,
               });
             }
           } else if (typeof item === "string" && item.trim()) {
@@ -900,10 +899,10 @@ export async function addStageNote(params: {
       const newNotePayload = JSON.stringify(updatedItems);
 
       // Preserve original changed_at timestamp of the stage transition
-      await runMySQLQuery(
-        `UPDATE \`prospect_stage_history\` SET \`note\` = ? WHERE \`id\` = ?;`,
-        [newNotePayload, historyId],
-      );
+      await runMySQLQuery(`UPDATE \`prospect_stage_history\` SET \`note\` = ? WHERE \`id\` = ?;`, [
+        newNotePayload,
+        historyId,
+      ]);
     } else {
       // Check if history has any entry for this prospect
       const histRes = await runMySQLQuery<Record<string, unknown>[]>(
@@ -951,19 +950,14 @@ export async function addStageNote(params: {
         const origAuthor = (pRes.data?.[0]?.["creator_name"] as string) || null;
         const origAvatar = (pRes.data?.[0]?.["creator_avatar"] as string) || null;
 
-        const currentItems = parseNotesToItems(
-          existingNotes,
-          origDate,
-          origAuthor,
-          origAvatar,
-        );
+        const currentItems = parseNotesToItems(existingNotes, origDate, origAuthor, origAvatar);
         const updatedItems = [...currentItems, newNoteItem];
         const newNotePayload = JSON.stringify(updatedItems);
 
-        await runMySQLQuery(
-          `UPDATE \`prospects\` SET \`notes\` = ? WHERE \`id\` = ?;`,
-          [newNotePayload, prospectId],
-        );
+        await runMySQLQuery(`UPDATE \`prospects\` SET \`notes\` = ? WHERE \`id\` = ?;`, [
+          newNotePayload,
+          prospectId,
+        ]);
 
         // Also insert into prospect_stage_history for full timeline tracking
         const currentStageId = String(stageId || pRes.data?.[0]?.["stage_id"] || "prospect");
@@ -1023,10 +1017,10 @@ export async function deleteStageNote(params: {
       const updatedItems = currentItems.filter((_, idx) => idx !== noteIndex);
       const newNotePayload = updatedItems.length > 0 ? JSON.stringify(updatedItems) : null;
 
-      await runMySQLQuery(
-        `UPDATE \`prospect_stage_history\` SET \`note\` = ? WHERE \`id\` = ?;`,
-        [newNotePayload, historyId],
-      );
+      await runMySQLQuery(`UPDATE \`prospect_stage_history\` SET \`note\` = ? WHERE \`id\` = ?;`, [
+        newNotePayload,
+        historyId,
+      ]);
     } else {
       const pRes = await runMySQLQuery<Record<string, unknown>[]>(
         `SELECT p.notes, p.created_at, COALESCE(prof.full_name, u.name) as creator_name, COALESCE(prof.avatar_url, u.avatar_url) as creator_avatar 
@@ -1041,19 +1035,14 @@ export async function deleteStageNote(params: {
       const origAuthor = (pRes.data?.[0]?.["creator_name"] as string) || null;
       const origAvatar = (pRes.data?.[0]?.["creator_avatar"] as string) || null;
 
-      const currentItems = parseNotesToItems(
-        existingNotes,
-        origDate,
-        origAuthor,
-        origAvatar,
-      );
+      const currentItems = parseNotesToItems(existingNotes, origDate, origAuthor, origAvatar);
       const updatedItems = currentItems.filter((_, idx) => idx !== noteIndex);
       const newNotePayload = updatedItems.length > 0 ? JSON.stringify(updatedItems) : null;
 
-      await runMySQLQuery(
-        `UPDATE \`prospects\` SET \`notes\` = ? WHERE \`id\` = ?;`,
-        [newNotePayload, prospectId],
-      );
+      await runMySQLQuery(`UPDATE \`prospects\` SET \`notes\` = ? WHERE \`id\` = ?;`, [
+        newNotePayload,
+        prospectId,
+      ]);
     }
 
     return true;

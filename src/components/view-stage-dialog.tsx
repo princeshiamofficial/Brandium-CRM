@@ -273,7 +273,7 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           hideClose
-          className="sm:max-w-xl h-[85vh] max-h-[720px] p-4 sm:p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xl bg-white dark:bg-card flex flex-col overflow-hidden"
+          className="sm:max-w-xl h-[85vh] max-h-180 p-4 sm:p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xl bg-white dark:bg-card flex flex-col overflow-hidden"
         >
           {/* 1. Fixed Dialog Header */}
           <DialogHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between space-y-0 shrink-0">
@@ -289,8 +289,7 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
                   variant="outline"
                   className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                 >
-                  {timelineItems.length}{" "}
-                  {timelineItems.length === 1 ? "transition" : "transitions"}
+                  {timelineItems.length} {timelineItems.length === 1 ? "transition" : "transitions"}
                 </Badge>
               </div>
             </div>

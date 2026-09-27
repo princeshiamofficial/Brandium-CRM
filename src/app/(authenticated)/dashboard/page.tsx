@@ -134,7 +134,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3 w-full sm:w-auto">
           {/* Timeframe Dropdown */}
           <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="h-10 px-4 rounded-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors w-[130px]">
+            <SelectTrigger className="h-10 px-4 rounded-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors w-32.5">
               <SelectValue placeholder="Timeframe" />
             </SelectTrigger>
             <SelectContent className="rounded-2xl border-slate-200 dark:border-slate-800">

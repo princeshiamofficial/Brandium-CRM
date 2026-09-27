@@ -75,10 +75,7 @@ export function PerformanceGauge({
     <div className="flex flex-col h-full justify-between">
       {/* Semi-circle Gauge Arch */}
       <div className="relative flex items-center justify-center w-full py-1">
-        <svg
-          viewBox="0 0 300 145"
-          className="w-full max-w-[260px] h-auto overflow-visible select-none"
-        >
+        <svg viewBox="0 0 300 145" className="w-full max-w-65 h-auto overflow-visible select-none">
           {/* Segment 1: Lime Green (Left) */}
           <motion.path
             d={pathGreen}

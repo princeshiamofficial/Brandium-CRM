@@ -271,7 +271,7 @@ export function RevenueExpenseChart({
 
         <div className="flex items-end">
           {/* Y-Axis scale */}
-          <div className="flex flex-col justify-between text-[11px] font-medium text-slate-400 dark:text-slate-500 select-none pr-3 h-[175px] w-9 shrink-0 pb-1">
+          <div className="flex flex-col justify-between text-[11px] font-medium text-slate-400 dark:text-slate-500 select-none pr-3 h-43.75 w-9 shrink-0 pb-1">
             <span>$2k</span>
             <span>$1.5k</span>
             <span>$1k</span>
@@ -280,7 +280,7 @@ export function RevenueExpenseChart({
           </div>
 
           {/* Bars Graphic Area */}
-          <div className="relative flex-1 h-[175px]">
+          <div className="relative flex-1 h-43.75">
             {/* Background Horizontal Guide Lines */}
             <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-40">
               <div className="border-b border-dashed border-slate-200 dark:border-slate-800 w-full" />
@@ -306,7 +306,7 @@ export function RevenueExpenseChart({
                     className="relative h-full flex flex-col justify-end items-center cursor-pointer group"
                   >
                     {/* Vertical subtle background line guideline */}
-                    <div className="absolute inset-y-0 w-[1px] bg-slate-100 dark:bg-slate-800/80 pointer-events-none group-hover:bg-slate-200 dark:group-hover:bg-slate-700 transition-colors" />
+                    <div className="absolute inset-y-0 w-px bg-slate-100 dark:bg-slate-800/80 pointer-events-none group-hover:bg-slate-200 dark:group-hover:bg-slate-700 transition-colors" />
 
                     {/* Green Floating Pill (Directly on top of blue bar with 2.5px gap) */}
                     {d.hasExpensePill && (

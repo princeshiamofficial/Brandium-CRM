@@ -70,7 +70,7 @@ export function PendingTasksList({ tasks = DEFAULT_TASKS }: PendingTasksListProp
         );
       case "instagram":
         return (
-          <div className="size-10 rounded-full bg-gradient-to-tr from-[#f58529] via-[#dd2a7b] to-[#8134af] text-white flex items-center justify-center shrink-0 shadow-sm">
+          <div className="size-10 rounded-full bg-linear-to-tr from-[#f58529] via-[#dd2a7b] to-[#8134af] text-white flex items-center justify-center shrink-0 shadow-sm">
             <svg
               className="size-5"
               viewBox="0 0 24 24"
