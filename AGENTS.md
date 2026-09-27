@@ -496,10 +496,13 @@ Welcome to the **Brandium CRM** repository.
   - **Service Filter & Dark Mode**: Service select filter connects directly to active database services (`servicesQueryOptions`). All input and select elements enforce clean dark mode backgrounds (`dark:bg-slate-900 dark:border-slate-800`).
   - **Actionable Empty State**: Per UI/UX Pro Max guidelines, empty states render a centered SearchX icon, clear explanation, a "Reset All Filters" action button, and a primary "Add Prospect" action button.
   - **1-Click Qualification**: Both card and table views provide a 1-click toggle to mark/unmark prospects as Qualified (`is_qualified = 1`), with soft emerald badges (`Star` icon) and instant cache invalidation for `prospects`, `prospects-stats`, and `qualified-leads`.
-- **Prospect Card Clickable Stage Badge & Streamlined Action Menu Standard**:
-  - In `src/app/(authenticated)/prospects/page.tsx`, stage badges on both card and table views are interactive `<button>` elements with `onClick` directly triggering `setStageTarget(...)` to open the `ChangeStageDialog` modal instantly without requiring menu navigation.
-  - The 3-dot dropdown action menu is streamlined to only include core actions: **Edit** (`EditProspectDialog`), **Stage History** (`ViewStageDialog`), and **Delete** (`AlertDialog`), removing redundant duplicate stage triggers.
-  - Stage history modal (`ViewStageDialog`) features a clean vertical timeline with parsed note arrays, 12-hour AM/PM timestamps, and zero redundant outer boxes.
+- **Stage History Unlimited Note Array & Footer Note Input Standard**:
+  - In `src/components/view-stage-dialog.tsx` and `src/lib/stages.ts`, the stage activity timeline supports unlimited notes per stage:
+    - **Footer Note Input Bar**: Embedded at the bottom of the dialog spanning the left side with a fast `<Input>` and purple "Add" / "Send" button (supports Enter key submission).
+    - **Targeted Stage Notes**: By default, notes attach to the active/latest stage, or users can click the `+` icon on any specific timeline stage card to target that stage directly.
+    - **Multiple Notes Array**: Notes are parsed and rendered via `parseNotesToArray()` as individual bulleted items under each stage transition.
+    - **Note Removal**: Hovering over any note item reveals a subtle delete `X` button with an `AlertDialog` confirmation, enabling complete CRUD control over individual notes in the array.
+    - **Database Sync**: Functions `addStageNote` and `deleteStageNote` persist updates directly to `prospect_stage_history.note` and sync with `prospects.notes` in MySQL.
 
 ## Agent skills
 
