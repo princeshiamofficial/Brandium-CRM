@@ -929,22 +929,33 @@ function ProspectsPageContent() {
                         </span>
                       </TableCell>
 
-                      {/* Stage Badge */}
+                      {/* Stage Badge (Clickable to change stage) */}
                       <TableCell>
-                        <span
-                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[6px] text-xs font-medium border"
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStageTarget({
+                              id: p.id,
+                              label: p.business_name || p.contact_name,
+                              stageId: p.stage_id,
+                              currentStageName: stageName,
+                            });
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[6px] text-xs font-medium border cursor-pointer hover:opacity-85 hover:scale-[1.02] active:scale-[0.98] transition-all"
                           style={{
                             backgroundColor: `${stageColor}15`,
                             color: stageColor,
                             borderColor: `${stageColor}30`,
                           }}
+                          title="Click to change stage"
                         >
                           <span
                             className="size-1.5 rounded-full shrink-0"
                             style={{ backgroundColor: stageColor }}
                           />
                           <span className="truncate max-w-28">{stageName}</span>
-                        </span>
+                        </button>
                       </TableCell>
 
                       {/* Qualified Status Button */}
@@ -1239,21 +1250,32 @@ function ProspectsPageContent() {
 
                     {/* Soft Badges row */}
                     <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
-                      {/* Dynamic Soft Stage Badge */}
-                      <span
-                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[6px] text-xs font-medium border"
+                      {/* Dynamic Soft Stage Badge (Clickable to change stage) */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setStageTarget({
+                            id: p.id,
+                            label: p.business_name || p.contact_name,
+                            stageId: p.stage_id,
+                            currentStageName: stageName,
+                          });
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[6px] text-xs font-medium border cursor-pointer hover:opacity-85 hover:scale-[1.02] active:scale-[0.98] transition-all"
                         style={{
                           backgroundColor: `${stageColor}15`,
                           color: stageColor,
                           borderColor: `${stageColor}30`,
                         }}
+                        title="Click to change stage"
                       >
                         <span
                           className="size-1.5 rounded-full shrink-0"
                           style={{ backgroundColor: stageColor }}
                         />
                         <span className="truncate max-w-30">{stageName}</span>
-                      </span>
+                      </button>
 
                       {/* Soft Service Tag (matches badge-soft-warning) */}
                       <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] text-xs font-medium bg-[#FEF8E6] text-[#B78103] dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/60 truncate max-w-32.5">
