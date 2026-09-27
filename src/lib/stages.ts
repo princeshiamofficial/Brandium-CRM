@@ -755,7 +755,20 @@ export function useDeleteStage() {
   });
 }
 
-export function parseNotesToArray(notes?: string | null): string[] {
+export type StageNoteItem = {
+  id?: string;
+  text: string;
+  createdAt?: string | null;
+  createdByName?: string | null;
+  createdByAvatar?: string | null;
+};
+
+export function parseNotesToItems(
+  notes?: string | null,
+  fallbackDate?: string | null,
+  fallbackAuthor?: string | null,
+  fallbackAvatar?: string | null,
+): StageNoteItem[] {
   if (!notes || typeof notes !== "string") return [];
 
   const cleaned = notes
@@ -765,13 +778,46 @@ export function parseNotesToArray(notes?: string | null): string[] {
 
   if (!cleaned) return [];
 
-  // If JSON array string e.g. ["item 1", "item 2"]
+  // If JSON array string e.g. [{"text": "...", "createdAt": "..."}, ...] OR ["item 1", "item 2"]
   if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
     try {
       const parsed = JSON.parse(cleaned);
       if (Array.isArray(parsed)) {
-        const arr = parsed.map((item) => String(item).trim()).filter(Boolean);
-        if (arr.length > 0) return arr;
+        const items: StageNoteItem[] = parsed
+          .map((item) => {
+            if (typeof item === "object" && item !== null) {
+              const text = String(item["text"] || item["note"] || "").trim();
+              if (!text) return null;
+              return {
+                id: item["id"] ? String(item["id"]) : undefined,
+                text,
+                createdAt:
+                  (item["createdAt"] as string) ||
+                  (item["created_at"] as string) ||
+                  fallbackDate ||
+                  null,
+                createdByName:
+                  (item["createdByName"] as string) ||
+                  (item["author"] as string) ||
+                  fallbackAuthor ||
+                  null,
+                createdByAvatar:
+                  (item["createdByAvatar"] as string) || fallbackAvatar || null,
+              };
+            }
+            if (typeof item === "string" && item.trim()) {
+              return {
+                text: item.trim(),
+                createdAt: fallbackDate || null,
+                createdByName: fallbackAuthor || null,
+                createdByAvatar: fallbackAvatar || null,
+              };
+            }
+            return null;
+          })
+          .filter((item): item is StageNoteItem => item !== null);
+
+        if (items.length > 0) return items;
       }
     } catch {
       // Fallback to text parsing
@@ -785,10 +831,26 @@ export function parseNotesToArray(notes?: string | null): string[] {
     .filter(Boolean);
 
   if (lines.length > 0) {
-    return lines;
+    return lines.map((line) => ({
+      text: line,
+      createdAt: fallbackDate || null,
+      createdByName: fallbackAuthor || null,
+      createdByAvatar: fallbackAvatar || null,
+    }));
   }
 
-  return [cleaned];
+  return [
+    {
+      text: cleaned,
+      createdAt: fallbackDate || null,
+      createdByName: fallbackAuthor || null,
+      createdByAvatar: fallbackAvatar || null,
+    },
+  ];
+}
+
+export function parseNotesToArray(notes?: string | null): string[] {
+  return parseNotesToItems(notes).map((item) => item.text);
 }
 
 export async function addStageNote(params: {
@@ -797,12 +859,22 @@ export async function addStageNote(params: {
   stageId?: string | null;
   note: string;
   userId?: string | null;
+  userName?: string | null;
+  userAvatar?: string | null;
 }): Promise<boolean> {
-  const { prospectId, historyId, stageId, note, userId } = params;
+  const { prospectId, historyId, stageId, note, userId, userName, userAvatar } = params;
   if (!prospectId || !note.trim()) return false;
 
   const nowStr = getMySQLTimestamp();
   const trimmedNote = note.trim();
+
+  const newNoteItem: StageNoteItem = {
+    id: generateUUID(),
+    text: trimmedNote,
+    createdAt: nowStr,
+    createdByName: userName || null,
+    createdByAvatar: userAvatar || null,
+  };
 
   try {
     // If a specific historyId is provided and it's not the virtual 'initial-' item:
@@ -812,9 +884,9 @@ export async function addStageNote(params: {
         [historyId],
       );
       const existingRawNote = (res.data?.[0]?.["note"] as string) || null;
-      const currentArray = parseNotesToArray(existingRawNote);
-      const updatedArray = [...currentArray, trimmedNote];
-      const newNotePayload = JSON.stringify(updatedArray);
+      const currentItems = parseNotesToItems(existingRawNote);
+      const updatedItems = [...currentItems, newNoteItem];
+      const newNotePayload = JSON.stringify(updatedItems);
 
       await runMySQLQuery(
         `UPDATE \`prospect_stage_history\` SET \`note\` = ?, \`changed_at\` = ? WHERE \`id\` = ?;`,
@@ -830,9 +902,9 @@ export async function addStageNote(params: {
       if (histRes?.success && histRes.data?.[0]?.["id"] && !historyId?.startsWith("initial-")) {
         const targetId = String(histRes.data[0]["id"]);
         const existingRawNote = (histRes.data[0]["note"] as string) || null;
-        const currentArray = parseNotesToArray(existingRawNote);
-        const updatedArray = [...currentArray, trimmedNote];
-        const newNotePayload = JSON.stringify(updatedArray);
+        const currentItems = parseNotesToItems(existingRawNote);
+        const updatedItems = [...currentItems, newNoteItem];
+        const newNotePayload = JSON.stringify(updatedItems);
 
         await runMySQLQuery(
           `UPDATE \`prospect_stage_history\` SET \`note\` = ?, \`changed_at\` = ? WHERE \`id\` = ?;`,
@@ -845,9 +917,9 @@ export async function addStageNote(params: {
           [prospectId],
         );
         const existingNotes = (pRes.data?.[0]?.["notes"] as string) || null;
-        const currentArray = parseNotesToArray(existingNotes);
-        const updatedArray = [...currentArray, trimmedNote];
-        const newNotePayload = JSON.stringify(updatedArray);
+        const currentItems = parseNotesToItems(existingNotes);
+        const updatedItems = [...currentItems, newNoteItem];
+        const newNotePayload = JSON.stringify(updatedItems);
 
         await runMySQLQuery(
           `UPDATE \`prospects\` SET \`notes\` = ?, \`updated_at\` = ? WHERE \`id\` = ?;`,
@@ -865,7 +937,7 @@ export async function addStageNote(params: {
             prospectId,
             currentStageId,
             currentStageId,
-            JSON.stringify([trimmedNote]),
+            newNotePayload,
             userId || null,
             nowStr,
           ],
@@ -903,9 +975,9 @@ export async function deleteStageNote(params: {
         [historyId],
       );
       const existingRawNote = (res.data?.[0]?.["note"] as string) || null;
-      const currentArray = parseNotesToArray(existingRawNote);
-      const updatedArray = currentArray.filter((_, idx) => idx !== noteIndex);
-      const newNotePayload = updatedArray.length > 0 ? JSON.stringify(updatedArray) : null;
+      const currentItems = parseNotesToItems(existingRawNote);
+      const updatedItems = currentItems.filter((_, idx) => idx !== noteIndex);
+      const newNotePayload = updatedItems.length > 0 ? JSON.stringify(updatedItems) : null;
 
       await runMySQLQuery(
         `UPDATE \`prospect_stage_history\` SET \`note\` = ?, \`changed_at\` = ? WHERE \`id\` = ?;`,
@@ -917,9 +989,9 @@ export async function deleteStageNote(params: {
         [prospectId],
       );
       const existingNotes = (pRes.data?.[0]?.["notes"] as string) || null;
-      const currentArray = parseNotesToArray(existingNotes);
-      const updatedArray = currentArray.filter((_, idx) => idx !== noteIndex);
-      const newNotePayload = updatedArray.length > 0 ? JSON.stringify(updatedArray) : null;
+      const currentItems = parseNotesToItems(existingNotes);
+      const updatedItems = currentItems.filter((_, idx) => idx !== noteIndex);
+      const newNotePayload = updatedItems.length > 0 ? JSON.stringify(updatedItems) : null;
 
       await runMySQLQuery(
         `UPDATE \`prospects\` SET \`notes\` = ?, \`updated_at\` = ? WHERE \`id\` = ?;`,

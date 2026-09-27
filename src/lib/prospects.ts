@@ -150,6 +150,24 @@ export function getProspectCreatorAvatar(prospect: {
 
 export function getProspectCleanNotes(notes?: string | null): string {
   if (!notes) return "";
+  const trimmed = notes.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const last = parsed[parsed.length - 1];
+        if (typeof last === "object" && last !== null) {
+          return String(last["text"] || last["note"] || "").trim();
+        }
+        if (typeof last === "string") {
+          return last.trim();
+        }
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
   return notes
     .replace(/\[Artist:\s*[^\]]+\]/gi, "")
     .replace(/\[Agent:\s*[^\]]+\]/gi, "")

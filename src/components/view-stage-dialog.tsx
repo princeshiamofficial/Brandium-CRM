@@ -23,8 +23,10 @@ import {
   formatStageSlugOrName,
   deleteStageHistoryEntry,
   parseNotesToArray,
+  parseNotesToItems,
   addStageNote,
   deleteStageNote,
+  type StageNoteItem,
 } from "@/lib/stages";
 import { type Prospect } from "@/lib/prospects";
 import { useAuth } from "@/lib/auth";
@@ -43,15 +45,15 @@ export type TimelineItem = {
   stageName: string;
   stageId?: string | null;
   fromStageName: string | null;
-  noteArray: string[];
+  noteItems: StageNoteItem[];
   actor: string;
   actorAvatar?: string | null | undefined;
 };
 
-export { parseNotesToArray };
+export { parseNotesToArray, parseNotesToItems };
 
 export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialogProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [newNote, setNewNote] = useState("");
   const [targetHistoryId, setTargetHistoryId] = useState<string | null>(null);
   const [deleteHistoryTarget, setDeleteHistoryTarget] = useState<{
@@ -94,14 +96,29 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
   });
 
   const addNoteMutation = useMutation({
-    mutationFn: async (payload: { historyId: string | null; stageId?: string | null; note: string }) => {
+    mutationFn: async (payload: {
+      historyId: string | null;
+      stageId?: string | null;
+      note: string;
+    }) => {
       if (!prospect) return false;
+      const currentUserName =
+        profile?.full_name ||
+        (user?.user_metadata?.["full_name"] as string) ||
+        user?.name ||
+        user?.email ||
+        "User";
+      const currentUserAvatar =
+        profile?.avatar_url || (user?.user_metadata?.["avatar_url"] as string) || null;
+
       return addStageNote({
         prospectId: prospect.id,
         historyId: payload.historyId,
         stageId: payload.stageId || prospect.stage_id,
         note: payload.note,
         userId: user?.id || null,
+        userName: currentUserName,
+        userAvatar: currentUserAvatar,
       });
     },
     onSuccess: () => {
@@ -149,15 +166,31 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
   const historyEntries = historyQuery.data ?? [];
 
   // 1. Initial creation entry
-  const initialNoteArray = parseNotesToArray(prospect.notes || "Lead created");
+  const initialAuthor = prospect.creator_name || "System";
+  const initialNoteItems = parseNotesToItems(
+    prospect.notes || "Lead created",
+    prospect.created_at,
+    initialAuthor,
+    prospect.creator_avatar || null,
+  );
   const initialItem: TimelineItem = {
     id: `initial-${prospect.id}`,
     date: prospect.created_at,
     stageName: "Prospect",
     stageId: "prospect",
     fromStageName: null,
-    noteArray: initialNoteArray.length > 0 ? initialNoteArray : ["Lead created"],
-    actor: prospect.creator_name || "System",
+    noteItems:
+      initialNoteItems.length > 0
+        ? initialNoteItems
+        : [
+            {
+              text: "Lead created",
+              createdAt: prospect.created_at,
+              createdByName: initialAuthor,
+              createdByAvatar: prospect.creator_avatar || null,
+            },
+          ],
+    actor: initialAuthor,
     actorAvatar: prospect.creator_avatar || null,
   };
 
@@ -172,7 +205,12 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
     }
     const finalName = rawName === "New Lead" || rawName === "new_lead" ? "Prospect" : rawName;
     const fromName = h.from_stage_name ? formatStageSlugOrName(h.from_stage_name) : null;
-    const parsedNotes = parseNotesToArray(h.note);
+    const actorName = h.changed_by_name || prospect.creator_name || "System";
+    const actorAvatar =
+      h.changed_by_avatar ||
+      (h.changed_by === prospect.created_by ? prospect.creator_avatar : null);
+
+    const parsedNoteItems = parseNotesToItems(h.note, h.changed_at, actorName, actorAvatar);
 
     return {
       id: h.id,
@@ -180,11 +218,19 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
       stageName: finalName,
       stageId: h.to_stage_id,
       fromStageName: fromName && fromName !== finalName ? fromName : null,
-      noteArray: parsedNotes.length > 0 ? parsedNotes : [`Stage transitioned to ${finalName}`],
-      actor: h.changed_by_name || prospect.creator_name || "System",
-      actorAvatar:
-        h.changed_by_avatar ||
-        (h.changed_by === prospect.created_by ? prospect.creator_avatar : null),
+      noteItems:
+        parsedNoteItems.length > 0
+          ? parsedNoteItems
+          : [
+              {
+                text: `Stage transitioned to ${finalName}`,
+                createdAt: h.changed_at,
+                createdByName: actorName,
+                createdByAvatar: actorAvatar,
+              },
+            ],
+      actor: actorName,
+      actorAvatar,
     };
   });
 
@@ -240,7 +286,8 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
                     variant="outline"
                     className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                   >
-                    {timelineItems.length} {timelineItems.length === 1 ? "transition" : "transitions"}
+                    {timelineItems.length}{" "}
+                    {timelineItems.length === 1 ? "transition" : "transitions"}
                   </Badge>
                 </div>
               </div>
@@ -270,7 +317,8 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
                       key={item.id || idx}
                       className={cn(
                         "relative flex items-start group rounded-xl p-1.5 -ml-1.5 transition-all",
-                        isTargeted && "bg-purple-50/50 dark:bg-purple-950/20 ring-1 ring-purple-200 dark:ring-purple-800/50",
+                        isTargeted &&
+                          "bg-purple-50/50 dark:bg-purple-950/20 ring-1 ring-purple-200 dark:ring-purple-800/50",
                       )}
                     >
                       {/* 1. Left Date Column (e.g., 10-26, 09-24) */}
@@ -367,47 +415,62 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
                           </div>
                         </div>
 
-                        {/* Note Array Description List with Individual Note Item Deletion */}
-                        {item.noteArray.length > 0 ? (
+                        {/* Note Array List with Date, Time, and Author Rendering */}
+                        {item.noteItems.length > 0 ? (
                           <div className="mt-1 space-y-1">
-                            {item.noteArray.map((noteText, nIdx) => (
-                              <div
-                                key={nIdx}
-                                className="group/note flex items-start justify-between gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-900/50 px-1 py-0.5 rounded transition-colors"
-                              >
-                                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-normal flex-1">
-                                  {item.noteArray.length > 1 ? `• ${noteText}` : noteText}
-                                </p>
+                            {item.noteItems.map((noteItem, nIdx) => {
+                              const noteAuthor = noteItem.createdByName || item.actor;
+                              const noteTimestamp = noteItem.createdAt
+                                ? format(new Date(noteItem.createdAt), "MM-dd h:mm a")
+                                : null;
 
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setDeleteNoteTarget({
-                                      historyId: isInitial ? null : item.id,
-                                      noteIndex: nIdx,
-                                      noteText,
-                                      stageName: stageDisplayName,
-                                    })
-                                  }
-                                  className="opacity-0 group-hover/note:opacity-100 text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 p-0.5 rounded cursor-pointer transition-opacity shrink-0"
-                                  title="Delete this note"
+                              return (
+                                <div
+                                  key={noteItem.id || nIdx}
+                                  className="group/note flex items-start justify-between gap-2 hover:bg-slate-50 dark:hover:bg-slate-900/50 p-1.5 rounded-lg transition-colors"
                                 >
-                                  <X className="size-3" />
-                                </button>
-                              </div>
-                            ))}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed font-normal">
+                                      {item.noteItems.length > 1
+                                        ? `• ${noteItem.text}`
+                                        : noteItem.text}
+                                    </p>
+
+                                    {/* Note Date, Time & Author attribution row */}
+                                    <div className="flex items-center gap-1.5 text-[11px] text-slate-400/80 dark:text-slate-500 mt-0.5 flex-wrap">
+                                      {noteTimestamp && <span>{noteTimestamp}</span>}
+                                      {noteTimestamp && noteAuthor && noteAuthor !== "System" && (
+                                        <span>•</span>
+                                      )}
+                                      {noteAuthor && noteAuthor !== "System" && (
+                                        <span>by {noteAuthor}</span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setDeleteNoteTarget({
+                                        historyId: isInitial ? null : item.id,
+                                        noteIndex: nIdx,
+                                        noteText: noteItem.text,
+                                        stageName: stageDisplayName,
+                                      })
+                                    }
+                                    className="opacity-0 group-hover/note:opacity-100 text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 p-0.5 rounded cursor-pointer transition-opacity shrink-0 mt-0.5"
+                                    title="Delete this note"
+                                  >
+                                    <X className="size-3" />
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : (
                           <p className="text-xs sm:text-sm text-slate-400/80 dark:text-slate-500 italic mt-0.5">
                             Stage updated to {stageDisplayName}
                           </p>
-                        )}
-
-                        {/* Subtle Actor Attribution */}
-                        {item.actor && item.actor !== "System" && (
-                          <span className="text-[11px] text-slate-400/70 dark:text-slate-500/70 mt-0.5 block font-normal">
-                            by {item.actor}
-                          </span>
                         )}
                       </div>
                     </div>
