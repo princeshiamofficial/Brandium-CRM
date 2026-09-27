@@ -215,7 +215,11 @@ function getProjectStageBadgeStyle(stageName?: string | null): string {
   if (s.includes("delivered") || s.includes("completed") || s.includes("done")) {
     return "bg-[#E8F9ED] text-[#16A34A] dark:bg-green-950/60 dark:text-green-400 border border-green-200/50 dark:border-green-800/50";
   }
-  if (s.includes("video graphy complete") || s.includes("videography complete") || (s.includes("video") && s.includes("complete"))) {
+  if (
+    s.includes("video graphy complete") ||
+    s.includes("videography complete") ||
+    (s.includes("video") && s.includes("complete"))
+  ) {
     return "bg-[#ECFDF5] text-[#059669] dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/50";
   }
   if (s.includes("videographer") || s.includes("videography")) {
@@ -2773,8 +2777,7 @@ function ProjectFormDialog({
                             <span
                               className="size-2 rounded-full shrink-0"
                               style={{
-                                backgroundColor:
-                                  st.color || resolveProjectStageColor(st.name),
+                                backgroundColor: st.color || resolveProjectStageColor(st.name),
                               }}
                             />
                             <span className="truncate">{st.name}</span>
@@ -2837,7 +2840,6 @@ function ProjectFormDialog({
                   </div>
                 </div>
               </div>
-
 
               {/* Row 4: Order Notes */}
               <div className="space-y-1">

@@ -189,14 +189,20 @@ export function resolveProjectStageColor(status?: string | null): string {
   if (!status) return "#3B82F6";
   const s = status.toLowerCase().trim();
   if (s.includes("delivered") || s.includes("done") || s.includes("completed")) return "#16A34A";
-  if (s.includes("complete") || s.includes("video graphy complete") || s.includes("videography complete")) return "#10B981";
+  if (
+    s.includes("complete") ||
+    s.includes("video graphy complete") ||
+    s.includes("videography complete")
+  )
+    return "#10B981";
   if (s.includes("script") || s.includes("writer")) return "#8B5CF6";
   if (s.includes("content") || s.includes("planner")) return "#EC4899";
   if (s.includes("videographer") || s.includes("videography")) return "#F59E0B";
   if (s.includes("editor") || s.includes("video edit")) return "#6366F1";
   if (s.includes("market") || s.includes("marketer")) return "#06B6D4";
   if (s.includes("developer") || s.includes("dev")) return "#0284C7";
-  if (s.includes("started") || s.includes("start") || s.includes("project started")) return "#3B82F6";
+  if (s.includes("started") || s.includes("start") || s.includes("project started"))
+    return "#3B82F6";
   if (s.includes("hold")) return "#DC2626";
   return "#3B82F6";
 }

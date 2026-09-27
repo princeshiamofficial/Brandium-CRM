@@ -50,8 +50,14 @@ export function resolveStageColor(name?: string | null, customColor?: string | n
   }
   const norm = (name || "").toLowerCase().replace(/[-_\s()]/g, "");
   if (norm.includes("delivered") || norm.includes("won") || norm.includes("sale")) return "#16A34A";
-  if (norm.includes("videographycomplete") || norm.includes("videographycompleted") || (norm.includes("video") && norm.includes("complete"))) return "#10B981";
-  if (norm.includes("projectstart") || norm.includes("started") || norm.includes("start")) return "#3B82F6";
+  if (
+    norm.includes("videographycomplete") ||
+    norm.includes("videographycompleted") ||
+    (norm.includes("video") && norm.includes("complete"))
+  )
+    return "#10B981";
+  if (norm.includes("projectstart") || norm.includes("started") || norm.includes("start"))
+    return "#3B82F6";
   if (norm.includes("script") || norm.includes("writer")) return "#8B5CF6";
   if (norm.includes("content") || norm.includes("planner")) return "#EC4899";
   if (norm.includes("videographer") || norm.includes("videography")) return "#F59E0B";
@@ -77,8 +83,14 @@ export function resolveStageIcon(name?: string | null, customIcon?: string | nul
   }
   const norm = (name || "").toLowerCase().replace(/[-_\s()]/g, "");
   if (norm.includes("delivered") || norm.includes("won") || norm.includes("sale")) return "Trophy";
-  if (norm.includes("videographycomplete") || norm.includes("videographycompleted") || (norm.includes("video") && norm.includes("complete"))) return "CheckCircle2";
-  if (norm.includes("projectstart") || norm.includes("started") || norm.includes("start")) return "PlayCircle";
+  if (
+    norm.includes("videographycomplete") ||
+    norm.includes("videographycompleted") ||
+    (norm.includes("video") && norm.includes("complete"))
+  )
+    return "CheckCircle2";
+  if (norm.includes("projectstart") || norm.includes("started") || norm.includes("start"))
+    return "PlayCircle";
   if (norm.includes("script") || norm.includes("writer")) return "FileText";
   if (norm.includes("content") || norm.includes("planner")) return "Calendar";
   if (norm.includes("videographer") || norm.includes("videography")) return "Video";
