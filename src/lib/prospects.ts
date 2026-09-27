@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
-import { formatStageSlugOrName } from "@/lib/stages";
+import { formatStageSlugOrName, parseNotesToItems, type StageNoteItem } from "@/lib/stages";
 import { runMySQLQuery } from "@/lib/mysql-api";
 import { getMySQLTimestamp } from "@/lib/mysql-client";
 
@@ -148,30 +148,76 @@ export function getProspectCreatorAvatar(prospect: {
   return null;
 }
 
-export function getProspectCleanNotes(notes?: string | null): string {
-  if (!notes) return "";
-  const trimmed = notes.trim();
-  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const last = parsed[parsed.length - 1];
-        if (typeof last === "object" && last !== null) {
-          return String(last["text"] || last["note"] || "").trim();
-        }
-        if (typeof last === "string") {
-          return last.trim();
-        }
+export function extractLatestProspectNote(
+  prospectNotes?: string | null,
+  prospectCreatedAt?: string | null,
+  historyEntries?: { note: string; changed_at?: string | null }[],
+): string {
+  const allItems: StageNoteItem[] = [];
+
+  if (prospectNotes) {
+    const pItems = parseNotesToItems(prospectNotes, prospectCreatedAt);
+    allItems.push(...pItems);
+  }
+
+  if (historyEntries && Array.isArray(historyEntries)) {
+    for (const h of historyEntries) {
+      if (h.note) {
+        const hItems = parseNotesToItems(h.note, h.changed_at);
+        allItems.push(...hItems);
       }
-    } catch {
-      // Fallback
     }
   }
 
-  return notes
+  if (allItems.length === 0) return "";
+
+  // Sort by createdAt ascending so the newest note is at the end
+  allItems.sort((a, b) => {
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    if (timeA !== timeB) {
+      return timeA - timeB;
+    }
+    return 0;
+  });
+
+  const latest = allItems[allItems.length - 1];
+  return latest?.text?.trim() || "";
+}
+
+export function getProspectCleanNotes(notes?: string | null): string {
+  if (!notes) return "";
+  const items = parseNotesToItems(notes);
+  if (items.length > 0) {
+    // Return the text of the latest note item
+    items.sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeA - timeB;
+    });
+    const latestItem = items[items.length - 1];
+    if (latestItem?.text) {
+      return latestItem.text.trim();
+    }
+  }
+
+  const cleaned = notes
     .replace(/\[Artist:\s*[^\]]+\]/gi, "")
     .replace(/\[Agent:\s*[^\]]+\]/gi, "")
     .trim();
+
+  if (!cleaned) return "";
+
+  const lines = cleaned
+    .split(/\r?\n+/)
+    .map((l) => l.replace(/^[\s*•\-–—\d.)]+/, "").trim())
+    .filter(Boolean);
+
+  if (lines.length > 0) {
+    return lines[lines.length - 1] || "";
+  }
+
+  return cleaned;
 }
 
 export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin: boolean) =>
@@ -214,10 +260,47 @@ export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin
 
         if (res?.success && Array.isArray(res.data)) {
           mysqlSuccess = true;
+
+          // Fetch all stage history notes for chronological resolution of the latest note
+          const historyNotesMap: Record<string, { note: string; changed_at: string }[]> = {};
+          try {
+            const histRes = await runMySQLQuery<Record<string, unknown>[]>(
+              `SELECT prospect_id, note, changed_at 
+               FROM \`prospect_stage_history\` 
+               WHERE note IS NOT NULL AND TRIM(note) != ''
+               ORDER BY changed_at ASC;`,
+            );
+            if (histRes?.success && Array.isArray(histRes.data)) {
+              for (const h of histRes.data) {
+                const pid = String(h["prospect_id"] || "");
+                const note = String(h["note"] || "");
+                const changedAt = String(h["changed_at"] || "");
+                if (pid && note) {
+                  if (!historyNotesMap[pid]) historyNotesMap[pid] = [];
+                  historyNotesMap[pid].push({ note, changed_at: changedAt });
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("history notes query notice:", e);
+          }
+
           fetchedRows = res.data.map((p) => {
+            const pId = String(p["id"]);
             const stId = String(p["stage_id"] || "");
+            const prospectNotes = (p["notes"] as string) || null;
+            const prospectCreatedAt = String(p["created_at"] || "");
+            const historyEntries = historyNotesMap[pId] || [];
+
+            // Resolve the latest note across all stage history transitions and prospect notes
+            const latestCleanNote = extractLatestProspectNote(
+              prospectNotes,
+              prospectCreatedAt,
+              historyEntries,
+            );
+
             return {
-              id: String(p["id"]),
+              id: pId,
               contact_name: String(p["contact_name"] || "Client"),
               business_name: (p["business_name"] as string) || null,
               designation: (p["designation"] as string) || null,
@@ -232,7 +315,7 @@ export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin
               assigned_to: (p["assigned_to"] as string) || null,
               assigned_artist_id: (p["assigned_artist_id"] as string) || null,
               created_by: (p["created_by"] as string) || null,
-              notes: (p["notes"] as string) || null,
+              notes: latestCleanNote || prospectNotes,
               is_qualified: p["is_qualified"] ? 1 : 0,
               created_at: String(p["created_at"] || new Date().toISOString()),
               updated_at: String(p["updated_at"] || new Date().toISOString()),

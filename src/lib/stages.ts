@@ -756,18 +756,18 @@ export function useDeleteStage() {
 }
 
 export type StageNoteItem = {
-  id?: string;
+  id?: string | undefined;
   text: string;
-  createdAt?: string | null;
-  createdByName?: string | null;
-  createdByAvatar?: string | null;
+  createdAt?: string | null | undefined;
+  createdByName?: string | null | undefined;
+  createdByAvatar?: string | null | undefined;
 };
 
 export function parseNotesToItems(
-  notes?: string | null,
-  fallbackDate?: string | null,
-  fallbackAuthor?: string | null,
-  fallbackAvatar?: string | null,
+  notes?: string | null | undefined,
+  fallbackDate?: string | null | undefined,
+  fallbackAuthor?: string | null | undefined,
+  fallbackAvatar?: string | null | undefined,
 ): StageNoteItem[] {
   if (!notes || typeof notes !== "string") return [];
 
@@ -783,12 +783,12 @@ export function parseNotesToItems(
     try {
       const parsed = JSON.parse(cleaned);
       if (Array.isArray(parsed)) {
-        const items: StageNoteItem[] = parsed
-          .map((item) => {
-            if (typeof item === "object" && item !== null) {
-              const text = String(item["text"] || item["note"] || "").trim();
-              if (!text) return null;
-              return {
+        const items: StageNoteItem[] = [];
+        for (const item of parsed) {
+          if (typeof item === "object" && item !== null) {
+            const text = String(item["text"] || item["note"] || "").trim();
+            if (text) {
+              items.push({
                 id: item["id"] ? String(item["id"]) : undefined,
                 text,
                 createdAt:
@@ -803,19 +803,17 @@ export function parseNotesToItems(
                   null,
                 createdByAvatar:
                   (item["createdByAvatar"] as string) || fallbackAvatar || null,
-              };
+              });
             }
-            if (typeof item === "string" && item.trim()) {
-              return {
-                text: item.trim(),
-                createdAt: fallbackDate || null,
-                createdByName: fallbackAuthor || null,
-                createdByAvatar: fallbackAvatar || null,
-              };
-            }
-            return null;
-          })
-          .filter((item): item is StageNoteItem => item !== null);
+          } else if (typeof item === "string" && item.trim()) {
+            items.push({
+              text: item.trim(),
+              createdAt: fallbackDate || null,
+              createdByName: fallbackAuthor || null,
+              createdByAvatar: fallbackAvatar || null,
+            });
+          }
+        }
 
         if (items.length > 0) return items;
       }

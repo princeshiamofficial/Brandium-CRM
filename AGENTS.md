@@ -504,6 +504,11 @@ Welcome to the **Brandium CRM** repository.
     - **Note Removal**: Hovering over any note item reveals a subtle delete `X` button with an `AlertDialog` confirmation, enabling complete CRUD control over individual notes in the array.
     - **Database Sync & Timestamp Preservation**: Functions `addStageNote` and `deleteStageNote` persist updates directly to `prospect_stage_history.note` and sync with `prospects.notes` in MySQL. When notes are appended or modified, original stage transition `changed_at` timestamps and existing note `createdAt` timestamps are strictly preserved without being overwritten.
 
+- **Prospect Card Latest Note Resolution Standard**:
+  - In `src/lib/prospects.ts` and `src/app/(authenticated)/prospects/page.tsx`, the prospect card torn paper sticky note banner always renders the absolute latest note chronologically added for that prospect across both `prospects.notes` and all `prospect_stage_history` transition notes.
+  - `extractLatestProspectNote(prospectNotes, prospectCreatedAt, historyEntries)` aggregates all note items, parses them via `parseNotesToItems()`, sorts them by ascending `createdAt` timestamp, and extracts the newest note text with author/tag sanitation.
+  - `prospectsQuery` automatically executes a fast relational lookup for all non-empty stage history notes and resolves the latest note for every card, ensuring instant live updates whenever new notes are appended or deleted in `ViewStageDialog`.
+
 ## Agent skills
 
 

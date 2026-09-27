@@ -102,14 +102,18 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
       note: string;
     }) => {
       if (!prospect) return false;
+      const uRecord = user as Record<string, unknown> | null;
+      const pRecord = profile as Record<string, unknown> | null;
       const currentUserName =
         profile?.full_name ||
         (user?.user_metadata?.["full_name"] as string) ||
-        user?.name ||
+        (uRecord?.["name"] as string) ||
         user?.email ||
         "User";
       const currentUserAvatar =
-        profile?.avatar_url || (user?.user_metadata?.["avatar_url"] as string) || null;
+        (pRecord?.["avatar_url"] as string) ||
+        (user?.user_metadata?.["avatar_url"] as string) ||
+        null;
 
       return addStageNote({
         prospectId: prospect.id,
