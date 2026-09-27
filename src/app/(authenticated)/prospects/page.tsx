@@ -1259,14 +1259,6 @@ function ProspectsPageContent() {
                       <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] text-xs font-medium bg-[#FEF8E6] text-[#B78103] dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/60 truncate max-w-32.5">
                         {resolvedServiceName}
                       </span>
-
-                      {/* Soft Qualified Badge */}
-                      {isQual && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/70 dark:border-emerald-900/60 shrink-0">
-                          <Star className="size-3 text-emerald-600 dark:text-emerald-400 fill-emerald-500" />
-                          <span>Qualified</span>
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
