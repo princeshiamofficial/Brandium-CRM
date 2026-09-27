@@ -372,7 +372,7 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
 
                           <div className="flex items-center gap-1.5 shrink-0">
                             <span className="text-xs sm:text-sm text-slate-400 dark:text-slate-500 font-normal">
-                              {format(new Date(item.date), "HH:mm")}
+                              {format(new Date(item.date), "h:mm a")}
                             </span>
 
                             {!isInitial && (
