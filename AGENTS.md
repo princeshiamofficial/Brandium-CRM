@@ -496,9 +496,10 @@ Welcome to the **Brandium CRM** repository.
   - **Service Filter & Dark Mode**: Service select filter connects directly to active database services (`servicesQueryOptions`). All input and select elements enforce clean dark mode backgrounds (`dark:bg-slate-900 dark:border-slate-800`).
   - **Actionable Empty State**: Per UI/UX Pro Max guidelines, empty states render a centered SearchX icon, clear explanation, a "Reset All Filters" action button, and a primary "Add Prospect" action button.
   - **1-Click Qualification**: Both card and table views provide a 1-click toggle to mark/unmark prospects as Qualified (`is_qualified = 1`), with soft emerald badges (`Star` icon) and instant cache invalidation for `prospects`, `prospects-stats`, and `qualified-leads`.
-- **Next.js Webpack Chunk Mismatch & Dev Server Artifact Conflict Resolution**:
-  - Running `npm run build` while `npm run dev` is running concurrently overwrites the shared `.next` compilation folder on disk, resulting in runtime errors such as `Cannot find module './1331.js'` or `ENOENT: routes-manifest.json`.
-  - When switching between dev and production verification, always stop the active dev server process before running `npm run build`, and restart `npm run dev` afresh after production builds so that Webpack loads fresh in-memory chunk manifests without stale module lookups.
+- **Prospect Card Clickable Stage Badge & Streamlined Action Menu Standard**:
+  - In `src/app/(authenticated)/prospects/page.tsx`, stage badges on both card and table views are interactive `<button>` elements with `onClick` directly triggering `setStageTarget(...)` to open the `ChangeStageDialog` modal instantly without requiring menu navigation.
+  - The 3-dot dropdown action menu is streamlined to only include core actions: **Edit** (`EditProspectDialog`), **Stage History** (`ViewStageDialog`), and **Delete** (`AlertDialog`), removing redundant duplicate stage triggers.
+  - Stage history modal (`ViewStageDialog`) features a clean vertical timeline with parsed note arrays, 12-hour AM/PM timestamps, and zero redundant outer boxes.
 
 ## Agent skills
 
