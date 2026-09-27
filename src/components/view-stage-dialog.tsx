@@ -10,16 +10,13 @@ import {
   CalendarIcon,
   Clock,
   Pencil,
-  Star,
-  TriangleAlert,
   Trash2,
   Globe,
-  FileText,
+  TriangleAlert,
   ArrowRight,
 } from "lucide-react";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -35,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { stageHistoryQuery, formatStageSlugOrName, deleteStageHistoryEntry } from "@/lib/stages";
 import { servicesQueryOptions } from "@/lib/services";
 import { getProspectArtistName, type Prospect } from "@/lib/prospects";
+import { cn } from "@/lib/utils";
 
 export type ViewStageDialogProps = {
   prospect: Prospect | null;
@@ -43,95 +41,57 @@ export type ViewStageDialogProps = {
   onEdit?: (prospect: Prospect) => void;
 };
 
-// Stage color helper with unique distinct colors for each stage
-function getStageColorStyle(stageName?: string | null) {
-  const name = (stageName || "").toLowerCase();
-  if (name.includes("prospect") || name.includes("lead")) {
-    return {
-      dot: "border-[3px] border-blue-600 text-blue-600 bg-white dark:bg-card",
-      line: "bg-blue-500 dark:bg-blue-600",
-      pill: "bg-blue-600 text-white shadow-2xs",
-      icon: null,
-    };
+export type TimelineItem = {
+  id: string;
+  date: string;
+  stageName: string;
+  fromStageName: string | null;
+  noteArray: string[];
+  actor: string;
+  actorAvatar?: string | null | undefined;
+};
+
+/**
+ * Parses raw notes into a clean array of string items.
+ * Handles single lines, multi-line strings, bullet points, and JSON stringified arrays.
+ */
+export function parseNotesToArray(notes?: string | null): string[] {
+  if (!notes || typeof notes !== "string") return [];
+
+  const cleaned = notes
+    .replace(/\[Artist:\s*[^\]]+\]/gi, "")
+    .replace(/\[Agent:\s*[^\]]+\]/gi, "")
+    .trim();
+
+  if (!cleaned) return [];
+
+  // If JSON array string e.g. ["item 1", "item 2"]
+  if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(cleaned);
+      if (Array.isArray(parsed)) {
+        const arr = parsed.map((item) => String(item).trim()).filter(Boolean);
+        if (arr.length > 0) return arr;
+      }
+    } catch {
+      // Fallback to text parsing
+    }
   }
-  if (name.includes("follow")) {
-    return {
-      dot: "border-[3px] border-teal-600 text-teal-600 bg-white dark:bg-card",
-      line: "bg-teal-500 dark:bg-teal-600",
-      pill: "bg-teal-600 text-white shadow-2xs",
-      icon: null,
-    };
+
+  // Split by newlines or semicolon / bullet lists
+  const lines = cleaned
+    .split(/\r?\n+/)
+    .map((line) => line.replace(/^[\s*•\-–—\d.)]+/, "").trim())
+    .filter(Boolean);
+
+  if (lines.length > 0) {
+    return lines;
   }
-  if (name.includes("opportunity")) {
-    return {
-      dot: "border-[3px] border-orange-500 text-orange-500 bg-white dark:bg-card",
-      line: "bg-orange-400 dark:bg-orange-600",
-      pill: "bg-orange-500 text-white shadow-2xs",
-      icon: null,
-    };
-  }
-  if (name.includes("won") || name.includes("sales")) {
-    return {
-      dot: "bg-[#67B239] text-white border-0",
-      line: "bg-[#67B239]",
-      pill: "bg-[#67B239] text-white shadow-2xs",
-      icon: Star,
-    };
-  }
-  if (name.includes("dnp")) {
-    return {
-      dot: "border-[3px] border-amber-500 text-amber-500 bg-white dark:bg-card",
-      line: "bg-amber-400 dark:bg-amber-600",
-      pill: "bg-amber-500 text-white shadow-2xs",
-      icon: null,
-    };
-  }
-  if (name.includes("switched")) {
-    return {
-      dot: "border-[3px] border-purple-600 text-purple-600 bg-white dark:bg-card",
-      line: "bg-purple-500 dark:bg-purple-600",
-      pill: "bg-purple-600 text-white shadow-2xs",
-      icon: null,
-    };
-  }
-  if (name.includes("invalid")) {
-    return {
-      dot: "border-[3px] border-rose-600 text-rose-600 bg-white dark:bg-card",
-      line: "bg-rose-500 dark:bg-rose-600",
-      pill: "bg-rose-600 text-white shadow-2xs",
-      icon: null,
-    };
-  }
-  if (name.includes("not_interested") || name.includes("not interested")) {
-    return {
-      dot: "border-[3px] border-slate-600 text-slate-600 bg-white dark:bg-card",
-      line: "bg-slate-500 dark:bg-slate-600",
-      pill: "bg-slate-600 text-white shadow-2xs",
-      icon: null,
-    };
-  }
-  if (name.includes("denied")) {
-    return {
-      dot: "border-[3px] border-red-700 text-red-700 bg-white dark:bg-card",
-      line: "bg-red-600 dark:bg-red-700",
-      pill: "bg-red-700 text-white shadow-2xs",
-      icon: null,
-    };
-  }
-  return {
-    dot: "border-[3px] border-indigo-500 text-indigo-500 bg-white dark:bg-card",
-    line: "bg-indigo-400 dark:bg-indigo-600",
-    pill: "bg-indigo-600 text-white shadow-2xs",
-    icon: null,
-  };
+
+  return [cleaned];
 }
 
 export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewStageDialogProps) {
-  const [selectedNoteTarget, setSelectedNoteTarget] = useState<{
-    stageName: string;
-    note: string;
-    date: string;
-  } | null>(null);
   const [deleteHistoryTarget, setDeleteHistoryTarget] = useState<{
     id: string;
     stageName: string;
@@ -185,22 +145,20 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
     return "Graphics Design";
   })();
 
-  // Build full chronological timeline items
-  const initialItem = {
+  // 1. Initial creation entry
+  const initialNoteArray = parseNotesToArray(prospect.notes || "Lead created");
+  const initialItem: TimelineItem = {
     id: `initial-${prospect.id}`,
     date: prospect.created_at,
     stageName: "Prospect",
-    fromStageName: null as string | null,
-    note: prospect.notes || "Lead created",
+    fromStageName: null,
+    noteArray: initialNoteArray.length > 0 ? initialNoteArray : ["Lead created"],
     actor: prospect.creator_name || "System",
     actorAvatar: prospect.creator_avatar || null,
   };
 
-  const sortedHistory = [...historyEntries].sort(
-    (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime(),
-  );
-
-  const historyItems = sortedHistory.map((h) => {
+  // 2. Map history entries
+  const historyItems: TimelineItem[] = historyEntries.map((h) => {
     let rawName = h.to_stage_name;
     if (!rawName || rawName === "Stage Update") {
       rawName = formatStageSlugOrName(h.to_stage_id);
@@ -210,13 +168,14 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
     }
     const finalName = rawName === "New Lead" || rawName === "new_lead" ? "Prospect" : rawName;
     const fromName = h.from_stage_name ? formatStageSlugOrName(h.from_stage_name) : null;
+    const parsedNotes = parseNotesToArray(h.note);
 
     return {
       id: h.id,
       date: h.changed_at,
       stageName: finalName,
       fromStageName: fromName && fromName !== finalName ? fromName : null,
-      note: h.note || null,
+      noteArray: parsedNotes.length > 0 ? parsedNotes : [`Stage transitioned to ${finalName}`],
       actor: h.changed_by_name || prospect.creator_name || "System",
       actorAvatar:
         h.changed_by_avatar ||
@@ -230,17 +189,21 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
       Math.abs(new Date(item.date).getTime() - new Date(prospect.created_at).getTime()) < 1000,
   );
 
-  // Render all multi-stage history items even if same stage repeats
-  const timelineItems = hasDuplicateInitial ? historyItems : [initialItem, ...historyItems];
+  const rawCombined = hasDuplicateInitial ? historyItems : [initialItem, ...historyItems];
+
+  // Sort descending: newest / active item at index 0 (Top), oldest at the bottom
+  const timelineItems = [...rawCombined].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+  );
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           hideClose
-          className="sm:max-w-2xl max-h-[92vh] overflow-y-auto p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xl bg-white dark:bg-card"
+          className="sm:max-w-2xl max-h-[92vh] overflow-y-auto p-4 sm:p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xl bg-white dark:bg-card"
         >
-          {/* Modern Header */}
+          {/* Header Section */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <div className="size-11 rounded-full bg-slate-100 dark:bg-slate-800 text-orange-600 dark:text-orange-400 font-bold flex items-center justify-center shrink-0 border border-slate-200/90 dark:border-slate-700 shadow-2xs mt-0.5 overflow-hidden">
@@ -283,7 +246,7 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
             </Button>
           </div>
 
-          {/* Minimal Meta Card: Phone, Service, Artist, Website */}
+          {/* Minimal Contact Info Bar */}
           <div className="mt-2.5 bg-slate-50/80 dark:bg-slate-900/50 rounded-xl p-2.5 border border-slate-200/70 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
             <div className="flex items-center gap-2">
               <Phone className="size-3.5 text-slate-400 shrink-0" />
@@ -325,8 +288,8 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
 
           <div className="my-2.5 border-t border-slate-200/80 dark:border-slate-800" />
 
-          {/* List or Chat Style Stage History Activity Feed */}
-          <div className="space-y-2.5 my-3">
+          {/* Activity Section Header */}
+          <div className="space-y-2.5 my-2">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
@@ -344,92 +307,79 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
               </span>
             </div>
 
+            {/* Redesigned Clean Vertical Tracking Timeline (Image 2 Match) */}
             <ScrollArea className="max-h-95 sm:max-h-105 pr-2.5">
-              <div className="relative pl-6 space-y-4 py-2">
-                {/* Continuous Vertical Timeline Thread Connector */}
-                <div className="absolute left-4.25 top-4 bottom-4 w-0.5 bg-slate-200 dark:bg-slate-800" />
-
+              <div className="py-2 pl-1 pr-1 space-y-6">
                 {timelineItems.map((item, idx) => {
-                  const rawStageName = item.stageName;
-                  const stageDisplayName =
-                    !rawStageName ||
-                    rawStageName.toLowerCase() === "new lead" ||
-                    rawStageName.toLowerCase() === "new_lead"
-                      ? "Prospect"
-                      : rawStageName;
-
-                  const style = getStageColorStyle(stageDisplayName);
-                  const IconComp = style.icon;
-                  const initials = (item.actor || "U")
-                    .split(" ")
-                    .map((n: string) => n[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase();
-
+                  const isLatest = idx === 0;
+                  const isLast = idx === timelineItems.length - 1;
                   const isInitial = item.id.startsWith("initial-");
+                  const stageDisplayName = item.stageName || "Prospect";
 
                   return (
-                    <div key={item.id || idx} className="relative flex items-start gap-3 group">
-                      {/* Left User Avatar Node on Timeline */}
-                      <div className="relative z-10 shrink-0 -ml-6">
-                        <Avatar className="size-9 rounded-full ring-2 ring-white dark:ring-card shadow-xs border border-slate-200/90 dark:border-slate-700">
-                          {item.actorAvatar ? (
-                            <AvatarImage
-                              src={item.actorAvatar}
-                              alt={item.actor}
-                              className="size-full object-cover"
-                            />
-                          ) : null}
-                          <AvatarFallback className="font-bold text-[11px] bg-[#0a2e5c]/10 text-[#0a2e5c] dark:bg-emerald-950/60 dark:text-emerald-300">
-                            {initials}
-                          </AvatarFallback>
-                        </Avatar>
+                    <div key={item.id || idx} className="relative flex items-start group">
+                      {/* 1. Left Date Column (e.g., 10-26) */}
+                      <div className="w-14 sm:w-16 text-right shrink-0 pr-3 sm:pr-4 pt-0.5">
+                        <span
+                          className={cn(
+                            "text-xs sm:text-sm font-medium tracking-tight",
+                            isLatest
+                              ? "text-purple-600 dark:text-purple-400 font-semibold"
+                              : "text-slate-400 dark:text-slate-500",
+                          )}
+                        >
+                          {format(new Date(item.date), "MM-dd")}
+                        </span>
                       </div>
 
-                      {/* Right Chat / Message Card */}
-                      <div className="flex-1 min-w-0 bg-slate-50/90 dark:bg-slate-900/60 rounded-2xl p-3 sm:p-3.5 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:shadow-xs transition-shadow space-y-2">
-                        {/* Header Row: User Name, Stage Badge, Date & Actions */}
-                        <div className="flex flex-wrap items-center justify-between gap-1.5 pb-1.5 border-b border-slate-200/60 dark:border-slate-800/60">
-                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 truncate">
-                              {item.actor}
-                            </span>
+                      {/* 2. Middle Node & Vertical Dashed Line Column */}
+                      <div className="relative flex flex-col items-center shrink-0 w-5">
+                        {/* Connecting dashed vertical line */}
+                        {!isLast && (
+                          <div className="absolute top-3.5 bottom-0 w-0 border-l-2 border-dashed border-slate-200 dark:border-slate-800 -mb-6" />
+                        )}
 
-                            {/* Stage Transition Badge */}
-                            <div className="flex items-center gap-1.5">
-                              {item.fromStageName && item.fromStageName !== stageDisplayName ? (
-                                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                                  {item.fromStageName}
-                                  <ArrowRight className="size-3 text-slate-400" />
-                                </span>
-                              ) : null}
-                              <span
-                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-2xs flex items-center gap-1 ${style.pill}`}
-                              >
-                                {IconComp ? <IconComp className="size-2.5 fill-current" /> : null}
-                                {stageDisplayName}
+                        {/* Node Dot (Top active has purple outer ring/halo, previous are solid neutral) */}
+                        {isLatest ? (
+                          <div className="relative z-10 size-4 rounded-full bg-purple-600 dark:bg-purple-500 ring-4 ring-purple-100 dark:ring-purple-950/70 shrink-0 mt-0.5 shadow-xs" />
+                        ) : (
+                          <div className="relative z-10 size-3 rounded-full bg-slate-400 dark:bg-slate-500 shrink-0 mt-1" />
+                        )}
+                      </div>
+
+                      {/* 3. Right Content Column (Title, Time, and Note Array) */}
+                      <div className="flex-1 min-w-0 pl-3 sm:pl-4">
+                        {/* Stage Title and Time Row */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                            <h4
+                              className={cn(
+                                "text-sm sm:text-base tracking-tight leading-snug",
+                                isLatest
+                                  ? "text-purple-700 dark:text-purple-300 font-semibold"
+                                  : "text-slate-800 dark:text-slate-200 font-medium",
+                              )}
+                            >
+                              {stageDisplayName}
+                            </h4>
+                            {item.fromStageName && item.fromStageName !== stageDisplayName && (
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1 font-normal">
+                                <ArrowRight className="size-2.5" />
+                                from {item.fromStageName}
                               </span>
-                            </div>
+                            )}
                           </div>
 
-                          {/* Date, Time & Delete Action */}
-                          <div className="flex items-center gap-1.5 ml-auto text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                            <span className="flex items-center gap-1 shrink-0">
-                              <CalendarIcon className="size-3 text-slate-400" />
-                              {format(new Date(item.date), "MMM d, yyyy")}
-                            </span>
-                            <span className="text-slate-300 dark:text-slate-700">•</span>
-                            <span className="flex items-center gap-1 shrink-0">
-                              <Clock className="size-3 text-slate-400" />
-                              {format(new Date(item.date), "h:mm a")}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-xs sm:text-sm text-slate-400 dark:text-slate-500 font-normal">
+                              {format(new Date(item.date), "HH:mm")}
                             </span>
 
                             {!isInitial && (
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="size-6 text-slate-400 hover:text-red-600 rounded-full cursor-pointer ml-0.5 transition-colors"
+                                className="size-5 text-slate-300 hover:text-red-600 dark:text-slate-600 dark:hover:text-red-400 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
                                 title="Delete stage entry"
                                 onClick={() =>
                                   setDeleteHistoryTarget({
@@ -438,43 +388,35 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
                                   })
                                 }
                               >
-                                <Trash2 className="size-3.5" />
+                                <Trash2 className="size-3" />
                               </Button>
                             )}
                           </div>
                         </div>
 
-                        {/* Note / Message Body */}
-                        {item.note && item.note.trim() ? (
-                          <div className="bg-white dark:bg-card rounded-xl p-2.5 border border-slate-200/70 dark:border-slate-800/80 text-xs text-slate-700 dark:text-slate-300 shadow-2xs font-normal">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                                <FileText className="size-3 text-amber-500" /> Notes / Details
-                              </span>
-                              {item.note.length > 120 && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setSelectedNoteTarget({
-                                      stageName: item.stageName,
-                                      note: item.note || "",
-                                      date: item.date,
-                                    })
-                                  }
-                                  className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                                >
-                                  View Full
-                                </button>
-                              )}
-                            </div>
-                            <p className="whitespace-pre-wrap leading-relaxed text-xs">
-                              {item.note}
-                            </p>
+                        {/* Note Array Description List */}
+                        {item.noteArray.length > 0 ? (
+                          <div className="mt-0.5 space-y-0.5">
+                            {item.noteArray.map((noteText, nIdx) => (
+                              <p
+                                key={nIdx}
+                                className="text-xs sm:text-sm text-slate-400 dark:text-slate-400 leading-relaxed font-normal"
+                              >
+                                {item.noteArray.length > 1 ? `• ${noteText}` : noteText}
+                              </p>
+                            ))}
                           </div>
                         ) : (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 italic">
-                            Stage transitioned to {stageDisplayName}
+                          <p className="text-xs sm:text-sm text-slate-400/80 dark:text-slate-500 italic mt-0.5">
+                            Stage updated to {stageDisplayName}
                           </p>
+                        )}
+
+                        {/* Subtle Actor Attribution */}
+                        {item.actor && item.actor !== "System" && (
+                          <span className="text-[11px] text-slate-400/70 dark:text-slate-500/70 mt-0.5 block font-normal">
+                            by {item.actor}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -524,7 +466,7 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
             </div>
           </div>
 
-          {/* Footer Actions */}
+          {/* Footer Close Button */}
           <div className="mt-3 flex justify-end">
             <Button
               onClick={() => onOpenChange(false)}
@@ -536,58 +478,7 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
         </DialogContent>
       </Dialog>
 
-      {/* Full Note View Dialog Modal */}
-      <Dialog
-        open={Boolean(selectedNoteTarget)}
-        onOpenChange={(open) => {
-          if (!open) setSelectedNoteTarget(null);
-        }}
-      >
-        <DialogContent
-          hideClose
-          className="sm:max-w-md p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xl bg-white dark:bg-card"
-        >
-          <DialogHeader className="flex flex-row items-center justify-between pb-2.5 border-b border-slate-200/80 dark:border-slate-800">
-            <div className="flex items-center gap-2.5">
-              <div className="size-8.5 rounded-xl bg-slate-900 text-white font-bold flex items-center justify-center shrink-0 shadow-2xs">
-                <Pencil className="size-4" />
-              </div>
-              <div>
-                <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  {!selectedNoteTarget?.stageName ||
-                  selectedNoteTarget.stageName.toLowerCase() === "new lead" ||
-                  selectedNoteTarget.stageName.toLowerCase() === "new_lead"
-                    ? "Prospect"
-                    : selectedNoteTarget.stageName}
-                </DialogTitle>
-                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-                  {selectedNoteTarget?.date
-                    ? format(new Date(selectedNoteTarget.date), "MMMM d, yyyy (h:mm a)")
-                    : "Full Note Details"}
-                </p>
-              </div>
-            </div>
-          </DialogHeader>
-
-          <div className="my-3 bg-slate-50/90 dark:bg-slate-900/60 rounded-xl p-4 border border-slate-200/80 dark:border-slate-800 max-h-[50vh] overflow-y-auto">
-            <p className="text-xs font-bold text-slate-900 dark:text-slate-100 mb-1.5">Notes:</p>
-            <div className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-relaxed whitespace-pre-wrap">
-              {selectedNoteTarget?.note}
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-1">
-            <Button
-              onClick={() => setSelectedNoteTarget(null)}
-              className="h-8.5 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer shadow-2xs"
-            >
-              Close Note
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Stage History Entry Confirmation Modal (Double-Click Triggered) */}
+      {/* Delete Stage History Entry Confirmation Modal */}
       <AlertDialog
         open={Boolean(deleteHistoryTarget)}
         onOpenChange={(open: boolean) => {
@@ -615,7 +506,7 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
             </AlertDialogCancel>
             <Button
               type="button"
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 hover:bg-red-700 text-white cursor-pointer"
               disabled={deleteHistoryMutation.isPending}
               onClick={() => {
                 if (deleteHistoryTarget) {

@@ -262,15 +262,13 @@ Welcome to the **Brandium CRM** repository.
 - **Workspace Scratch File Cleanup & Tailwind v4 Unknown At-Rule Inspection**:
   - Never retain temporary migration/fetch helper scripts (`.cjs`, `.js`) in workspace project root or `scratch/` folders inside the codebase; always remove them upon task completion to keep linter diagnostics 100% clean.
 
-- **Prospect Stage History List & Chat Activity Stream Standard**:
-  - In `src/components/view-stage-dialog.tsx`, prospect stage transitions are presented as a modern vertical list/chat style activity stream, replacing legacy horizontal step cards.
-  - Each activity item renders:
-    - **User Avatar**: Display circular avatar (`Avatar`, `AvatarImage`, `AvatarFallback`) resolved by user ID via `changed_by` or creator user record, falling back to clean phonetic initials (e.g., `MA`).
-    - **User Name**: Explicitly renders the changer/creator user full name (`item.actor`).
-    - **Stage Transition Indicator**: Distinct stage pill badge with dynamic color scheme and from $\rightarrow$ to arrow (`New Lead → Follow-up`).
-    - **Date & Time Stamp**: Formatted with calendar and clock indicators (`MMM d, yyyy · h:mm a`).
-    - **Note Speech Bubble**: Notes entered during stage transitions are rendered inside clean card bubbles with whitespace preservation and expand modal for extended requirements.
-    - **Continuous Connector Line**: A vertical timeline thread connects avatar nodes down the feed.
+- **Prospect Stage History Vertical Tracking Timeline & Note Array Standard**:
+  - In `src/components/view-stage-dialog.tsx`, prospect stage transitions are presented as a sleek, vertical logistics/tracking style timeline matching modern delivery/audit tracking interfaces:
+    - **Date Column (Left)**: Renders short date (e.g. `10-26`, `09-26` via `format(new Date(item.date), "MM-dd")`). Topmost / active transition displays highlighted in purple (`text-purple-600 dark:text-purple-400 font-semibold`), while previous transitions render in neutral slate (`text-slate-400 dark:text-slate-500 font-normal`).
+    - **Timeline Track & Node (Middle)**: A continuous dashed line (`border-l-2 border-dashed border-slate-200 dark:border-slate-800`) connects all steps. Topmost / latest step renders a glowing purple circular node with outer halo ring (`size-4 bg-purple-600 ring-4 ring-purple-100 dark:ring-purple-950/70 shadow-xs`), while completed/earlier steps render clean solid slate dots (`size-3 bg-slate-400 dark:bg-slate-500`).
+    - **Stage Title & Time (Right Header)**: Topmost step title is styled in `text-purple-700 dark:text-purple-300 font-semibold`, while previous stages render in `text-slate-800 dark:text-slate-200 font-medium`. Time is right-aligned in `text-slate-400 font-normal` (`HH:mm`).
+    - **Note Array Rendering (`parseNotesToArray`)**: Automatically parses single-string, multiline, bulleted, and JSON notes into a clean `string[]` array. Each note item is rendered as a clean description line (`text-slate-400 dark:text-slate-400 text-sm leading-relaxed`) underneath the title, with subtle actor attribution (`by [Name]`).
+    - **Descending Chronological Order**: Timeline entries are sorted newest at the top (Index 0) down to initial prospect creation at the bottom.
   - In `src/lib/stages.ts`, `stageHistoryQuery` joins `users` and `profiles` tables on `psh.changed_by` to deliver `changed_by_name` and `changed_by_avatar` dynamically from MySQL.
   - Tailwind CSS v4 custom directives (`@source`, `@custom-variant`, `@theme`) trigger IDE CSS language server warnings by default. Configure `"css.lint.unknownAtRules": "ignore"` in `.vscode/settings.json` to silence false positive warnings.
 
