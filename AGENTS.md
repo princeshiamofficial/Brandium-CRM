@@ -502,7 +502,7 @@ Welcome to the **Brandium CRM** repository.
     - **Targeted Stage Notes**: By default, notes attach to the active/latest stage, or users can click the `+` icon on any specific timeline stage card to target that stage directly.
     - **Multiple Notes Array with Date, Time & Author**: Notes are parsed via `parseNotesToItems()` as structured `StageNoteItem` objects (`text`, `createdAt`, `createdByName`, `createdByAvatar`). Each note displays its creation date and time (`MM-dd h:mm a`) along with author attribution (`by Name`) directly below the note text.
     - **Note Removal**: Hovering over any note item reveals a subtle delete `X` button with an `AlertDialog` confirmation, enabling complete CRUD control over individual notes in the array.
-    - **Database Sync**: Functions `addStageNote` and `deleteStageNote` persist updates directly to `prospect_stage_history.note` and sync with `prospects.notes` in MySQL.
+    - **Database Sync & Timestamp Preservation**: Functions `addStageNote` and `deleteStageNote` persist updates directly to `prospect_stage_history.note` and sync with `prospects.notes` in MySQL. When notes are appended or modified, original stage transition `changed_at` timestamps and existing note `createdAt` timestamps are strictly preserved without being overwritten.
 
 ## Agent skills
 
