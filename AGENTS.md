@@ -504,10 +504,12 @@ Welcome to the **Brandium CRM** repository.
     - **Note Removal**: Hovering over any note item reveals a subtle delete `X` button with an `AlertDialog` confirmation, enabling complete CRUD control over individual notes in the array.
     - **Database Sync & Timestamp Preservation**: Functions `addStageNote` and `deleteStageNote` persist updates directly to `prospect_stage_history.note` and sync with `prospects.notes` in MySQL. When notes are appended or modified, original stage transition `changed_at` timestamps and existing note `createdAt` timestamps are strictly preserved without being overwritten.
 
-- **Prospect Card Latest Note Resolution Standard**:
-  - In `src/lib/prospects.ts` and `src/app/(authenticated)/prospects/page.tsx`, the prospect card torn paper sticky note banner always renders the absolute latest note chronologically added for that prospect across both `prospects.notes` and all `prospect_stage_history` transition notes.
-  - `extractLatestProspectNote(prospectNotes, prospectCreatedAt, historyEntries)` aggregates all note items, parses them via `parseNotesToItems()`, sorts them by ascending `createdAt` timestamp, and extracts the newest note text with author/tag sanitation.
-  - `prospectsQuery` automatically executes a fast relational lookup for all non-empty stage history notes and resolves the latest note for every card, ensuring instant live updates whenever new notes are appended or deleted in `ViewStageDialog`.
+- **Follow-up Tasks Page Architecture & Management Standard**:
+  - On `/follow-ups` (`src/app/(authenticated)/follow-ups/page.tsx`), follow-up tasks and client reminder calls are presented with Brandium CRM's premium design system:
+    - **Top KPI Cards**: 5 pastel summary cards (Total Tasks, Pending Calls, Completed, Overdue, Cancelled) driven by `followUpSummaryQuery`.
+    - **Dual Layout**: Seamless toggle between Cards Grid view (with prospect avatar, business, clickable phone, due datetime, "Chira Kagoj" torn paper note, and quick action buttons) and Table view (high-density scanning with Radix `<Table>`).
+    - **Live Filters & Search**: Real-time filtering by text search, status dropdown (`pending`, `overdue`, `completed`, `cancelled`), agent selector, and single due date picker popover.
+    - **Modal Integration**: Complete support for `FollowUpDialog` (scheduling new follow-ups) and `FollowUpDetailModal` (inspecting prospect timeline, making calls, updating status, and chaining next follow-ups).
 
 ## Agent skills
 

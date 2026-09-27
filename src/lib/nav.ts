@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   Users2,
   CalendarDays,
+  CalendarClock,
   MessageSquarePlus,
   MessagesSquare,
   Receipt,
@@ -40,6 +41,7 @@ export const navGroups: NavGroup[] = [
       { title: "Projects", url: "/projects", icon: FolderKanban },
       { title: "Prospects", url: "/prospects", icon: Users2 },
       { title: "Meetings", url: "/meetings", icon: CalendarDays },
+      { title: "Follow-ups", url: "/follow-ups", icon: CalendarClock },
     ],
   },
   {
