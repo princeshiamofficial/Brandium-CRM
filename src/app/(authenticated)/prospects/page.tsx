@@ -1030,20 +1030,6 @@ function ProspectsPageContent() {
                             <DropdownMenuItem
                               className="flex items-center gap-2 cursor-pointer w-full text-[13px] font-normal px-3 py-1.5 rounded-[5px]"
                               onClick={() => {
-                                toggleQualifiedMutation.mutate({
-                                  id: p.id,
-                                  isQualified: !isQual,
-                                });
-                              }}
-                            >
-                              <Star
-                                className={`size-3.5 shrink-0 ${isQual ? "text-amber-500 fill-amber-500" : "text-amber-500"}`}
-                              />
-                              <span>{isQual ? "Unmark Qualified" : "Mark as Qualified"}</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="flex items-center gap-2 cursor-pointer w-full text-[13px] font-normal px-3 py-1.5 rounded-[5px]"
-                              onClick={() => {
                                 setViewStageProspect(p);
                                 setViewStageOpen(true);
                               }}
@@ -1187,20 +1173,6 @@ function ProspectsPageContent() {
                         >
                           <Pencil className="size-3.5 text-[#1B84FF] shrink-0" />
                           <span>Edit</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="flex items-center gap-2 cursor-pointer w-full text-[14px] font-normal leading-5.25 text-[#707070] dark:text-slate-400 focus:text-amber-600 focus:bg-amber-50 dark:focus:bg-amber-950/40 rounded-[6px] px-3.75 py-[6.4px] transition-colors"
-                          onClick={() => {
-                            toggleQualifiedMutation.mutate({
-                              id: p.id,
-                              isQualified: !isQual,
-                            });
-                          }}
-                        >
-                          <Star
-                            className={`size-3.5 shrink-0 ${isQual ? "text-amber-500 fill-amber-500" : "text-amber-500"}`}
-                          />
-                          <span>{isQual ? "Unmark Qualified" : "Mark as Qualified"}</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="flex items-center gap-2 cursor-pointer w-full text-[14px] font-normal leading-5.25 text-[#707070] dark:text-slate-400 focus:text-slate-900 dark:focus:text-slate-100 focus:bg-slate-50 dark:focus:bg-slate-800 rounded-[6px] px-3.75 py-[6.4px] transition-colors"
