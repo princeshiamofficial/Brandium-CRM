@@ -4,9 +4,12 @@ import { runMySQLQuery } from "@/lib/mysql-api";
 export type DashboardMetrics = {
   total_prospects: number;
   active_prospects: number;
+  qualified_leads: number;
+  not_qualified_leads: number;
   won_sales: number;
   pending_tasks: number;
   follow_up_stage: number;
+  meetings_count: number;
   total_sales: number;
   paid_sales: number;
   outstanding_amount: number;
@@ -39,9 +42,12 @@ export const STAGE_GROUPS = [
 const EMPTY_METRICS: DashboardMetrics = {
   total_prospects: 0,
   active_prospects: 0,
+  qualified_leads: 0,
+  not_qualified_leads: 0,
   won_sales: 0,
   pending_tasks: 0,
   follow_up_stage: 0,
+  meetings_count: 0,
   total_sales: 0,
   paid_sales: 0,
   outstanding_amount: 0,
@@ -183,8 +189,40 @@ export const dashboardMetricsQuery = (
       let wonSales = 0;
       let followUp = 0;
       let pendingTasks = 0;
+      let qualifiedLeads = 0;
+      let notQualifiedLeads = 0;
 
       for (const p of all) {
+        const stageName = String(p["stage_name"] || "")
+          .toLowerCase()
+          .trim();
+        const stageGroup = String(p["stage_group"] || "")
+          .toLowerCase()
+          .trim();
+        const isQual = Boolean(p["is_qualified"]) || Number(p["is_qualified"]) === 1;
+
+        if (
+          isQual ||
+          stageName.includes("qualif") ||
+          stageName.includes("opportunity") ||
+          stageName.includes("proposal")
+        ) {
+          qualifiedLeads++;
+        }
+
+        if (
+          stageGroup === "lost" ||
+          stageGroup === "unreachable" ||
+          stageName.includes("not-interested") ||
+          stageName.includes("not interested") ||
+          stageName.includes("dnp") ||
+          stageName.includes("switched") ||
+          stageName.includes("invalid") ||
+          stageName.includes("lost")
+        ) {
+          notQualifiedLeads++;
+        }
+
         const bucket = getProspectBucket({
           stage_name: p["stage_name"] as string,
           stage_group: p["stage_group"] as string,
@@ -199,6 +237,23 @@ export const dashboardMetricsQuery = (
         } else if (bucket === "new_prospects") {
           newProspects++;
         }
+      }
+
+      let meetingsCount = 0;
+      try {
+        const targetUser = agentFilter || (!isAdmin && userId ? userId : undefined);
+        const meetingSql = targetUser
+          ? `SELECT COUNT(*) AS total_meetings FROM meetings WHERE (created_by = '${targetUser}' OR assigned_user_id = '${targetUser}');`
+          : "SELECT COUNT(*) AS total_meetings FROM meetings;";
+        const meetingRes = await runMySQLQuery<Record<string, unknown>[]>(meetingSql);
+        meetingsCount = Number(meetingRes?.data?.[0]?.["total_meetings"] || 0);
+      } catch {
+        // Fallback to prospects in meeting stage
+        meetingsCount = all.filter((p) =>
+          String(p["stage_name"] || "")
+            .toLowerCase()
+            .includes("meeting"),
+        ).length;
       }
 
       let totalSales = 0;
@@ -219,9 +274,12 @@ export const dashboardMetricsQuery = (
       return {
         total_prospects: totalProspects,
         active_prospects: newProspects,
+        qualified_leads: qualifiedLeads,
+        not_qualified_leads: notQualifiedLeads,
         won_sales: wonSales,
         pending_tasks: pendingTasks,
         follow_up_stage: followUp,
+        meetings_count: meetingsCount,
         total_sales: totalSales,
         paid_sales: paidSales,
         outstanding_amount: Math.max(0, totalSales - paidSales),

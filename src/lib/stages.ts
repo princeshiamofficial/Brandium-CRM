@@ -27,6 +27,7 @@ export type StageHistoryEntry = {
   from_stage_name: string | null;
   to_stage_name: string | null;
   changed_by_name: string | null;
+  changed_by_avatar?: string | null;
 };
 
 export const DEFAULT_STAGE_THEMES: Record<string, { color: string; icon: string }> = {
@@ -48,10 +49,18 @@ export function resolveStageColor(name?: string | null, customColor?: string | n
     return customColor;
   }
   const norm = (name || "").toLowerCase().replace(/[-_\s()]/g, "");
+  if (norm.includes("delivered") || norm.includes("won") || norm.includes("sale")) return "#16A34A";
+  if (norm.includes("videographycomplete") || norm.includes("videographycompleted") || (norm.includes("video") && norm.includes("complete"))) return "#10B981";
+  if (norm.includes("projectstart") || norm.includes("started") || norm.includes("start")) return "#3B82F6";
+  if (norm.includes("script") || norm.includes("writer")) return "#8B5CF6";
+  if (norm.includes("content") || norm.includes("planner")) return "#EC4899";
+  if (norm.includes("videographer") || norm.includes("videography")) return "#F59E0B";
+  if (norm.includes("videoeditor") || norm.includes("editor")) return "#6366F1";
+  if (norm.includes("market") || norm.includes("marketing")) return "#06B6D4";
+  if (norm.includes("developer") || norm.includes("dev")) return "#0284C7";
   if (norm.includes("prospect") || norm.includes("lead")) return "#2563EB";
   if (norm.includes("follow")) return "#D97706";
   if (norm.includes("opportunity")) return "#8B5CF6";
-  if (norm.includes("won") || norm.includes("sale")) return "#16A34A";
   if (norm.includes("dnp") || norm.includes("didnotpick")) return "#EA580C";
   if (norm.includes("switchedoff") || norm.includes("switchoff")) return "#E11D48";
   if (norm.includes("invalid") || norm.includes("wrong")) return "#DC2626";
@@ -67,10 +76,18 @@ export function resolveStageIcon(name?: string | null, customIcon?: string | nul
     return customIcon;
   }
   const norm = (name || "").toLowerCase().replace(/[-_\s()]/g, "");
+  if (norm.includes("delivered") || norm.includes("won") || norm.includes("sale")) return "Trophy";
+  if (norm.includes("videographycomplete") || norm.includes("videographycompleted") || (norm.includes("video") && norm.includes("complete"))) return "CheckCircle2";
+  if (norm.includes("projectstart") || norm.includes("started") || norm.includes("start")) return "PlayCircle";
+  if (norm.includes("script") || norm.includes("writer")) return "FileText";
+  if (norm.includes("content") || norm.includes("planner")) return "Calendar";
+  if (norm.includes("videographer") || norm.includes("videography")) return "Video";
+  if (norm.includes("videoeditor") || norm.includes("editor")) return "Film";
+  if (norm.includes("market") || norm.includes("marketing")) return "Megaphone";
+  if (norm.includes("developer") || norm.includes("dev")) return "Code";
   if (norm.includes("prospect") || norm.includes("lead")) return "UserPlus";
   if (norm.includes("follow")) return "CalendarClock";
   if (norm.includes("opportunity")) return "Sparkles";
-  if (norm.includes("won") || norm.includes("sale")) return "Trophy";
   if (norm.includes("dnp") || norm.includes("didnotpick")) return "PhoneMissed";
   if (norm.includes("switchedoff") || norm.includes("switchoff")) return "PowerOff";
   if (norm.includes("invalid") || norm.includes("wrong")) return "PhoneOff";
@@ -273,9 +290,17 @@ export const stageHistoryQuery = (prospectId: string) =>
       // 1. Direct query from local MySQL database `brandium_crm.prospect_stage_history`
       try {
         const mysqlRes = await runMySQLQuery<Record<string, unknown>[]>(
-          `SELECT psh.*, st.name AS to_stage_name 
+          `SELECT 
+            psh.*, 
+            st.name AS to_stage_name,
+            st_from.name AS from_stage_name,
+            COALESCE(prof.full_name, u.name) AS changed_by_name,
+            COALESCE(prof.avatar_url, u.avatar_url) AS changed_by_avatar
            FROM \`prospect_stage_history\` psh 
-           LEFT JOIN \`stages\` st ON psh.to_stage_id = st.id 
+           LEFT JOIN \`stages\` st ON (psh.to_stage_id = st.id OR psh.to_stage_id = REPLACE(st.id, '-', '_') OR psh.to_stage_id = st.name)
+           LEFT JOIN \`stages\` st_from ON (psh.from_stage_id = st_from.id OR psh.from_stage_id = REPLACE(st_from.id, '-', '_') OR psh.from_stage_id = st_from.name)
+           LEFT JOIN \`users\` u ON psh.changed_by = u.id
+           LEFT JOIN \`profiles\` prof ON psh.changed_by = prof.id
            WHERE psh.prospect_id = ? 
            ORDER BY psh.changed_at DESC;`,
           [prospectId],
@@ -295,12 +320,17 @@ export const stageHistoryQuery = (prospectId: string) =>
         const toStageId = (row["to_stage_id"] as string) ?? null;
         const changedBy = row["changed_by"] as string | undefined;
 
-        const resolvedFrom = fromStageId
-          ? stageMap.get(fromStageId) || formatStageSlugOrName(fromStageId)
-          : null;
-        const resolvedTo = toStageId
-          ? stageMap.get(toStageId) || formatStageSlugOrName(toStageId)
-          : null;
+        const resolvedFrom =
+          (row["from_stage_name"] as string) ||
+          (fromStageId ? stageMap.get(fromStageId) || formatStageSlugOrName(fromStageId) : null);
+        const resolvedTo =
+          (row["to_stage_name"] as string) ||
+          (toStageId ? stageMap.get(toStageId) || formatStageSlugOrName(toStageId) : null);
+        const changedByName =
+          (row["changed_by_name"] as string) ||
+          (changedBy ? nameById.get(changedBy) : null) ||
+          null;
+        const changedByAvatar = (row["changed_by_avatar"] as string) || null;
 
         return {
           id: String(row["id"]),
@@ -312,7 +342,8 @@ export const stageHistoryQuery = (prospectId: string) =>
           changed_at: String(row["changed_at"] ?? new Date().toISOString()),
           from_stage_name: resolvedFrom ?? null,
           to_stage_name: resolvedTo ?? null,
-          changed_by_name: changedBy ? nameById.get(changedBy) : undefined,
+          changed_by_name: changedByName,
+          changed_by_avatar: changedByAvatar,
         };
       }) as StageHistoryEntry[];
 

@@ -100,6 +100,9 @@ Welcome to the **Brandium CRM** repository.
 - **Tailwind CSS v4 Utility Standard Conversions**:
   - Replace arbitrary bracket sizing like `min-w-[8rem]` with built-in
     Tailwind utilities like `min-w-32`.
+  - Replace arbitrary pixel values with standard utilities (e.g.,
+    `max-h-[380px]` $\rightarrow$ `max-h-95`, `sm:max-h-[420px]` $\rightarrow$ `sm:max-h-105`,
+    `left-[17px]` $\rightarrow$ `left-4.25`).
   - Replace CSS variable bracket syntax like `max-h-[var(--name)]` with
     standard parenthetical syntax `max-h-(--name)`.
   - Replace explicit data attribute brackets like `data-[disabled]:...` with
@@ -258,6 +261,17 @@ Welcome to the **Brandium CRM** repository.
 
 - **Workspace Scratch File Cleanup & Tailwind v4 Unknown At-Rule Inspection**:
   - Never retain temporary migration/fetch helper scripts (`.cjs`, `.js`) in workspace project root or `scratch/` folders inside the codebase; always remove them upon task completion to keep linter diagnostics 100% clean.
+
+- **Prospect Stage History List & Chat Activity Stream Standard**:
+  - In `src/components/view-stage-dialog.tsx`, prospect stage transitions are presented as a modern vertical list/chat style activity stream, replacing legacy horizontal step cards.
+  - Each activity item renders:
+    - **User Avatar**: Display circular avatar (`Avatar`, `AvatarImage`, `AvatarFallback`) resolved by user ID via `changed_by` or creator user record, falling back to clean phonetic initials (e.g., `MA`).
+    - **User Name**: Explicitly renders the changer/creator user full name (`item.actor`).
+    - **Stage Transition Indicator**: Distinct stage pill badge with dynamic color scheme and from $\rightarrow$ to arrow (`New Lead → Follow-up`).
+    - **Date & Time Stamp**: Formatted with calendar and clock indicators (`MMM d, yyyy · h:mm a`).
+    - **Note Speech Bubble**: Notes entered during stage transitions are rendered inside clean card bubbles with whitespace preservation and expand modal for extended requirements.
+    - **Continuous Connector Line**: A vertical timeline thread connects avatar nodes down the feed.
+  - In `src/lib/stages.ts`, `stageHistoryQuery` joins `users` and `profiles` tables on `psh.changed_by` to deliver `changed_by_name` and `changed_by_avatar` dynamically from MySQL.
   - Tailwind CSS v4 custom directives (`@source`, `@custom-variant`, `@theme`) trigger IDE CSS language server warnings by default. Configure `"css.lint.unknownAtRules": "ignore"` in `.vscode/settings.json` to silence false positive warnings.
 
 - **Projects Assigned Team Members & Creator Avatar by User ID Standard**:
@@ -452,8 +466,44 @@ Welcome to the **Brandium CRM** repository.
     3. Automatic fallback to the latest active project from table `projects` (`ORDER BY prj.updated_at DESC, prj.created_at DESC LIMIT 1`), guaranteeing authentic database records render even when visiting demo or placeholder URLs (such as `/projects/12145` or `/projects/id`).
   - Strict TypeScript interface `ProjectRecord` ensures all project attributes (`prospect_id`, `advance_payments`, `updated_at`, `status_history`) are strongly typed without `Record<string, unknown>` property errors.
   - In `prospect_stage_history` queries, select `psh.note AS note` (aligning with the single `note` column in table schema) rather than `COALESCE(psh.note, psh.notes)`.
+- **Order Items Table Unit Price Input & Real-Time Calculation Standard (`ProjectFormDialog`)**:
+  - In `src/app/(authenticated)/projects/page.tsx`, the `Order Items *` table in `ProjectFormDialog` must include an explicit **Unit Price \*** input column between `Quantity *` and `Total Price`:
+    - Columns: `Service *` (w-[45%]), `Quantity *` (w-[15%]), `Unit Price *` (w-[18%]), `Total Price` (w-[18%]), and Delete action (w-[4%]).
+    - Input: `<Input id={`unitPrice-${item.id}`} type="number" min="0" step="0.01" placeholder="0" required ... />` bound to `item.unitPrice`.
+    - In `handleItemChange`, handle `field === "unitPrice"` by updating `updatedItem.unitPrice` and immediately re-calculating `updatedItem.lineItemTotalPrice = quantity * unitPrice`.
+- **Node.js Heap Memory Allocation & Next.js OOM Prevention (`--max-old-space-size=4096`)**:
+  - When compiling extensive Next.js App Router route modules in development mode on Windows, Node.js can exceed default 32-bit/64-bit semi-space heap limits (~800MB - 1.4GB) and trigger `RangeError: Failed to allocate memory` or `FATAL ERROR: Committing semi space failed. Allocation failed - JavaScript heap out of memory`.
+  - Always allocate at least 4GB (4096MB) heap space in `package.json` scripts (`"dev": "node --max-old-space-size=4096 ./node_modules/next/dist/bin/next dev"` and `"build": "node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build"`) to ensure seamless compilation across all dynamic route chunks without crashes.
+
+- **Prospects 7-Card Pipeline Summary Cards Standard**:
+  - In `src/app/(authenticated)/prospects/page.tsx` and `src/lib/prospects.ts`, summary cards represent the 7 core pipeline stages displayed in a responsive grid (`grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7`):
+    1. **All**: `stats.data?.totalProspects`, purple scheme (`pastelPurple`), resets stage and text filters when clicked.
+    2. **Prospect**: `stats.data?.prospectCount`, sky blue scheme (`pastelBlue`), filters to prospect/new lead stage when clicked.
+    3. **Qualified**: `stats.data?.qualifiedLeads`, teal scheme (`pastelTeal`), filters to qualified leads when clicked.
+    4. **Follow-Up**: `stats.data?.followUps`, amber scheme (`pastelYellow`), filters to follow-up stage when clicked.
+    5. **Meeting**: `stats.data?.meetingCount`, indigo scheme (`pastelIndigo`), filters to meeting stage when clicked.
+    6. **Won**: `stats.data?.salesWon`, emerald scheme (`pastelEmerald`), filters to sales won stage when clicked.
+    7. **Lost/DNP**: `stats.data?.lostDnpCount`, peach scheme (`pastelPeach`), filters to lost, DNP, or unreachable stages when clicked.
+  - The local `StatCard` preserves the exact visual aesthetic: circular 36-44px icon container, bold number count, label, hint subtext, faint rotated watermark icon in the bottom right, and smooth hover elevation (`hover:scale-[1.02]`).
+
+- **Phantom Git Submodule Resolution & Agent Skill Integration**:
+  - When a skill folder (e.g. `.agents/skills/ui-ux-pro-max`) was previously added as an unmapped gitlink (mode `160000`) without `.gitmodules`, git commands fail with `fatal: no submodule mapping found in .gitmodules for path '...'` or `fatal: Pathspec '...' is in submodule`.
+  - Always clear the stale cached gitlink using `git rm --cached <path>` and add the files directly with `git add <path>` so the skill files and data tables (`data/`, `scripts/`, `references/`) are tracked cleanly as native workspace files.
+  - Exclude Python bytecode (`__pycache__/`, `*.pyc`) in `.gitignore` to prevent generated execution artifacts from cluttering the working tree.
+- **Prospects Page Dual View (Grid / Table), Dynamic Sorting & Export Standards**:
+  - In `src/app/(authenticated)/prospects/page.tsx` and `src/lib/prospects.ts`, the prospects pipeline supports dual layout modes:
+    - **Grid View**: Visually rich Dreamstechnologies card layout featuring avatars, torn paper notes, communication buttons, stage badges, and creator attribution.
+    - **Table View**: High-density scanning table using Radix `<Table>` with contact details, business, phone/email links, service badge, stage badge with color dot, 1-click qualification status toggle, creator attribution, date, and 3-dot dropdown actions.
+  - **Dynamic Sorting**: `sortBy` parameter supports `newest` (`created_at DESC`), `oldest` (`created_at ASC`), `name_asc` (`contact_name ASC`), `name_desc` (`contact_name DESC`), and `updated` (`updated_at DESC`).
+  - **Service Filter & Dark Mode**: Service select filter connects directly to active database services (`servicesQueryOptions`). All input and select elements enforce clean dark mode backgrounds (`dark:bg-slate-900 dark:border-slate-800`).
+  - **Actionable Empty State**: Per UI/UX Pro Max guidelines, empty states render a centered SearchX icon, clear explanation, a "Reset All Filters" action button, and a primary "Add Prospect" action button.
+  - **1-Click Qualification**: Both card and table views provide a 1-click toggle to mark/unmark prospects as Qualified (`is_qualified = 1`), with soft emerald badges (`Star` icon) and instant cache invalidation for `prospects`, `prospects-stats`, and `qualified-leads`.
+- **Next.js Webpack Chunk Mismatch & Dev Server Artifact Conflict Resolution**:
+  - Running `npm run build` while `npm run dev` is running concurrently overwrites the shared `.next` compilation folder on disk, resulting in runtime errors such as `Cannot find module './1331.js'` or `ENOENT: routes-manifest.json`.
+  - When switching between dev and production verification, always stop the active dev server process before running `npm run build`, and restart `npm run dev` afresh after production builds so that Webpack loads fresh in-memory chunk manifests without stale module lookups.
 
 ## Agent skills
+
 
 
 ### Issue tracker

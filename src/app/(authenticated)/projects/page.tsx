@@ -116,6 +116,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { crmUsersQueryOptions, type CrmUser } from "@/lib/admin-users";
 import { servicesQueryOptions } from "@/lib/services";
@@ -210,22 +213,31 @@ function getProjectCleanNotesAndItems(
 function getProjectStageBadgeStyle(stageName?: string | null): string {
   const s = (stageName || "").toLowerCase();
   if (s.includes("delivered") || s.includes("completed") || s.includes("done")) {
-    return "bg-[#E8F9ED] text-[#28C76F] dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/50";
+    return "bg-[#E8F9ED] text-[#16A34A] dark:bg-green-950/60 dark:text-green-400 border border-green-200/50 dark:border-green-800/50";
+  }
+  if (s.includes("video graphy complete") || s.includes("videography complete") || (s.includes("video") && s.includes("complete"))) {
+    return "bg-[#ECFDF5] text-[#059669] dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/50";
+  }
+  if (s.includes("videographer") || s.includes("videography")) {
+    return "bg-[#FFFBEB] text-[#D97706] dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/50";
+  }
+  if (s.includes("script") || s.includes("writer")) {
+    return "bg-[#F3E8FF] text-[#7C3AED] dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/50 dark:border-purple-800/50";
+  }
+  if (s.includes("content") || s.includes("planner")) {
+    return "bg-[#FDF2F8] text-[#DB2777] dark:bg-pink-950/60 dark:text-pink-300 border border-pink-200/50 dark:border-pink-800/50";
+  }
+  if (s.includes("editor") || s.includes("video edit")) {
+    return "bg-[#EEF2FF] text-[#4F46E5] dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50";
+  }
+  if (s.includes("market") || s.includes("marketer")) {
+    return "bg-[#ECFEFF] text-[#0891B2] dark:bg-cyan-950/60 dark:text-cyan-300 border border-cyan-200/50 dark:border-cyan-800/50";
+  }
+  if (s.includes("developer") || s.includes("dev")) {
+    return "bg-[#E0F2FE] text-[#0284C7] dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/50 dark:border-sky-800/50";
   }
   if (s.includes("hold") || s.includes("denied") || s.includes("cancelled")) {
     return "bg-[#FDE8E8] text-[#EF1E1E] dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200/50 dark:border-rose-800/50";
-  }
-  if (s.includes("design") || s.includes("creative")) {
-    return "bg-[#E0F2FE] text-[#0284C7] dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/50 dark:border-sky-800/50";
-  }
-  if (s.includes("co clearance")) {
-    return "bg-[#FFF7ED] text-[#EA580C] dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/50";
-  }
-  if (s.includes("cr clearance") || s.includes("review")) {
-    return "bg-[#EEF2FF] text-[#6366F1] dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50";
-  }
-  if (s.includes("logistics") || s.includes("print")) {
-    return "bg-[#F3E8FF] text-[#9333EA] dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/50 dark:border-purple-800/50";
   }
   return "bg-[#EBF5FF] text-[#2563EB] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/50";
 }
@@ -309,11 +321,11 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
     client_address: null,
     service_id: "srv-web-app",
     service_name: "Web App",
-    stage_id: "Active",
-    stage_name: "Active",
+    stage_id: "Project Started",
+    stage_name: "Project Started",
     stage_group: "in_progress",
-    stage_color: "#16A34A",
-    stage_icon: "Sparkles",
+    stage_color: "#3B82F6",
+    stage_icon: "PlayCircle",
     priority: "High",
     assigned_agent_id: "agent-1",
     assigned_agent_name: "Agent One",
@@ -330,7 +342,7 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
     budget: 350000,
     paid_amount: 150000,
     due_amount: 200000,
-    progress: 100,
+    progress: 15,
     order_date: "2023-10-01",
     deadline: "2023-10-15",
     assignees: [
@@ -366,11 +378,11 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
     client_address: null,
     service_id: "srv-web-app",
     service_name: "Web App",
-    stage_id: "Active",
-    stage_name: "Active",
+    stage_id: "Script Writer",
+    stage_name: "Script Writer",
     stage_group: "in_progress",
-    stage_color: "#16A34A",
-    stage_icon: "Sparkles",
+    stage_color: "#8B5CF6",
+    stage_icon: "FileText",
     priority: "High",
     assigned_agent_id: "agent-2",
     assigned_agent_name: "Agent Two",
@@ -387,7 +399,7 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
     budget: 215000,
     paid_amount: 100000,
     due_amount: 115000,
-    progress: 80,
+    progress: 30,
     order_date: "2023-10-01",
     deadline: "2023-10-19",
     assignees: [
@@ -416,11 +428,11 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
     client_address: null,
     service_id: "srv-web-app",
     service_name: "Web App",
-    stage_id: "Active",
-    stage_name: "Active",
+    stage_id: "Videographer",
+    stage_name: "Videographer",
     stage_group: "in_progress",
-    stage_color: "#16A34A",
-    stage_icon: "Sparkles",
+    stage_color: "#F59E0B",
+    stage_icon: "Video",
     priority: "High",
     assigned_agent_id: "agent-3",
     assigned_agent_name: "Agent Three",
@@ -437,7 +449,7 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
     budget: 145000,
     paid_amount: 80000,
     due_amount: 65000,
-    progress: 75,
+    progress: 50,
     order_date: "2023-10-01",
     deadline: "2023-10-12",
     assignees: [],
@@ -458,11 +470,11 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
     client_address: null,
     service_id: "srv-web-app",
     service_name: "Web App",
-    stage_id: "Active",
-    stage_name: "Active",
-    stage_group: "in_progress",
+    stage_id: "Delivered",
+    stage_name: "Delivered",
+    stage_group: "won",
     stage_color: "#16A34A",
-    stage_icon: "Sparkles",
+    stage_icon: "Trophy",
     priority: "High",
     assigned_agent_id: "agent-4",
     assigned_agent_name: "Agent Four",
@@ -477,9 +489,9 @@ const DEMO_PROJECTS: CrmProjectItem[] = [
     creator_avatar:
       "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
     budget: 215000,
-    paid_amount: 120000,
-    due_amount: 95000,
-    progress: 75,
+    paid_amount: 215000,
+    due_amount: 0,
+    progress: 100,
     order_date: "2023-10-01",
     deadline: "2023-10-24",
     assignees: [],
@@ -1040,6 +1052,53 @@ export default function ProjectsPage() {
                           Stage
                         </DropdownMenuItem>
 
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger
+                            className="px-3 py-1.5 rounded-lg text-[13px] text-[#707070] dark:text-slate-300 cursor-pointer flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <i className="ti ti-refresh text-indigo-500 text-[14px]" /> Change Stage
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="w-52 rounded-[6px] p-1 shadow-md border border-[#E2E8F0] dark:border-slate-800 bg-white dark:bg-slate-900 z-60">
+                            {stages.map((st) => {
+                              const isCurrent =
+                                project.stage_id === st.id ||
+                                project.stage_name.toLowerCase() === st.name.toLowerCase();
+                              return (
+                                <DropdownMenuItem
+                                  key={st.id}
+                                  className={cn(
+                                    "px-3 py-1.5 rounded-md text-[13px] cursor-pointer flex items-center gap-2",
+                                    isCurrent
+                                      ? "font-semibold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800"
+                                      : "text-[#707070] dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800",
+                                  )}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    await updateStatusMutation.mutateAsync({
+                                      id: project.id,
+                                      stage_id: st.id,
+                                      stage_name: st.name,
+                                    });
+                                  }}
+                                >
+                                  <span
+                                    className="size-2 rounded-full shrink-0"
+                                    style={{
+                                      backgroundColor:
+                                        st.color || resolveProjectStageColor(st.name),
+                                    }}
+                                  />
+                                  <span className="truncate">{st.name}</span>
+                                  {isCurrent && (
+                                    <Check className="size-3.5 ms-auto text-emerald-600 shrink-0" />
+                                  )}
+                                </DropdownMenuItem>
+                              );
+                            })}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+
                         <DropdownMenuItem
                           className="px-3 py-1.5 rounded-lg text-[13px] text-[#707070] dark:text-slate-300 cursor-pointer flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800"
                           onClick={(e) => {
@@ -1423,7 +1482,7 @@ function ProjectAssigneesDialog({
             ))}
           </div>
 
-          <div className="max-h-[300px] overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+          <div className="max-h-75 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
             {filteredUsers.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-6">No users found.</p>
             ) : (
@@ -1864,7 +1923,7 @@ function ProjectFormDialog({
         setCompanyName(project.client_name || project.title || "");
         setAddress(project.client_address || "Dhaka, Bangladesh");
         setPhoneNumber(project.client_phone || "");
-        setInitialStatusId(project.stage_id || stages[0]?.id || "CR Clearance");
+        setInitialStatusId(project.stage_id || stages[0]?.id || "Project Started");
 
         const payments = parseProjectPayments(
           project.notes,
@@ -1976,7 +2035,7 @@ function ProjectFormDialog({
         setCompanyName("");
         setAddress("");
         setPhoneNumber("");
-        setInitialStatusId(stages[0]?.id || "CR Clearance");
+        setInitialStatusId(stages[0]?.id || "Project Started");
         setExistingAdvancePayments([]);
         setAdvancePaymentAmount("");
         setAdvancePaymentMethod("");
@@ -2100,12 +2159,19 @@ function ProjectFormDialog({
             updatedItem.unitPrice = selectedModel ? selectedModel.sellingPrice : 500;
           } else if (field === "quantity") {
             updatedItem.quantity = value as string;
+          } else if (field === "unitPrice") {
+            if (value === "" || value === null || value === undefined) {
+              updatedItem.unitPrice = null;
+            } else {
+              const parsed = parseFloat(String(value));
+              updatedItem.unitPrice = isNaN(parsed) ? 0 : parsed;
+            }
           } else if (field === "lamination") {
             updatedItem.lamination = value as string;
           }
-          const q = parseInt(updatedItem.quantity, 10);
-          const p = updatedItem.unitPrice || 0;
-          updatedItem.lineItemTotalPrice = !isNaN(q) && q > 0 ? q * p : p;
+          const q = parseFloat(String(updatedItem.quantity)) || 0;
+          const p = updatedItem.unitPrice ?? 0;
+          updatedItem.lineItemTotalPrice = q > 0 ? q * p : p;
           return updatedItem;
         }
         return item;
@@ -2422,7 +2488,7 @@ function ProjectFormDialog({
       client_phone: phoneNumber.trim() || null,
       client_email: project?.client_email || null,
       service_id: orderItems[0]?.model || null,
-      stage_id: initialStatusId || "CR Clearance",
+      stage_id: initialStatusId || "Project Started",
       priority: priorityLabel,
       assigned_artist_id: null, // rule: "default assign thakbe nah"
       assigned_agent_id: agentId || null,
@@ -2565,15 +2631,15 @@ function ProjectFormDialog({
                   required
                   placeholder="Client address or location..."
                   className={cn(
-                    "w-full text-xs sm:text-sm min-h-[60px]",
+                    "w-full text-xs sm:text-sm min-h-15",
                     isAutoFilled && "bg-muted/50",
                   )}
                   disabled={isSaving}
                 />
               </div>
 
-              {/* Row 3: Phone Number, Order Date, Delivery Date, Priority Star */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 w-full min-w-0">
+              {/* Row 3: Phone Number, Order Date, Delivery Date, Pipeline Stage, Priority Star */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5 w-full min-w-0">
                 <div className="space-y-1 min-w-0">
                   <Label
                     htmlFor="phoneNumber"
@@ -2686,6 +2752,40 @@ function ProjectFormDialog({
                 </div>
 
                 <div className="space-y-1 min-w-0">
+                  <Label
+                    htmlFor="initialStatusId"
+                    className="text-xs sm:text-sm h-5 flex items-center truncate"
+                  >
+                    Pipeline Stage
+                  </Label>
+                  <Select value={initialStatusId} onValueChange={setInitialStatusId}>
+                    <SelectTrigger id="initialStatusId" className="w-full text-xs sm:text-sm h-9">
+                      <SelectValue placeholder="Stage" />
+                    </SelectTrigger>
+                    <SelectContent className="z-60 max-h-56">
+                      {stages.map((st) => (
+                        <SelectItem
+                          key={st.id}
+                          value={st.id}
+                          className="text-xs sm:text-sm cursor-pointer"
+                        >
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span
+                              className="size-2 rounded-full shrink-0"
+                              style={{
+                                backgroundColor:
+                                  st.color || resolveProjectStageColor(st.name),
+                              }}
+                            />
+                            <span className="truncate">{st.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1 min-w-0">
                   <Label className="flex items-center gap-1.5 h-5 cursor-pointer text-xs sm:text-sm truncate">
                     <Star
                       className={cn(
@@ -2738,6 +2838,7 @@ function ProjectFormDialog({
                 </div>
               </div>
 
+
               {/* Row 4: Order Notes */}
               <div className="space-y-1">
                 <Label htmlFor="orderNotes" className="text-xs sm:text-sm">
@@ -2749,7 +2850,7 @@ function ProjectFormDialog({
                   onChange={(e) => setOrderNotes(e.target.value)}
                   placeholder="Add any specific instructions or notes for this order..."
                   rows={3}
-                  className="w-full text-xs sm:text-sm min-h-[60px]"
+                  className="w-full text-xs sm:text-sm min-h-15"
                   disabled={isSaving}
                 />
               </div>
@@ -2758,13 +2859,14 @@ function ProjectFormDialog({
               <div className="space-y-3 mt-4 border-t border-border pt-4 w-full min-w-0">
                 <Label className="text-base sm:text-lg font-semibold">Order Items *</Label>
                 <div className="w-full max-w-full overflow-x-auto rounded-md border bg-background custom-scrollbar">
-                  <Table className="w-full min-w-[620px]">
+                  <Table className="w-full min-w-155">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[55%]">Service *</TableHead>
-                        <TableHead className="w-[20%]">Quantity *</TableHead>
-                        <TableHead className="w-[20%] text-right pr-4">Total Price</TableHead>
-                        <TableHead className="w-[5%] text-right"></TableHead>
+                        <TableHead className="w-[45%]">Service *</TableHead>
+                        <TableHead className="w-[15%]">Quantity *</TableHead>
+                        <TableHead className="w-[18%]">Unit Price *</TableHead>
+                        <TableHead className="w-[18%] text-right pr-4">Total Price</TableHead>
+                        <TableHead className="w-[4%] text-right"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -2792,7 +2894,7 @@ function ProjectFormDialog({
                                   </Button>
                                 </PopoverTrigger>
                                 <PopoverContent
-                                  className="min-w-[var(--radix-popover-trigger-width)] w-max max-w-lg p-0 z-[60]"
+                                  className="min-w-(--radix-popover-trigger-width) w-max max-w-lg p-0 z-60"
                                   align="start"
                                 >
                                   <Command className="max-h-96 overflow-hidden flex flex-col">
@@ -2844,8 +2946,28 @@ function ProjectFormDialog({
                               onChange={(e) =>
                                 handleItemChange(item.id, "quantity", e.target.value)
                               }
-                              placeholder="e.g., 100"
+                              placeholder="1"
                               min="1"
+                              required
+                              className="bg-background text-xs sm:text-sm h-9"
+                              disabled={isSaving}
+                            />
+                          </TableCell>
+                          <TableCell className="p-2 align-middle">
+                            <Input
+                              id={`unitPrice-${item.id}`}
+                              type="number"
+                              value={
+                                item.unitPrice !== null && item.unitPrice !== undefined
+                                  ? item.unitPrice
+                                  : ""
+                              }
+                              onChange={(e) =>
+                                handleItemChange(item.id, "unitPrice", e.target.value)
+                              }
+                              placeholder="0"
+                              min="0"
+                              step="0.01"
                               required
                               className="bg-background text-xs sm:text-sm h-9"
                               disabled={isSaving}
@@ -2953,7 +3075,7 @@ function ProjectFormDialog({
 
                 {existingAdvancePayments.length > 0 ? (
                   <div className="w-full max-w-full max-h-48 overflow-y-auto overflow-x-auto rounded-md border bg-muted/20 p-2 custom-scrollbar">
-                    <Table className="w-full min-w-[450px]">
+                    <Table className="w-full min-w-112.5">
                       <TableHeader>
                         <TableRow>
                           <TableHead className="h-8 text-xs">Date</TableHead>
@@ -3010,7 +3132,7 @@ function ProjectFormDialog({
                               )}
                             </TableCell>
                             <TableCell
-                              className="text-xs text-muted-foreground py-1.5 max-w-[150px] truncate"
+                              className="text-xs text-muted-foreground py-1.5 max-w-37.5 truncate"
                               title={record.notes || undefined}
                             >
                               {editingPaymentId === record.id ? (
@@ -3117,7 +3239,7 @@ function ProjectFormDialog({
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="min-w-[var(--radix-popover-trigger-width)] w-max max-w-md p-0">
+                      <PopoverContent className="min-w-(--radix-popover-trigger-width) w-max max-w-md p-0">
                         <Command>
                           <CommandInput placeholder="Search method..." />
                           <CommandList>

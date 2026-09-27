@@ -809,10 +809,10 @@ export default function ExpensesPage() {
 
       {/* Color Hut Radix Alert Delete Confirmation Dialog */}
       <Dialog open={!!deleteExpenseId} onOpenChange={() => setDeleteExpenseId(null)}>
-        <DialogContent className="w-full max-w-[512px] bg-[#EEEFF2] dark:bg-slate-900 border border-[#E1E7EF] dark:border-slate-800 rounded-[12px] p-6 shadow-lg gap-4 text-slate-900 dark:text-slate-100">
+        <DialogContent className="w-full max-w-lg bg-[#EEEFF2] dark:bg-slate-900 border border-[#E1E7EF] dark:border-slate-800 rounded-2xl p-6 shadow-lg gap-4 text-slate-900 dark:text-slate-100">
           <DialogHeader className="flex flex-col space-y-2 text-left sm:text-left">
             <DialogTitle className="text-lg font-semibold flex items-center gap-2 text-[#0f1729] dark:text-slate-100">
-              <TriangleAlert className="size-6 text-[#dc2626] stroke-[2]" />
+              <TriangleAlert className="size-6 text-[#dc2626] stroke-2" />
               Are you absolutely sure?
             </DialogTitle>
             <DialogDescription className="text-sm text-[#94a3b8] dark:text-slate-400 text-left mt-2 leading-5">

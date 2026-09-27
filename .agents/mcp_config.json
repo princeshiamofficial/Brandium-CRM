@@ -2,7 +2,58 @@
   "mcpServers": {
     "gsd": {
       "command": "npx",
-      "args": ["-y", "-p", "@opengsd/gsd-core", "gsd-mcp-server"]
+      "args": [
+        "-y",
+        "-p",
+        "@opengsd/gsd-core",
+        "gsd-mcp-server"
+      ]
+    },
+    "AgentsRoom-MCP": {
+      "command": "node",
+      "args": [
+        "C:\\Program Files\\AgentsRoom\\resources\\app-mcp-server.cjs"
+      ],
+      "env": {
+        "AR_PROJECT_ID": "proj-1790356815058-bus8qn",
+        "AR_PROJECT_PATH": "C:\\Transfer\\Brandium CRM\\New\\Brandium-CRM",
+        "AR_API_BASE_URL": "https://agentsroom.dev",
+        "AR_SETTINGS_FILE": "C:\\Users\\Color Hut\\.agentsroom\\settings.json",
+        "AR_APP_VERSION": "1.192.0",
+        "AR_BRIDGE_FILE": "C:\\Users\\Color Hut\\.agentsroom\\browser-bridge.json"
+      }
+    },
+    "AgentsRoom-Test-Runner": {
+      "command": "node",
+      "args": [
+        "C:\\Program Files\\AgentsRoom\\resources\\test-runner-mcp-server.cjs"
+      ],
+      "env": {
+        "AR_BROWSER_BRIDGE_FILE": "C:\\Users\\Color Hut\\.agentsroom\\browser-bridge.json",
+        "AR_BROWSER_PROJECT_ID": "proj-1790356815058-bus8qn",
+        "AR_PROJECT_PATH": "C:\\Transfer\\Brandium CRM\\New\\Brandium-CRM"
+      }
+    },
+    "AgentsRoom-QA-Tester": {
+      "command": "node",
+      "args": [
+        "C:\\Program Files\\AgentsRoom\\resources\\qa-tester-mcp-server.cjs"
+      ],
+      "env": {
+        "AR_BROWSER_BRIDGE_FILE": "C:\\Users\\Color Hut\\.agentsroom\\browser-bridge.json",
+        "AR_BROWSER_PROJECT_ID": "proj-1790356815058-bus8qn"
+      }
+    },
+    "AgentsRoom-Chrome": {
+      "command": "node",
+      "args": [
+        "C:\\Program Files\\AgentsRoom\\resources\\browser-mcp-server.cjs"
+      ],
+      "env": {
+        "AR_BROWSER_BRIDGE_FILE": "C:\\Users\\Color Hut\\.agentsroom\\browser-bridge.json",
+        "AR_BROWSER_PROJECT_ID": "proj-1790356815058-bus8qn",
+        "AR_BROWSER_KIND": "chrome"
+      }
     }
   }
 }

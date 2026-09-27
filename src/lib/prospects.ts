@@ -11,6 +11,7 @@ export const prospectFiltersSchema = z.object({
   stage: z.string().optional(),
   agent: z.string().optional(),
   service: z.string().optional(),
+  sortBy: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
 });
@@ -35,6 +36,7 @@ export type Prospect = {
   created_by: string | null;
   notes: string | null;
   artist?: string | null | undefined;
+  is_qualified?: number | boolean | null | undefined;
   created_at: string;
   updated_at: string;
   // Joined fields
@@ -213,6 +215,7 @@ export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin
               assigned_artist_id: (p["assigned_artist_id"] as string) || null,
               created_by: (p["created_by"] as string) || null,
               notes: (p["notes"] as string) || null,
+              is_qualified: p["is_qualified"] ? 1 : 0,
               created_at: String(p["created_at"] || new Date().toISOString()),
               updated_at: String(p["updated_at"] || new Date().toISOString()),
               service_name: (p["service_name"] as string) || undefined,
@@ -268,10 +271,27 @@ export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin
           if (p.stage_id === filters.stage) return true;
           const sName = (p.stage_name || "").toLowerCase();
           if (target.includes("follow") && sName.includes("follow")) return true;
+          if (target.includes("qualif") && (sName.includes("qualif") || Boolean(p.is_qualified)))
+            return true;
           if (target.includes("opportunity") && sName.includes("opportunity")) return true;
           if (
             (target.includes("won") || target.includes("sales")) &&
             (sName.includes("won") || sName.includes("sales"))
+          )
+            return true;
+          if (target.includes("meeting") && sName.includes("meeting")) return true;
+          if (
+            (target.includes("lost") ||
+              target.includes("dnp") ||
+              target.includes("switch") ||
+              target.includes("invalid") ||
+              target.includes("not interested")) &&
+            (sName.includes("lost") ||
+              sName.includes("dnp") ||
+              sName.includes("switch") ||
+              sName.includes("invalid") ||
+              sName.includes("not interested") ||
+              (p.stage_group && (p.stage_group === "lost" || p.stage_group === "unreachable")))
           )
             return true;
           if (target.includes("prospect") && sName.includes("prospect")) return true;
@@ -296,6 +316,20 @@ export const prospectsQuery = (filters: ProspectFilters, userId: string, isAdmin
         rows = rows.filter((p) => p.created_at <= filters.to!);
       }
 
+      // Apply dynamic sorting
+      if (filters.sortBy === "oldest") {
+        rows.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+      } else if (filters.sortBy === "name_asc") {
+        rows.sort((a, b) => (a.contact_name || "").localeCompare(b.contact_name || ""));
+      } else if (filters.sortBy === "name_desc") {
+        rows.sort((a, b) => (b.contact_name || "").localeCompare(a.contact_name || ""));
+      } else if (filters.sortBy === "updated") {
+        rows.sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
+      } else {
+        // default: newest first
+        rows.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+      }
+
       const totalCount = rows.length;
       const paginated = rows.slice(from, from + pageSize);
       return {
@@ -316,10 +350,12 @@ export const prospectsStatsQuery = (userId: string, isAdmin: boolean) =>
           `SELECT 
             p.id,
             p.stage_id,
+            p.is_qualified,
             p.assigned_to,
             p.assigned_artist_id,
             p.created_by,
-            COALESCE(st.name, p.stage_id, 'Prospect') AS stage_name
+            COALESCE(st.name, p.stage_id, 'Prospect') AS stage_name,
+            st.stage_group AS stage_group
           FROM \`prospects\` p
           LEFT JOIN \`stages\` st ON (p.stage_id = st.id OR p.stage_id = REPLACE(st.id, '-', '_') OR p.stage_id = st.name)
           WHERE (p.is_active = 1 OR p.is_active IS NULL) 
@@ -347,6 +383,11 @@ export const prospectsStatsQuery = (userId: string, isAdmin: boolean) =>
       let activeProspects = 0;
       let pendingTasks = 0;
       let followUps = 0;
+      let qualifiedLeads = 0;
+      let notQualifiedLeads = 0;
+      let prospectCount = 0;
+      let meetingCount = 0;
+      let lostDnpCount = 0;
       const stageCounts: Record<string, number> = {};
 
       for (const p of allProspects) {
@@ -354,19 +395,50 @@ export const prospectsStatsQuery = (userId: string, isAdmin: boolean) =>
           (p["stage_name"] as string) || (p["stage_id"] as string) || "Prospect",
         );
         const stageName = rawStage.toLowerCase();
+        const stageGroup = String((p["stage_group"] as string) || "")
+          .toLowerCase()
+          .trim();
+        const isQual = Boolean(p["is_qualified"]) || Number(p["is_qualified"]) === 1;
+
         const isWon = stageName.includes("won") || stageName.includes("sales won");
         const isFollowUp = stageName.includes("follow");
-        const isPending =
-          isFollowUp ||
-          stageName.includes("opportunity") ||
+        const isMeeting = stageName.includes("meeting");
+        const isLostOrDnp =
+          stageGroup === "lost" ||
+          stageGroup === "unreachable" ||
+          stageName.includes("not-interested") ||
+          stageName.includes("not interested") ||
+          stageName.includes("dnp") ||
+          stageName.includes("switched") ||
+          stageName.includes("invalid") ||
+          stageName.includes("lost");
+        const isProspect =
           stageName.includes("prospect") ||
-          stageName.includes("meeting") ||
-          stageName.includes("quotation");
+          stageGroup === "new" ||
+          (!isWon && !isFollowUp && !isMeeting && !isLostOrDnp && !isQual);
 
         if (isWon) salesWon++;
         else activeProspects++;
-        if (isPending) pendingTasks++;
+
+        if (isFollowUp || isMeeting || stageName.includes("opportunity") || isProspect) {
+          pendingTasks++;
+        }
         if (isFollowUp) followUps++;
+        if (isMeeting) meetingCount++;
+        if (isLostOrDnp) {
+          notQualifiedLeads++;
+          lostDnpCount++;
+        }
+        if (isProspect) prospectCount++;
+
+        if (
+          isQual ||
+          stageName.includes("qualif") ||
+          stageName.includes("opportunity") ||
+          stageName.includes("proposal")
+        ) {
+          qualifiedLeads++;
+        }
 
         const trimmedKey = rawStage.trim();
         stageCounts[trimmedKey] = (stageCounts[trimmedKey] || 0) + 1;
@@ -381,6 +453,11 @@ export const prospectsStatsQuery = (userId: string, isAdmin: boolean) =>
         salesWon,
         pendingTasks,
         followUps,
+        qualifiedLeads,
+        notQualifiedLeads,
+        prospectCount,
+        meetingCount,
+        lostDnpCount,
         stageCounts,
         successRate,
       };
@@ -699,4 +776,18 @@ export async function checkDuplicateProspectPhone(
     console.warn("checkDuplicateProspectPhone error:", err);
     return { isDuplicate: false };
   }
+}
+
+export async function toggleProspectQualified(
+  prospectId: string,
+  isQualified: boolean,
+): Promise<boolean> {
+  const now = getMySQLTimestamp();
+  const sql = `
+    UPDATE \`prospects\`
+    SET \`is_qualified\` = ?, \`updated_at\` = ?
+    WHERE \`id\` = ?;
+  `;
+  const res = await runMySQLQuery(sql, [isQualified ? 1 : 0, now, prospectId]);
+  return Boolean(res.success);
 }

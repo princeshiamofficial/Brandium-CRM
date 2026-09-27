@@ -169,7 +169,7 @@ const FALLBACK_DEMO_PROJECT: ProjectRecord = {
   client_email: "colorhut.official@gmail.com",
   client_address: "House No. 14, Road No. A, Block A, Sontek, South Kajla, Jatrabari, Dhaka - 1236",
   service_name: "Graphics Design & Print",
-  status: "CR Clearance",
+  status: "Project Started",
   priority: "High",
   creator_name: "Mehan Ahmed",
   creator_avatar: null,
@@ -189,7 +189,7 @@ const FALLBACK_DEMO_PROJECT: ProjectRecord = {
   status_history: JSON.stringify([
     {
       id: "sh-demo-1",
-      status: "Order Submitted",
+      status: "Project Started",
       timestamp: "2026-09-15T01:25:00.000Z",
       changedByUserName: "Mehan Ahmed",
       notes: "Project initiated for Color Hut.",
@@ -197,18 +197,18 @@ const FALLBACK_DEMO_PROJECT: ProjectRecord = {
     },
     {
       id: "sh-demo-2",
-      status: "DR Assigned",
+      status: "Script Writer",
       timestamp: "2026-09-15T02:10:00.000Z",
       changedByUserName: "Mehan Ahmed",
-      notes: "Assigned to Artist Team for visual layout drafting.",
+      notes: "Assigned to script writer for narrative drafting.",
       proofUrl: null,
     },
     {
       id: "sh-demo-3",
-      status: "CR Clearance",
+      status: "Videographer",
       timestamp: "2026-09-15T04:30:00.000Z",
       changedByUserName: "Mehan Ahmed",
-      notes: "Moved to CR Clearance after review.",
+      notes: "Assigned to videographer for video shoot.",
       proofUrl: null,
     },
   ]),
@@ -240,20 +240,36 @@ const buildRealProjectHistory = (proj: Record<string, unknown>): StatusHistoryEn
 
   const pipeline = [
     {
-      status: "Order Submitted",
-      notes: "Order created and registered.",
+      status: "Project Started",
+      notes: "Project initiated and registered.",
     },
     {
-      status: "DR Assigned",
-      notes: `Design requirements assigned to ${artist}.`,
+      status: "Script Writer",
+      notes: "Script and copywriting assigned.",
     },
     {
-      status: "CO Clearance",
-      notes: "Creative officer review and clearance.",
+      status: "Content Planner",
+      notes: "Content strategy and storyline planning.",
     },
     {
-      status: "Logistics",
-      notes: "Project deliverables processed for logistics and printing.",
+      status: "Videographer",
+      notes: `Video shoot and capture assigned to ${artist}.`,
+    },
+    {
+      status: "Video Graphy Complete",
+      notes: "Video shooting completed and raw footage verified.",
+    },
+    {
+      status: "Video Editor",
+      notes: "Post-production editing and sound design.",
+    },
+    {
+      status: "Marketer",
+      notes: "Marketing campaigns and audience targeting setup.",
+    },
+    {
+      status: "Developer",
+      notes: "Development, web assets and technical integration.",
     },
     {
       status: "Delivered",
@@ -412,7 +428,7 @@ export default function ProjectInvoicePage() {
           COALESCE(p.address, 'Dhaka, Bangladesh') AS client_address,
           p.logo_url AS prospect_logo_url,
           prj.service_id,
-          COALESCE(prj.status, 'CR Clearance') AS status,
+          COALESCE(prj.status, 'Project Started') AS status,
           COALESCE(prj.priority, 'Medium') AS priority,
           prj.assigned_agent_id,
           prj.assigned_artist_id,
@@ -495,7 +511,7 @@ export default function ProjectInvoicePage() {
             COALESCE(p.address, 'Dhaka, Bangladesh') AS client_address,
             p.logo_url AS prospect_logo_url,
             p.service_id,
-            COALESCE(st.name, p.stage_id, 'CR Clearance') AS status,
+            COALESCE(st.name, p.stage_id, 'Project Started') AS status,
             'Medium' AS priority,
             p.assigned_to AS assigned_agent_id,
             p.assigned_artist_id,
@@ -1112,7 +1128,7 @@ export default function ProjectInvoicePage() {
                         borderColor: `${stageColor}30`,
                       }}
                     >
-                      {project.status || "CR Clearance"}
+                      {project.status || "Project Started"}
                     </span>
                   </h3>
                   <div className="text-xs text-muted-foreground mt-2">

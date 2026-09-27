@@ -56,3 +56,11 @@ public/uploads/*
 # Temporary & Scratch scripts
 scratch/
 .scratch/
+.mcp.json
+.agentsroom/
+.claude/
+brain/
+.agents/mcp.json
+__pycache__/
+*.pyc
+.vibe/

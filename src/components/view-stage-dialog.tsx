@@ -14,9 +14,14 @@ import {
   TriangleAlert,
   Trash2,
   Globe,
+  FileText,
+  ArrowRight,
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -185,8 +190,10 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
     id: `initial-${prospect.id}`,
     date: prospect.created_at,
     stageName: "Prospect",
+    fromStageName: null as string | null,
     note: prospect.notes || "Lead created",
     actor: prospect.creator_name || "System",
+    actorAvatar: prospect.creator_avatar || null,
   };
 
   const sortedHistory = [...historyEntries].sort(
@@ -202,13 +209,18 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
       rawName = "Follow-up";
     }
     const finalName = rawName === "New Lead" || rawName === "new_lead" ? "Prospect" : rawName;
+    const fromName = h.from_stage_name ? formatStageSlugOrName(h.from_stage_name) : null;
 
     return {
       id: h.id,
       date: h.changed_at,
       stageName: finalName,
-      note: h.note || prospect.notes || "Stage updated",
+      fromStageName: fromName && fromName !== finalName ? fromName : null,
+      note: h.note || null,
       actor: h.changed_by_name || prospect.creator_name || "System",
+      actorAvatar:
+        h.changed_by_avatar ||
+        (h.changed_by === prospect.created_by ? prospect.creator_avatar : null),
     };
   });
 
@@ -313,124 +325,163 @@ export function ViewStageDialog({ prospect, open, onOpenChange, onEdit }: ViewSt
 
           <div className="my-2.5 border-t border-slate-200/80 dark:border-slate-800" />
 
-          {/* Minimal Horizontal Stepper Timeline */}
-          <div className="overflow-x-auto no-scrollbar py-1 px-0.5">
-            <div className="flex items-start gap-3 min-w-max">
-              {timelineItems.map((item, idx) => {
-                const rawStageName = item.stageName;
-                const stageDisplayName =
-                  !rawStageName ||
-                  rawStageName.toLowerCase() === "new lead" ||
-                  rawStageName.toLowerCase() === "new_lead"
-                    ? "Prospect"
-                    : rawStageName;
+          {/* List or Chat Style Stage History Activity Feed */}
+          <div className="space-y-2.5 my-3">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Stage Activity History
+                </span>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                >
+                  {timelineItems.length} {timelineItems.length === 1 ? "transition" : "transitions"}
+                </Badge>
+              </div>
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 hidden sm:inline">
+                Activity Feed & Notes
+              </span>
+            </div>
 
-                const style = getStageColorStyle(stageDisplayName);
-                const IconComp = style.icon;
-                const formattedDate = format(new Date(item.date), "MMM d, yyyy");
+            <ScrollArea className="max-h-95 sm:max-h-105 pr-2.5">
+              <div className="relative pl-6 space-y-4 py-2">
+                {/* Continuous Vertical Timeline Thread Connector */}
+                <div className="absolute left-4.25 top-4 bottom-4 w-0.5 bg-slate-200 dark:bg-slate-800" />
 
-                return (
-                  <div
-                    key={item.id || idx}
-                    className="flex flex-col items-center w-36 sm:w-40 shrink-0 relative"
-                  >
-                    {/* Step Date Header */}
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                      {formattedDate}
-                    </span>
+                {timelineItems.map((item, idx) => {
+                  const rawStageName = item.stageName;
+                  const stageDisplayName =
+                    !rawStageName ||
+                    rawStageName.toLowerCase() === "new lead" ||
+                    rawStageName.toLowerCase() === "new_lead"
+                      ? "Prospect"
+                      : rawStageName;
 
-                    {/* Node Circle & Connecting Line */}
-                    <div className="relative flex items-center justify-center w-full my-0.5">
-                      {/* Connecting Line behind node */}
-                      {idx < timelineItems.length - 1 && (
-                        <div className="absolute top-1/2 left-1/2 w-full h-0.5 bg-slate-200 dark:bg-slate-800 -z-10" />
-                      )}
+                  const style = getStageColorStyle(stageDisplayName);
+                  const IconComp = style.icon;
+                  const initials = (item.actor || "U")
+                    .split(" ")
+                    .map((n: string) => n[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase();
 
-                      {/* Circle Node */}
-                      <div
-                        title={
-                          item.id.startsWith("initial-")
-                            ? undefined
-                            : "Double-click to delete stage entry"
-                        }
-                        onDoubleClick={() => {
-                          if (!item.id.startsWith("initial-")) {
-                            setDeleteHistoryTarget({ id: item.id, stageName: stageDisplayName });
-                          }
-                        }}
-                        className={`size-6.5 rounded-full ${style.dot} flex items-center justify-center shadow-2xs z-10 ${
-                          item.id.startsWith("initial-")
-                            ? ""
-                            : "cursor-pointer hover:scale-110 transition-transform"
-                        }`}
-                      >
-                        {IconComp ? (
-                          <IconComp className="size-3 fill-current" />
+                  const isInitial = item.id.startsWith("initial-");
+
+                  return (
+                    <div key={item.id || idx} className="relative flex items-start gap-3 group">
+                      {/* Left User Avatar Node on Timeline */}
+                      <div className="relative z-10 shrink-0 -ml-6">
+                        <Avatar className="size-9 rounded-full ring-2 ring-white dark:ring-card shadow-xs border border-slate-200/90 dark:border-slate-700">
+                          {item.actorAvatar ? (
+                            <AvatarImage
+                              src={item.actorAvatar}
+                              alt={item.actor}
+                              className="size-full object-cover"
+                            />
+                          ) : null}
+                          <AvatarFallback className="font-bold text-[11px] bg-[#0a2e5c]/10 text-[#0a2e5c] dark:bg-emerald-950/60 dark:text-emerald-300">
+                            {initials}
+                          </AvatarFallback>
+                        </Avatar>
+                      </div>
+
+                      {/* Right Chat / Message Card */}
+                      <div className="flex-1 min-w-0 bg-slate-50/90 dark:bg-slate-900/60 rounded-2xl p-3 sm:p-3.5 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:shadow-xs transition-shadow space-y-2">
+                        {/* Header Row: User Name, Stage Badge, Date & Actions */}
+                        <div className="flex flex-wrap items-center justify-between gap-1.5 pb-1.5 border-b border-slate-200/60 dark:border-slate-800/60">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 truncate">
+                              {item.actor}
+                            </span>
+
+                            {/* Stage Transition Badge */}
+                            <div className="flex items-center gap-1.5">
+                              {item.fromStageName && item.fromStageName !== stageDisplayName ? (
+                                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                  {item.fromStageName}
+                                  <ArrowRight className="size-3 text-slate-400" />
+                                </span>
+                              ) : null}
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-2xs flex items-center gap-1 ${style.pill}`}
+                              >
+                                {IconComp ? <IconComp className="size-2.5 fill-current" /> : null}
+                                {stageDisplayName}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Date, Time & Delete Action */}
+                          <div className="flex items-center gap-1.5 ml-auto text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                            <span className="flex items-center gap-1 shrink-0">
+                              <CalendarIcon className="size-3 text-slate-400" />
+                              {format(new Date(item.date), "MMM d, yyyy")}
+                            </span>
+                            <span className="text-slate-300 dark:text-slate-700">•</span>
+                            <span className="flex items-center gap-1 shrink-0">
+                              <Clock className="size-3 text-slate-400" />
+                              {format(new Date(item.date), "h:mm a")}
+                            </span>
+
+                            {!isInitial && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-6 text-slate-400 hover:text-red-600 rounded-full cursor-pointer ml-0.5 transition-colors"
+                                title="Delete stage entry"
+                                onClick={() =>
+                                  setDeleteHistoryTarget({
+                                    id: item.id,
+                                    stageName: stageDisplayName,
+                                  })
+                                }
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Note / Message Body */}
+                        {item.note && item.note.trim() ? (
+                          <div className="bg-white dark:bg-card rounded-xl p-2.5 border border-slate-200/70 dark:border-slate-800/80 text-xs text-slate-700 dark:text-slate-300 shadow-2xs font-normal">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                                <FileText className="size-3 text-amber-500" /> Notes / Details
+                              </span>
+                              {item.note.length > 120 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedNoteTarget({
+                                      stageName: item.stageName,
+                                      note: item.note || "",
+                                      date: item.date,
+                                    })
+                                  }
+                                  className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                                >
+                                  View Full
+                                </button>
+                              )}
+                            </div>
+                            <p className="whitespace-pre-wrap leading-relaxed text-xs">
+                              {item.note}
+                            </p>
+                          </div>
                         ) : (
-                          <div className="size-1.5 rounded-full bg-current" />
+                          <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+                            Stage transitioned to {stageDisplayName}
+                          </p>
                         )}
                       </div>
                     </div>
-
-                    {/* Stage Name Solid Pill Badge */}
-                    <div
-                      title={
-                        item.id.startsWith("initial-")
-                          ? undefined
-                          : "Double-click to delete stage entry"
-                      }
-                      onDoubleClick={() => {
-                        if (!item.id.startsWith("initial-")) {
-                          setDeleteHistoryTarget({ id: item.id, stageName: stageDisplayName });
-                        }
-                      }}
-                      className={`mt-2 px-2.5 py-1 rounded-xl ${style.pill} text-[11px] font-bold shadow-2xs truncate max-w-full text-center ${
-                        item.id.startsWith("initial-")
-                          ? ""
-                          : "cursor-pointer hover:opacity-90 transition-opacity"
-                      }`}
-                    >
-                      {stageDisplayName}
-                    </div>
-
-                    {/* Minimal Notes Box */}
-                    <div className="mt-2 w-full bg-slate-50/90 dark:bg-slate-900/60 rounded-xl p-2.5 text-xs text-slate-800 dark:text-slate-200 font-semibold space-y-1 flex flex-col justify-between min-h-26.25 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-                      <div>
-                        <p className="font-bold text-slate-900 dark:text-slate-100 text-[11px] mb-0.5">
-                          Notes:
-                        </p>
-                        <ul className="list-disc list-inside text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5 leading-snug">
-                          {item.note
-                            .split(/[\n,;]/)
-                            .filter(Boolean)
-                            .slice(0, 3)
-                            .map((line, lIdx) => (
-                              <li key={lIdx} className="truncate">
-                                {line.replace(/^[-*•]\s*/, "")}
-                              </li>
-                            ))}
-                        </ul>
-                      </div>
-
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="w-full h-6.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] cursor-pointer mt-1.5 shadow-2xs transition-all"
-                        onClick={() =>
-                          setSelectedNoteTarget({
-                            stageName: item.stageName,
-                            note: item.note,
-                            date: item.date,
-                          })
-                        }
-                      >
-                        View
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
           </div>
 
           {/* Minimal Inset Metadata Box */}

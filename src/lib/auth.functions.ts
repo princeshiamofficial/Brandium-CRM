@@ -338,7 +338,7 @@ export async function ensureMySQLTablesExist(
           \`prospect_id\` VARCHAR(36) NULL,
           \`client_name\` VARCHAR(255) NOT NULL,
           \`service_id\` VARCHAR(36) NULL,
-          \`status\` VARCHAR(50) NOT NULL DEFAULT 'CR Clearance',
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Project Started',
           \`assigned_agent_id\` VARCHAR(36) NULL,
           \`assigned_artist_id\` VARCHAR(36) NULL,
           \`assigned_user_ids\` TEXT NULL,
@@ -1042,12 +1042,12 @@ export async function ensureMySQLTablesExist(
             \`budget\`, \`paid_amount\`, \`progress\`, \`deadline\`, \`notes\`
           )
           VALUES
-          ('prj-1001', 'PRJ-1001', 'Apex Footwear E-Commerce Commercial Ads', 'Apex Footwear Ltd.', 'srv-5', 'On Design', 45000.00, 25000.00, 60, DATE_ADD(CURRENT_DATE, INTERVAL 7 DAY), 'High-priority celebrity video ad production for seasonal footwear launch.'),
-          ('prj-1002', 'PRJ-1002', 'Navana Real Estate Brand Identity & Logo Suite', 'Navana Group', 'srv-12', 'CR Clearance', 30000.00, 15000.00, 20, DATE_ADD(CURRENT_DATE, INTERVAL 14 DAY), 'Vector logo design with brand guidelines and corporate stationery.'),
-          ('prj-1003', 'PRJ-1003', 'Shwapno Supermarket 3D Motion Promo Video', 'ACI Logistics / Shwapno', 'srv-11', 'CO Clearance', 55000.00, 30000.00, 35, DATE_ADD(CURRENT_DATE, INTERVAL 10 DAY), '2D/3D motion graphics animation for Facebook & YouTube campaigns.'),
-          ('prj-1004', 'PRJ-1004', 'Beximco Pharma Medical Product Catalog Shoot', 'Beximco Pharma', 'srv-1', 'Logistics', 40000.00, 40000.00, 85, DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY), 'High-resolution studio product photography and color grading.'),
+          ('prj-1001', 'PRJ-1001', 'Apex Footwear E-Commerce Commercial Ads', 'Apex Footwear Ltd.', 'srv-5', 'Project Started', 45000.00, 25000.00, 15, DATE_ADD(CURRENT_DATE, INTERVAL 7 DAY), 'High-priority celebrity video ad production for seasonal footwear launch.'),
+          ('prj-1002', 'PRJ-1002', 'Navana Real Estate Brand Identity & Logo Suite', 'Navana Group', 'srv-12', 'Script Writer', 30000.00, 15000.00, 25, DATE_ADD(CURRENT_DATE, INTERVAL 14 DAY), 'Script writing and storyboarding with brand guidelines.'),
+          ('prj-1003', 'PRJ-1003', 'Shwapno Supermarket 3D Motion Promo Video', 'ACI Logistics / Shwapno', 'srv-11', 'Content Planner', 55000.00, 30000.00, 35, DATE_ADD(CURRENT_DATE, INTERVAL 10 DAY), 'Content planning & campaign strategy for Facebook & YouTube.'),
+          ('prj-1004', 'PRJ-1004', 'Beximco Pharma Medical Product Catalog Shoot', 'Beximco Pharma', 'srv-1', 'Videographer', 40000.00, 40000.00, 50, DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY), 'Studio video production and high-resolution cinematography.'),
           ('prj-1005', 'PRJ-1005', 'Chaldal Monthly Social Media & Ad Campaigns', 'Chaldal.com', 'srv-3', 'Delivered', 75000.00, 75000.00, 100, CURRENT_DATE, 'Monthly digital marketing plan, ad copy, and video production completed.'),
-          ('prj-1006', 'PRJ-1006', 'Aarong Handcraft Artisans Video Docu-Series', 'BRAC Aarong', 'srv-6', 'On Hold', 60000.00, 20000.00, 40, DATE_ADD(CURRENT_DATE, INTERVAL 21 DAY), 'Waiting for client script approval and location clearances.');
+          ('prj-1006', 'PRJ-1006', 'Aarong Handcraft Artisans Video Docu-Series', 'BRAC Aarong', 'srv-6', 'Video Editor', 60000.00, 20000.00, 70, DATE_ADD(CURRENT_DATE, INTERVAL 21 DAY), 'Video editing, color grading and audio mastering in progress.');
         `);
       }
 

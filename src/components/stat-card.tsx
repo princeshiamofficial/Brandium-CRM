@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -7,7 +8,8 @@ export type StatCardProps = {
   value: string | number;
   icon: LucideIcon;
   loading?: boolean;
-  hint?: string;
+  hint?: string | undefined;
+  href?: string | undefined;
   colorScheme?:
     | "teal"
     | "blue"
@@ -115,15 +117,19 @@ export function StatCard({
   icon: Icon,
   loading = false,
   hint,
+  href,
   colorScheme = "teal",
   className,
 }: StatCardProps) {
   const scheme = colorVariants[colorScheme as keyof typeof colorVariants] ?? colorVariants.teal;
 
-  return (
+  const content = (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-2xl sm:rounded-xl border p-4 shadow-2xs transition-all duration-300 hover:shadow-md active:scale-[0.99] select-none",
+        "group relative overflow-hidden rounded-2xl sm:rounded-xl border p-4 shadow-2xs transition-all duration-300 select-none",
+        href
+          ? "hover:shadow-md hover:scale-[1.015] active:scale-[0.985] cursor-pointer"
+          : "hover:shadow-md active:scale-[0.99]",
         "cardBg" in scheme && scheme.cardBg
           ? scheme.cardBg
           : "border-slate-200/80 dark:border-border bg-card text-card-foreground",
@@ -176,6 +182,12 @@ export function StatCard({
               {value}
             </p>
           )}
+
+          {hint && !loading && (
+            <p className="text-[11px] font-medium text-muted-foreground truncate px-0.5 mt-0.5">
+              {hint}
+            </p>
+          )}
         </div>
       </div>
 
@@ -188,4 +200,14 @@ export function StatCard({
       <div className="absolute inset-x-0 bottom-0 h-0.5 bg-linear-to-r from-transparent via-primary/20 to-transparent opacity-60" />
     </div>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="block no-underline">
+        {content}
+      </Link>
+    );
+  }
+
+  return content;
 }

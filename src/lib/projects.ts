@@ -94,77 +94,111 @@ export type SaveProjectPayload = {
 
 export const PROJECT_WORKFLOW_STAGES: Stage[] = [
   {
-    id: "CR Clearance",
-    name: "CR Clearance",
+    id: "Project Started",
+    name: "Project Started",
     stage_group: "in_progress",
     sort_order: 1,
     is_follow_up: false,
     is_active: true,
-    color: "#6366F1",
-    icon: "FileText",
+    color: "#3B82F6",
+    icon: "PlayCircle",
   },
   {
-    id: "On Design",
-    name: "On Design",
+    id: "Script Writer",
+    name: "Script Writer",
     stage_group: "in_progress",
     sort_order: 2,
     is_follow_up: false,
     is_active: true,
-    color: "#0284C7",
-    icon: "DraftingCompass",
+    color: "#8B5CF6",
+    icon: "FileText",
   },
   {
-    id: "CO Clearance",
-    name: "CO Clearance",
+    id: "Content Planner",
+    name: "Content Planner",
     stage_group: "in_progress",
     sort_order: 3,
     is_follow_up: false,
     is_active: true,
-    color: "#D97706",
-    icon: "Sparkles",
+    color: "#EC4899",
+    icon: "Calendar",
   },
   {
-    id: "Logistics",
-    name: "Logistics",
+    id: "Videographer",
+    name: "Videographer",
     stage_group: "in_progress",
     sort_order: 4,
     is_follow_up: false,
     is_active: true,
-    color: "#8B5CF6",
-    icon: "Layers",
+    color: "#F59E0B",
+    icon: "Video",
+  },
+  {
+    id: "Video Graphy Complete",
+    name: "Video Graphy Complete",
+    stage_group: "in_progress",
+    sort_order: 5,
+    is_follow_up: false,
+    is_active: true,
+    color: "#10B981",
+    icon: "CheckCircle2",
+  },
+  {
+    id: "Video Editor",
+    name: "Video Editor",
+    stage_group: "in_progress",
+    sort_order: 6,
+    is_follow_up: false,
+    is_active: true,
+    color: "#6366F1",
+    icon: "Film",
+  },
+  {
+    id: "Marketer",
+    name: "Marketer",
+    stage_group: "in_progress",
+    sort_order: 7,
+    is_follow_up: false,
+    is_active: true,
+    color: "#06B6D4",
+    icon: "Megaphone",
+  },
+  {
+    id: "Developer",
+    name: "Developer",
+    stage_group: "in_progress",
+    sort_order: 8,
+    is_follow_up: false,
+    is_active: true,
+    color: "#0284C7",
+    icon: "Code",
   },
   {
     id: "Delivered",
     name: "Delivered",
     stage_group: "won",
-    sort_order: 5,
+    sort_order: 9,
     is_follow_up: false,
     is_active: true,
     color: "#16A34A",
     icon: "Trophy",
   },
-  {
-    id: "On Hold",
-    name: "On Hold",
-    stage_group: "lost",
-    sort_order: 6,
-    is_follow_up: false,
-    is_active: true,
-    color: "#DC2626",
-    icon: "PowerOff",
-  },
 ];
 
 export function resolveProjectStageColor(status?: string | null): string {
-  if (!status) return "#6366F1";
+  if (!status) return "#3B82F6";
   const s = status.toLowerCase().trim();
-  if (s.includes("cr")) return "#6366F1";
-  if (s.includes("design")) return "#0284C7";
-  if (s.includes("co")) return "#D97706";
-  if (s.includes("logistics")) return "#8B5CF6";
   if (s.includes("delivered") || s.includes("done") || s.includes("completed")) return "#16A34A";
+  if (s.includes("complete") || s.includes("video graphy complete") || s.includes("videography complete")) return "#10B981";
+  if (s.includes("script") || s.includes("writer")) return "#8B5CF6";
+  if (s.includes("content") || s.includes("planner")) return "#EC4899";
+  if (s.includes("videographer") || s.includes("videography")) return "#F59E0B";
+  if (s.includes("editor") || s.includes("video edit")) return "#6366F1";
+  if (s.includes("market") || s.includes("marketer")) return "#06B6D4";
+  if (s.includes("developer") || s.includes("dev")) return "#0284C7";
+  if (s.includes("started") || s.includes("start") || s.includes("project started")) return "#3B82F6";
   if (s.includes("hold")) return "#DC2626";
-  return "#0ea5e9";
+  return "#3B82F6";
 }
 
 export type ProjectsQueryResult = {
@@ -187,7 +221,7 @@ export const projectsQueryOptions = (userId?: string, isAdmin: boolean = false) 
           COALESCE(prj.client_email, p.email) AS client_email,
           p.logo_url AS prospect_logo_url,
           prj.service_id,
-          COALESCE(prj.status, 'CR Clearance') AS status,
+          COALESCE(prj.status, 'Project Started') AS status,
           COALESCE(prj.priority, 'Medium') AS priority,
           prj.assigned_agent_id,
           prj.assigned_artist_id,
@@ -267,7 +301,7 @@ export const projectsQueryOptions = (userId?: string, isAdmin: boolean = false) 
           const dueAmount = Math.max(0, budget - paidAmount);
           const progress = Number(r["progress"] || 0);
           const rawId = String(r["id"]);
-          const status = String(r["status"] || "CR Clearance");
+          const status = String(r["status"] || "Project Started");
           const priority = String(r["priority"] || "Medium");
           const code =
             (r["project_code"] as string) ||
@@ -429,7 +463,7 @@ export function useSaveProjectMutation() {
             payload.client_phone || null,
             payload.client_email || null,
             payload.service_id || null,
-            payload.stage_id || "CR Clearance",
+            payload.stage_id || "Project Started",
             payload.priority || "Medium",
             payload.budget || 0,
             payload.paid_amount || 0,
@@ -465,7 +499,7 @@ export function useSaveProjectMutation() {
             payload.client_phone || null,
             payload.client_email || null,
             payload.service_id || null,
-            payload.stage_id || "CR Clearance",
+            payload.stage_id || "Project Started",
             payload.priority || "Medium",
             payload.budget || 0,
             payload.paid_amount || 0,
