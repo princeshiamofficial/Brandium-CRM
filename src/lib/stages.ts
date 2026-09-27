@@ -755,6 +755,185 @@ export function useDeleteStage() {
   });
 }
 
+export function parseNotesToArray(notes?: string | null): string[] {
+  if (!notes || typeof notes !== "string") return [];
+
+  const cleaned = notes
+    .replace(/\[Artist:\s*[^\]]+\]/gi, "")
+    .replace(/\[Agent:\s*[^\]]+\]/gi, "")
+    .trim();
+
+  if (!cleaned) return [];
+
+  // If JSON array string e.g. ["item 1", "item 2"]
+  if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(cleaned);
+      if (Array.isArray(parsed)) {
+        const arr = parsed.map((item) => String(item).trim()).filter(Boolean);
+        if (arr.length > 0) return arr;
+      }
+    } catch {
+      // Fallback to text parsing
+    }
+  }
+
+  // Split by newlines or semicolon / bullet lists
+  const lines = cleaned
+    .split(/\r?\n+/)
+    .map((line) => line.replace(/^[\s*•\-–—\d.)]+/, "").trim())
+    .filter(Boolean);
+
+  if (lines.length > 0) {
+    return lines;
+  }
+
+  return [cleaned];
+}
+
+export async function addStageNote(params: {
+  prospectId: string;
+  historyId?: string | null;
+  stageId?: string | null;
+  note: string;
+  userId?: string | null;
+}): Promise<boolean> {
+  const { prospectId, historyId, stageId, note, userId } = params;
+  if (!prospectId || !note.trim()) return false;
+
+  const nowStr = getMySQLTimestamp();
+  const trimmedNote = note.trim();
+
+  try {
+    // If a specific historyId is provided and it's not the virtual 'initial-' item:
+    if (historyId && !historyId.startsWith("initial-")) {
+      const res = await runMySQLQuery<Record<string, unknown>[]>(
+        `SELECT note FROM \`prospect_stage_history\` WHERE \`id\` = ? LIMIT 1;`,
+        [historyId],
+      );
+      const existingRawNote = (res.data?.[0]?.["note"] as string) || null;
+      const currentArray = parseNotesToArray(existingRawNote);
+      const updatedArray = [...currentArray, trimmedNote];
+      const newNotePayload = JSON.stringify(updatedArray);
+
+      await runMySQLQuery(
+        `UPDATE \`prospect_stage_history\` SET \`note\` = ?, \`changed_at\` = ? WHERE \`id\` = ?;`,
+        [newNotePayload, nowStr, historyId],
+      );
+    } else {
+      // Check if history has any entry for this prospect
+      const histRes = await runMySQLQuery<Record<string, unknown>[]>(
+        `SELECT id, note FROM \`prospect_stage_history\` WHERE \`prospect_id\` = ? ORDER BY \`changed_at\` DESC LIMIT 1;`,
+        [prospectId],
+      );
+
+      if (histRes?.success && histRes.data?.[0]?.["id"] && !historyId?.startsWith("initial-")) {
+        const targetId = String(histRes.data[0]["id"]);
+        const existingRawNote = (histRes.data[0]["note"] as string) || null;
+        const currentArray = parseNotesToArray(existingRawNote);
+        const updatedArray = [...currentArray, trimmedNote];
+        const newNotePayload = JSON.stringify(updatedArray);
+
+        await runMySQLQuery(
+          `UPDATE \`prospect_stage_history\` SET \`note\` = ?, \`changed_at\` = ? WHERE \`id\` = ?;`,
+          [newNotePayload, nowStr, targetId],
+        );
+      } else {
+        // Append to prospects.notes
+        const pRes = await runMySQLQuery<Record<string, unknown>[]>(
+          `SELECT notes, stage_id FROM \`prospects\` WHERE \`id\` = ? LIMIT 1;`,
+          [prospectId],
+        );
+        const existingNotes = (pRes.data?.[0]?.["notes"] as string) || null;
+        const currentArray = parseNotesToArray(existingNotes);
+        const updatedArray = [...currentArray, trimmedNote];
+        const newNotePayload = JSON.stringify(updatedArray);
+
+        await runMySQLQuery(
+          `UPDATE \`prospects\` SET \`notes\` = ?, \`updated_at\` = ? WHERE \`id\` = ?;`,
+          [newNotePayload, nowStr, prospectId],
+        );
+
+        // Also insert into prospect_stage_history for full timeline tracking
+        const currentStageId = String(stageId || pRes.data?.[0]?.["stage_id"] || "prospect");
+        const newHistId = generateUUID();
+        await runMySQLQuery(
+          `INSERT INTO \`prospect_stage_history\` (\`id\`, \`prospect_id\`, \`from_stage_id\`, \`to_stage_id\`, \`note\`, \`changed_by\`, \`changed_at\`)
+           VALUES (?, ?, ?, ?, ?, ?, ?);`,
+          [
+            newHistId,
+            prospectId,
+            currentStageId,
+            currentStageId,
+            JSON.stringify([trimmedNote]),
+            userId || null,
+            nowStr,
+          ],
+        );
+      }
+    }
+
+    // Keep prospects updated_at and notes in sync
+    await runMySQLQuery(
+      `UPDATE \`prospects\` SET \`updated_at\` = ? WHERE \`id\` = ?;`,
+      [nowStr, prospectId],
+    );
+
+    return true;
+  } catch (err) {
+    console.error("addStageNote error:", err);
+    return false;
+  }
+}
+
+export async function deleteStageNote(params: {
+  prospectId: string;
+  historyId?: string | null;
+  noteIndex: number;
+}): Promise<boolean> {
+  const { prospectId, historyId, noteIndex } = params;
+  if (!prospectId) return false;
+
+  const nowStr = getMySQLTimestamp();
+
+  try {
+    if (historyId && !historyId.startsWith("initial-")) {
+      const res = await runMySQLQuery<Record<string, unknown>[]>(
+        `SELECT note FROM \`prospect_stage_history\` WHERE \`id\` = ? LIMIT 1;`,
+        [historyId],
+      );
+      const existingRawNote = (res.data?.[0]?.["note"] as string) || null;
+      const currentArray = parseNotesToArray(existingRawNote);
+      const updatedArray = currentArray.filter((_, idx) => idx !== noteIndex);
+      const newNotePayload = updatedArray.length > 0 ? JSON.stringify(updatedArray) : null;
+
+      await runMySQLQuery(
+        `UPDATE \`prospect_stage_history\` SET \`note\` = ?, \`changed_at\` = ? WHERE \`id\` = ?;`,
+        [newNotePayload, nowStr, historyId],
+      );
+    } else {
+      const pRes = await runMySQLQuery<Record<string, unknown>[]>(
+        `SELECT notes FROM \`prospects\` WHERE \`id\` = ? LIMIT 1;`,
+        [prospectId],
+      );
+      const existingNotes = (pRes.data?.[0]?.["notes"] as string) || null;
+      const currentArray = parseNotesToArray(existingNotes);
+      const updatedArray = currentArray.filter((_, idx) => idx !== noteIndex);
+      const newNotePayload = updatedArray.length > 0 ? JSON.stringify(updatedArray) : null;
+
+      await runMySQLQuery(
+        `UPDATE \`prospects\` SET \`notes\` = ?, \`updated_at\` = ? WHERE \`id\` = ?;`,
+        [newNotePayload, nowStr, prospectId],
+      );
+    }
+
+    return true;
+  } catch (err) {
+    console.error("deleteStageNote error:", err);
+    return false;
+  }
+}
+
 export async function deleteStageHistoryEntry(
   historyId: string,
   prospectId: string,
