@@ -1027,30 +1027,7 @@ function ProspectsPageContent() {
                               <Pencil className="size-3.5 text-[#1B84FF] shrink-0" />
                               <span>Edit</span>
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="flex items-center gap-2 cursor-pointer w-full text-[13px] font-normal px-3 py-1.5 rounded-[5px]"
-                              onClick={() => {
-                                setViewStageProspect(p);
-                                setViewStageOpen(true);
-                              }}
-                            >
-                              <Eye className="size-3.5 text-[#00c5fb] shrink-0" />
-                              <span>Preview</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="flex items-center gap-2 cursor-pointer w-full text-[13px] font-normal px-3 py-1.5 rounded-[5px]"
-                              onClick={() => {
-                                setStageTarget({
-                                  id: p.id,
-                                  label: p.business_name || p.contact_name,
-                                  stageId: p.stage_id,
-                                  currentStageName: stageName,
-                                });
-                              }}
-                            >
-                              <RefreshCw className="size-3.5 text-emerald-600 shrink-0" />
-                              <span>Update Stage</span>
-                            </DropdownMenuItem>
+
                             <DropdownMenuItem
                               className="flex items-center gap-2 cursor-pointer w-full text-[13px] font-normal px-3 py-1.5 rounded-[5px] text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40"
                               onClick={() => {
@@ -1174,30 +1151,7 @@ function ProspectsPageContent() {
                           <Pencil className="size-3.5 text-[#1B84FF] shrink-0" />
                           <span>Edit</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="flex items-center gap-2 cursor-pointer w-full text-[14px] font-normal leading-5.25 text-[#707070] dark:text-slate-400 focus:text-slate-900 dark:focus:text-slate-100 focus:bg-slate-50 dark:focus:bg-slate-800 rounded-[6px] px-3.75 py-[6.4px] transition-colors"
-                          onClick={() => {
-                            setViewStageProspect(p);
-                            setViewStageOpen(true);
-                          }}
-                        >
-                          <Eye className="size-3.5 text-[#00c5fb] shrink-0" />
-                          <span>Preview</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="flex items-center gap-2 cursor-pointer w-full text-[14px] font-normal leading-5.25 text-[#707070] dark:text-slate-400 focus:text-slate-900 dark:focus:text-slate-100 focus:bg-slate-50 dark:focus:bg-slate-800 rounded-[6px] px-3.75 py-[6.4px] transition-colors"
-                          onClick={() => {
-                            setStageTarget({
-                              id: p.id,
-                              label: p.business_name || p.contact_name,
-                              stageId: p.stage_id,
-                              currentStageName: stageName,
-                            });
-                          }}
-                        >
-                          <RefreshCw className="size-3.5 text-emerald-600 shrink-0" />
-                          <span>Update Stage</span>
-                        </DropdownMenuItem>
+
                         <DropdownMenuItem
                           className="flex items-center gap-2 cursor-pointer w-full text-[14px] font-normal leading-5.25 text-[#707070] dark:text-slate-400 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40 rounded-[6px] px-3.75 py-[6.4px] transition-colors"
                           onClick={() => {
