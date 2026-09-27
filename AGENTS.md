@@ -500,7 +500,7 @@ Welcome to the **Brandium CRM** repository.
   - In `src/components/view-stage-dialog.tsx` and `src/lib/stages.ts`, the stage activity timeline supports unlimited notes per stage:
     - **Footer Note Input Bar**: Embedded at the bottom of the dialog spanning the left side with a fast `<Input>` and purple "Add" / "Send" button (supports Enter key submission).
     - **Targeted Stage Notes**: By default, notes attach to the active/latest stage, or users can click the `+` icon on any specific timeline stage card to target that stage directly.
-    - **Multiple Notes Array**: Notes are parsed and rendered via `parseNotesToArray()` as individual bulleted items under each stage transition.
+    - **Multiple Notes Array with Date, Time & Author**: Notes are parsed via `parseNotesToItems()` as structured `StageNoteItem` objects (`text`, `createdAt`, `createdByName`, `createdByAvatar`). Each note displays its creation date and time (`MM-dd h:mm a`) along with author attribution (`by Name`) directly below the note text.
     - **Note Removal**: Hovering over any note item reveals a subtle delete `X` button with an `AlertDialog` confirmation, enabling complete CRUD control over individual notes in the array.
     - **Database Sync**: Functions `addStageNote` and `deleteStageNote` persist updates directly to `prospect_stage_history.note` and sync with `prospects.notes` in MySQL.
 
