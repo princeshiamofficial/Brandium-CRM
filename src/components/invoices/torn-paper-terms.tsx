@@ -3,11 +3,24 @@
 import React from "react";
 import { Info } from "lucide-react";
 
+/** Brandium's standard client terms (quotations, orders). */
+export const BRANDIUM_TERMS = [
+  "All Prices Exclude VAT/Taxes",
+  "Media Buying Costs Billed Separately",
+  "Third-Party Production Costs Additional",
+  "Additional Revisions Chargeable free till 3 requests (After that charge will be applicable)",
+  "Out-of-Scope Work Will Be Invoiced Separately",
+  "Work Begins After Payment Confirmation",
+  "Approved Work Is Non-Refundable",
+];
+
 interface TornPaperTermsProps {
   className?: string;
+  /** Plain-text terms; when given they replace the default four bold-labelled terms. */
+  terms?: string[] | undefined;
 }
 
-export const TornPaperTerms: React.FC<TornPaperTermsProps> = ({ className = "" }) => {
+export const TornPaperTerms: React.FC<TornPaperTermsProps> = ({ className = "", terms }) => {
   return (
     <div className={`w-full max-w-md select-none print:break-inside-avoid ${className}`}>
       {/* Top Torn Edge SVG - Double Layered for Paper Fiber Depth */}
@@ -49,36 +62,47 @@ export const TornPaperTerms: React.FC<TornPaperTermsProps> = ({ className = "" }
           <Info className="h-3.5 w-3.5 text-[#67B239]" />
           <span>Terms & Conditions</span>
         </div>
-        <ul className="space-y-1.5 text-[11px] sm:text-xs text-slate-700 leading-snug">
-          <li className="flex items-start gap-1.5">
-            <span className="text-[#67B239] font-black leading-none mt-0.5">•</span>
-            <span>
-              <strong className="text-slate-900 font-semibold">Advance Payment:</strong> Minimum 50%
-              advance required with official work order.
-            </span>
-          </li>
-          <li className="flex items-start gap-1.5">
-            <span className="text-[#67B239] font-black leading-none mt-0.5">•</span>
-            <span>
-              <strong className="text-slate-900 font-semibold">Delivery Timeline:</strong> Maximum
-              delivery time is 1 month from confirmation.
-            </span>
-          </li>
-          <li className="flex items-start gap-1.5">
-            <span className="text-[#67B239] font-black leading-none mt-0.5">•</span>
-            <span>
-              <strong className="text-slate-900 font-semibold">Excluded Charges:</strong> Tax, VAT &
-              delivery charges are excluded.
-            </span>
-          </li>
-          <li className="flex items-start gap-1.5">
-            <span className="text-[#67B239] font-black leading-none mt-0.5">•</span>
-            <span>
-              <strong className="text-slate-900 font-semibold">Refund Policy:</strong> Advance
-              payment is strictly non-refundable.
-            </span>
-          </li>
-        </ul>
+        {terms ? (
+          <ol className="space-y-1 text-[11px] sm:text-xs text-slate-700 leading-snug">
+            {terms.map((term, index) => (
+              <li key={term} className="flex items-start gap-1.5">
+                <span className="text-[#67B239] font-bold leading-none mt-0.5">{index + 1}.</span>
+                <span>{term}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <ul className="space-y-1.5 text-[11px] sm:text-xs text-slate-700 leading-snug">
+            <li className="flex items-start gap-1.5">
+              <span className="text-[#67B239] font-black leading-none mt-0.5">•</span>
+              <span>
+                <strong className="text-slate-900 font-semibold">Advance Payment:</strong> Minimum
+                50% advance required with official work order.
+              </span>
+            </li>
+            <li className="flex items-start gap-1.5">
+              <span className="text-[#67B239] font-black leading-none mt-0.5">•</span>
+              <span>
+                <strong className="text-slate-900 font-semibold">Delivery Timeline:</strong> Maximum
+                delivery time is 1 month from confirmation.
+              </span>
+            </li>
+            <li className="flex items-start gap-1.5">
+              <span className="text-[#67B239] font-black leading-none mt-0.5">•</span>
+              <span>
+                <strong className="text-slate-900 font-semibold">Excluded Charges:</strong> Tax, VAT
+                & delivery charges are excluded.
+              </span>
+            </li>
+            <li className="flex items-start gap-1.5">
+              <span className="text-[#67B239] font-black leading-none mt-0.5">•</span>
+              <span>
+                <strong className="text-slate-900 font-semibold">Refund Policy:</strong> Advance
+                payment is strictly non-refundable.
+              </span>
+            </li>
+          </ul>
+        )}
       </div>
 
       {/* Bottom Torn Edge SVG - Double Layered for Paper Fiber Depth */}
