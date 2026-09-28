@@ -26,6 +26,7 @@ import {
   Phone,
   Printer,
   ReceiptText,
+  ScrollText,
   Send,
   StickyNote,
   Trash2,
@@ -66,7 +67,7 @@ import {
   useDeleteOrderCommentMutation,
   type OrderComment,
 } from "@/lib/orders";
-import { BRANDIUM_TERMS, TornPaperTerms } from "@/components/invoices/torn-paper-terms";
+import { BRANDIUM_TERMS } from "@/components/invoices/torn-paper-terms";
 import { StatusInfoIcon } from "@/components/sales/status-info-icon";
 import { getInitials } from "@/components/orders/assign-stage-dialog";
 
@@ -669,7 +670,14 @@ export default function OrderTrackPage() {
               <div className="flex flex-col sm:flex-row justify-between items-start gap-6 mt-6 pt-4 border-t border-border/30 print:mt-2 print:pt-2 print:break-inside-avoid">
                 {/* Terms & Conditions (bottom-left) */}
                 <div className="w-full sm:max-w-[55%]">
-                  <TornPaperTerms terms={BRANDIUM_TERMS} />
+                  <h4 className="flex items-center gap-1.5 mb-1.5 text-xs font-semibold uppercase tracking-wide text-[#0a2e5c] dark:text-slate-200">
+                    <ScrollText className="size-3.5 text-[#67B239]" /> Terms & Conditions
+                  </h4>
+                  <ol className="list-decimal pl-4 space-y-0.5 text-[11px] leading-snug text-muted-foreground">
+                    {BRANDIUM_TERMS.map((term, index) => (
+                      <li key={index}>{term}</li>
+                    ))}
+                  </ol>
                 </div>
 
                 {/* Financial Summary Box (bottom-right) */}
