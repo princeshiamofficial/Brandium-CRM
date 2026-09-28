@@ -731,6 +731,8 @@ export async function ensureMySQLTablesExist(
         { table: "prospects", column: "is_qualified", def: "TINYINT(1) NOT NULL DEFAULT 0" },
         { table: "prospects", column: "estimated_budget", def: "DECIMAL(12, 2) NULL" },
         { table: "prospects", column: "qualification_notes", def: "TEXT NULL" },
+        // quotations protection
+        { table: "quotations", column: "is_protected", def: "TINYINT(1) NOT NULL DEFAULT 0" },
         // expenses
         { table: "expenses", column: "receipt_url", def: "TEXT NULL" },
         { table: "expenses", column: "reference_no", def: "VARCHAR(100) NULL" },
@@ -833,6 +835,15 @@ export async function ensureMySQLTablesExist(
           ('role-global-artist', 'perm-services-read'),
           ('role-global-artist', 'perm-sales-view');
       `);
+
+      // Mark default quotations as protected to prevent accidental deletion
+      try {
+        await conn.query(
+          "UPDATE `quotations` SET `is_protected` = 1 WHERE `quotation_code` IN ('QT-12145', 'QT-12147', 'QT-12148');",
+        );
+      } catch {
+        // Ignore if quotations table does not exist yet
+      }
 
       try {
         await conn.query(

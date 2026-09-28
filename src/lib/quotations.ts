@@ -64,6 +64,7 @@ export type CrmQuotationItem = {
   notes: string | null;
   prospect_notes?: string | null;
   status_history?: string | null;
+  is_protected?: boolean | null;
   created_at: string;
   updated_at: string;
 };
@@ -641,6 +642,16 @@ export function useDeleteQuotationMutation() {
 
   return useMutation({
     mutationFn: async (quotationId: string) => {
+      // Check if quotation is protected (default)
+      const check = await runMySQLQuery<Record<string, unknown>[]>(
+        "SELECT is_protected FROM quotations WHERE id = ? LIMIT 1;",
+        [quotationId],
+      );
+      const row = (check.data || [])[0];
+      if (row && row["is_protected"]) {
+        throw new Error("Cannot delete protected default quotations");
+      }
+
       await runMySQLQuery("UPDATE quotations SET is_active = 0 WHERE id = ?;", [quotationId]);
       return { success: true };
     },
