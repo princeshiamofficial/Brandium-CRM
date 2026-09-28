@@ -928,6 +928,12 @@ export default function QuotationDetailPage() {
                   <p className="text-base sm:text-lg font-bold text-foreground">
                     {quotation.client_name || quotation.title}
                   </p>
+                  {quotation.title && quotation.title !== quotation.client_name && (
+                    <p className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                      <Building className="h-3.5 w-3.5 text-[#67B239] shrink-0" />
+                      <span>{quotation.title}</span>
+                    </p>
+                  )}
                   <div className="space-y-1 text-xs text-muted-foreground">
                     {quotation.client_address && (
                       <p className="flex items-start gap-1.5 leading-relaxed">
