@@ -1,34 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { Link } from "@/components/navigation-link";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { useState, useMemo } from "react";
+import Link from "next/link";
 import {
   Receipt,
-  Plus,
   Search,
-  Calendar,
-  DollarSign,
-  CheckCircle2,
-  AlertCircle,
   Eye,
-  Edit,
-  Ban,
-  CreditCard,
   RotateCcw,
-  Calendar as CalendarIcon,
   Layers,
   X,
-  FileText,
-  Printer,
-  Trash2,
-  User,
-  MoreVertical,
+  DollarSign,
+  AlertCircle,
+  CheckCircle2,
+  CreditCard,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -39,29 +27,48 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarPicker } from "@/components/ui/calendar";
-import type { DateRange } from "react-day-picker";
-import { format } from "date-fns";
 import { StatCard } from "@/components/stat-card";
-import {
-  invoicesQueryOptions,
-  type InvoiceFilters,
-  type InvoiceStatus,
-  type Invoice,
-  cancelInvoice,
-  deleteInvoice,
-} from "@/lib/billing";
 import { useAuth } from "@/lib/auth";
-import { BillingRecordPaymentModal } from "@/components/billing-record-payment-modal";
-import { AddInvoiceDialog } from "@/components/add-invoice-dialog";
+import { runMySQLQuery } from "@/lib/mysql-api";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+
+interface BillingRecord {
+  id: string;
+  order_number: string;
+  company_name: string;
+  status: string;
+  total_amount: number;
+  paid_amount: number;
+  created_at: string;
+}
+
+interface BillingMetrics {
+  total_revenue: number;
+  total_paid: number;
+  pending_amount: number;
+  invoice_count: number;
+}
+
+const ORDER_STATUSES = [
+  "Order Submitted",
+  "Script Writer",
+  "Content Planner",
+  "Videographer",
+  "Video Graphy Complete",
+  "Video Editor",
+  "Marketer",
+  "Developer",
+  "Delivered",
+];
 
 function formatCurrency(amount: number): string {
   return `৳${Number(amount || 0).toLocaleString("en-US", {
@@ -70,180 +77,165 @@ function formatCurrency(amount: number): string {
   })}`;
 }
 
-export default function BillingPage() {
-  const { user, isAdmin } = useAuth();
-  const queryClient = useQueryClient();
-  const [search, setSearch] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<InvoiceStatus | "all">("all");
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [calOpen, setCalOpen] = useState(false);
+function formatDate(dateStr: string): string {
+  try {
+    return format(new Date(dateStr), "dd MMM yyyy");
+  } catch {
+    return dateStr;
+  }
+}
 
-  const [payModalState, setPayModalState] = useState<{
-    open: boolean;
-    invoice: Invoice | null;
-  }>({ open: false, invoice: null });
+function getStatusBadge(status: string) {
+  const statusLower = (status || "").toLowerCase();
 
-  const [isAddInvoiceOpen, setIsAddInvoiceOpen] = useState(false);
-  const [editInvoiceState, setEditInvoiceState] = useState<Invoice | null>(null);
+  if (statusLower.includes("delivered")) {
+    return (
+      <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200">
+        Delivered
+      </Badge>
+    );
+  }
 
-  const filters: InvoiceFilters = {
-    search,
-    status: statusFilter,
-    from_date: dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : undefined,
-    to_date: dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : undefined,
-  };
+  if (statusLower.includes("editor") || statusLower.includes("marketer")) {
+    return (
+      <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200">
+        In Progress
+      </Badge>
+    );
+  }
 
-  const { data: rawInvoices = [], isLoading } = useQuery(
-    invoicesQueryOptions(filters, user?.id, isAdmin),
+  if (statusLower.includes("submitted")) {
+    return (
+      <Badge className="bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200">
+        Pending
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 border border-slate-200">
+      {status || "N/A"}
+    </Badge>
   );
-  const invoices = Array.isArray(rawInvoices) ? rawInvoices : [];
+}
 
-  const totalInvoiceCount = invoices.length;
-  const totalBilledRevenue = invoices.reduce((acc, curr) => acc + curr.total_amount, 0);
-  const totalPaidRevenue = invoices.reduce((acc, curr) => acc + curr.paid_amount, 0);
-  const totalDueRevenue = invoices.reduce((acc, curr) => acc + curr.due_amount, 0);
+export default function BillingPage() {
+  const { user } = useAuth();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 12;
 
-  const cancelMutation = useMutation({
-    mutationFn: (id: string) => cancelInvoice(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      toast.success("Invoice marked as cancelled.");
-    },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to cancel invoice.");
+  // Fetch metrics
+  const { data: metricsData, isLoading: metricsLoading } = useQuery({
+    queryKey: ["billing-metrics"],
+    queryFn: async () => {
+      const result = await runMySQLQuery<
+        Array<{ total_revenue: number; total_paid: number; count: number }>
+      >(
+        `SELECT
+          SUM(CAST(total_amount AS DECIMAL(12,2))) AS total_revenue,
+          SUM(CAST(paid_amount AS DECIMAL(12,2))) AS total_paid,
+          COUNT(*) AS count
+        FROM orders
+        WHERE is_deleted = 0`,
+        [],
+      );
+
+      if (!result.success || !result.data || result.data.length === 0) {
+        return {
+          total_revenue: 0,
+          total_paid: 0,
+          pending_amount: 0,
+          invoice_count: 0,
+        };
+      }
+
+      const row = result.data[0];
+      if (!row) {
+        return {
+          total_revenue: 0,
+          total_paid: 0,
+          pending_amount: 0,
+          invoice_count: 0,
+        };
+      }
+
+      const total_revenue = Number(row.total_revenue) || 0;
+      const total_paid = Number(row.total_paid) || 0;
+      const pending_amount = total_revenue - total_paid;
+      const invoice_count = Number(row.count) || 0;
+
+      return {
+        total_revenue,
+        total_paid,
+        pending_amount,
+        invoice_count,
+      };
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteInvoice(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
-      queryClient.invalidateQueries({ queryKey: ["opportunity-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["prospects"] });
-      queryClient.invalidateQueries({ queryKey: ["denied-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["won-sales"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success("Invoice deleted successfully.");
-    },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to delete invoice.");
+  // Fetch billing records
+  const { data: ordersData, isLoading: ordersLoading } = useQuery({
+    queryKey: ["billing-orders", search, statusFilter],
+    queryFn: async () => {
+      let sql = `SELECT
+        id,
+        order_number,
+        company_name,
+        status,
+        total_amount,
+        paid_amount,
+        created_at
+      FROM orders
+      WHERE is_deleted = 0`;
+
+      const params: unknown[] = [];
+
+      // Apply search filter
+      if (search.trim()) {
+        sql += ` AND (order_number LIKE ? OR company_name LIKE ?)`;
+        params.push(`%${search}%`, `%${search}%`);
+      }
+
+      // Apply status filter
+      if (statusFilter !== "all") {
+        sql += ` AND status LIKE ?`;
+        params.push(`%${statusFilter}%`);
+      }
+
+      sql += ` ORDER BY created_at DESC`;
+
+      const result = await runMySQLQuery<BillingRecord[]>(sql, params);
+
+      if (!result.success || !result.data) {
+        return [];
+      }
+
+      return result.data as BillingRecord[];
     },
   });
+
+  const orders = useMemo(() => (Array.isArray(ordersData) ? ordersData : []), [ordersData]);
+
+  // Pagination
+  const totalPages = Math.ceil(orders.length / pageSize);
+  const paginatedOrders = useMemo(() => {
+    const startIdx = (currentPage - 1) * pageSize;
+    return orders.slice(startIdx, startIdx + pageSize);
+  }, [orders, currentPage]);
 
   const resetFilters = () => {
     setSearch("");
     setStatusFilter("all");
-    setDateRange(undefined);
+    setCurrentPage(1);
   };
 
-  const printInvoice = (inv: Invoice) => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      window.print();
-      return;
-    }
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Invoice - ${inv.invoice_number}</title>
-          <style>
-            body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; color: #1e293b; }
-            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; }
-            .title { font-size: 24px; font-weight: bold; color: #0f172a; }
-            .brand { font-size: 18px; font-weight: bold; color: #67B239; }
-            .section { margin-top: 24px; }
-            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
-            .box { background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; }
-            .label { font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; }
-            .val { font-size: 16px; font-weight: bold; margin-top: 4px; color: #0f172a; }
-            .amount-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #cbd5e1; }
-            .due { color: #e11d48; font-size: 18px; font-weight: 900; }
-            .paid { color: #16a34a; font-weight: bold; }
-            .status { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-weight: bold; font-size: 12px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <div class="brand">Brandium Telesales CRM</div>
-              <div class="title">INVOICE: ${inv.invoice_number}</div>
-            </div>
-            <div style="text-align: right;">
-              <div><strong>Status:</strong> ${inv.status}</div>
-              <div><strong>Bill Date:</strong> ${inv.bill_date}</div>
-              <div><strong>Due Date:</strong> ${inv.due_date}</div>
-            </div>
-          </div>
-          <div class="section grid">
-            <div class="box">
-              <div class="label">Billed To</div>
-              <div class="val">${inv.prospect_name}</div>
-              <div>${inv.business_name || ""}</div>
-              <div>${inv.client_phone || ""}</div>
-              <div>${inv.client_email || ""}</div>
-            </div>
-            <div class="box">
-              <div class="label">Service Description</div>
-              <div class="val">${inv.description}</div>
-              <div style="margin-top: 8px; font-size: 13px; color: #64748b;">Created by: ${inv.created_by_name || "TSE Agent"}</div>
-            </div>
-          </div>
-          <div class="section box" style="margin-top: 24px;">
-            <div class="amount-row"><span>Total Amount:</span><strong>${formatCurrency(inv.total_amount)}</strong></div>
-            <div class="amount-row"><span class="paid">Paid Amount:</span><strong class="paid">${formatCurrency(inv.paid_amount)}</strong></div>
-            <div class="amount-row" style="border-bottom: none; font-size: 18px;"><span class="due">Due Balance:</span><strong class="due">${formatCurrency(inv.due_amount)}</strong></div>
-          </div>
-          <script>
-            window.onload = function() { window.print(); };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
-
-  const exportSingleInvoicePDF = (inv: Invoice) => {
-    printInvoice(inv);
-    toast.success(`Generated printable PDF for ${inv.invoice_number}`);
-  };
-
-  const getStatusBadge = (status: InvoiceStatus) => {
-    switch (status) {
-      case "Paid":
-        return (
-          <Badge className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 text-xs font-semibold px-2.5 py-0.5 rounded-md">
-            Paid
-          </Badge>
-        );
-      case "Partially Paid":
-        return (
-          <Badge className="bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 text-xs font-semibold px-2.5 py-0.5 rounded-md">
-            Partially Paid
-          </Badge>
-        );
-      case "Pending":
-        return (
-          <Badge className="bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 text-xs font-semibold px-2.5 py-0.5 rounded-md">
-            Pending
-          </Badge>
-        );
-      case "Cancelled":
-        return (
-          <Badge
-            variant="outline"
-            className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 text-xs font-semibold px-2.5 py-0.5 rounded-md"
-          >
-            Cancelled
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
+  const isLoading = metricsLoading || ordersLoading;
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
@@ -255,63 +247,80 @@ export default function BillingPage() {
                 Billing & Invoices
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                Client billing, invoice creation, payment recording, and financial due calculations.
+                Track orders, payments, and financial analytics.
               </p>
             </div>
           </div>
         </div>
-
-        <Button
-          onClick={() => {
-            setEditInvoiceState(null);
-            setIsAddInvoiceOpen(true);
-          }}
-          className="bg-[#67B239] hover:bg-[#5aa030] text-white gap-1.5 w-full sm:w-auto h-10 px-4 rounded-xl font-semibold shadow-xs transition-all cursor-pointer"
-        >
-          <Plus className="size-4" />
-          Add Bill / Create Invoice
-        </Button>
       </div>
 
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
-        <StatCard
-          label="Total Invoices"
-          value={String(totalInvoiceCount)}
-          icon={Receipt}
-          colorScheme="pastelPurple"
-        />
-        <StatCard
-          label="Total Billed"
-          value={formatCurrency(totalBilledRevenue)}
-          icon={DollarSign}
-          colorScheme="pastelTeal"
-        />
-        <StatCard
-          label="Total Collected (Paid)"
-          value={formatCurrency(totalPaidRevenue)}
-          icon={CheckCircle2}
-          colorScheme="pastelEmerald"
-        />
-        <StatCard
-          label="Outstanding Due Balance"
-          value={formatCurrency(totalDueRevenue)}
-          icon={AlertCircle}
-          colorScheme="pastelPeach"
-        />
+        {isLoading ? (
+          <>
+            {[1, 2, 3, 4].map((idx) => (
+              <Card key={idx} className="border-slate-200/80 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-xs text-muted-foreground font-medium">
+                    <Skeleton className="h-3 w-20 rounded" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-32 rounded mb-2" />
+                  <Skeleton className="h-2 w-24 rounded" />
+                </CardContent>
+              </Card>
+            ))}
+          </>
+        ) : (
+          <>
+            <StatCard
+              label="Total Revenue"
+              value={formatCurrency(metricsData?.total_revenue || 0)}
+              icon={DollarSign}
+              colorScheme="pastelTeal"
+            />
+            <StatCard
+              label="Pending Amount"
+              value={formatCurrency(metricsData?.pending_amount || 0)}
+              icon={AlertCircle}
+              colorScheme="pastelPeach"
+            />
+            <StatCard
+              label="Total Paid"
+              value={formatCurrency(metricsData?.total_paid || 0)}
+              icon={CheckCircle2}
+              colorScheme="pastelEmerald"
+            />
+            <StatCard
+              label="Invoice Count"
+              value={String(metricsData?.invoice_count || 0)}
+              icon={CreditCard}
+              colorScheme="pastelPurple"
+            />
+          </>
+        )}
       </div>
 
+      {/* Filters */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="relative w-full md:max-w-xs lg:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
-            placeholder="Search client, business, invoice #..."
+            placeholder="Search order# or company..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             className="pl-9 pr-8 h-9 text-xs sm:text-sm bg-white dark:bg-card rounded-xl border-slate-200 dark:border-border"
           />
           {search && (
             <button
-              onClick={() => setSearch("")}
+              onClick={() => {
+                setSearch("");
+                setCurrentPage(1);
+              }}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
             >
               <X className="size-3.5" />
@@ -322,76 +331,26 @@ export default function BillingPage() {
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <Select
             value={statusFilter}
-            onValueChange={(val: string) => setStatusFilter(val as InvoiceStatus | "all")}
+            onValueChange={(val) => {
+              setStatusFilter(val);
+              setCurrentPage(1);
+            }}
           >
-            <SelectTrigger className="flex-1 sm:flex-none sm:w-40 h-9 text-xs rounded-xl bg-white dark:bg-card border-slate-200 dark:border-border">
+            <SelectTrigger className="flex-1 sm:flex-none sm:w-44 h-9 text-xs rounded-xl bg-white dark:bg-card border-slate-200 dark:border-border">
               <Layers className="size-3.5 text-muted-foreground shrink-0" />
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="Pending">Pending</SelectItem>
-              <SelectItem value="Partially Paid">Partially Paid</SelectItem>
-              <SelectItem value="Paid">Paid</SelectItem>
-              <SelectItem value="Cancelled">Cancelled</SelectItem>
+              {ORDER_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
-          <Popover open={calOpen} onOpenChange={setCalOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={`flex-1 sm:flex-none h-9 px-3 text-xs font-normal rounded-xl bg-white dark:bg-card border-slate-200 dark:border-border gap-2 ${
-                  dateRange?.from ? "text-foreground font-medium" : "text-muted-foreground"
-                }`}
-              >
-                <CalendarIcon className="size-3.5" />
-                {dateRange?.from ? (
-                  dateRange.to ? (
-                    <span>
-                      {format(dateRange.from, "MMM d")} &ndash;{" "}
-                      {format(dateRange.to, "MMM d, yyyy")}
-                    </span>
-                  ) : (
-                    format(dateRange.from, "MMM d, yyyy")
-                  )
-                ) : (
-                  "Date Range"
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <CalendarPicker
-                mode="range"
-                selected={dateRange}
-                onSelect={(range) => {
-                  setDateRange(range);
-                  if (range?.to) {
-                    setCalOpen(false);
-                  }
-                }}
-                numberOfMonths={2}
-                initialFocus
-              />
-              {dateRange?.from && (
-                <div className="border-t p-2 flex justify-end">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs"
-                    onClick={() => {
-                      setDateRange(undefined);
-                      setCalOpen(false);
-                    }}
-                  >
-                    Clear dates
-                  </Button>
-                </div>
-              )}
-            </PopoverContent>
-          </Popover>
-
-          {(search || statusFilter !== "all" || dateRange) && (
+          {(search || statusFilter !== "all") && (
             <Button
               variant="outline"
               size="icon"
@@ -405,238 +364,169 @@ export default function BillingPage() {
         </div>
       </div>
 
+      {/* Table */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, idx) => (
-            <div
-              key={idx}
-              className="bg-white dark:bg-card border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4.5 space-y-4 shadow-xs"
-            >
-              <div className="flex justify-between items-start">
-                <div className="space-y-2">
-                  <Skeleton className="h-5 w-32 rounded-md" />
-                  <Skeleton className="h-3 w-20 rounded-md" />
-                </div>
-                <Skeleton className="h-6 w-16 rounded-md" />
-              </div>
-              <div className="space-y-2 py-2">
-                <Skeleton className="h-4 w-full rounded" />
-                <Skeleton className="h-4 w-full rounded" />
-                <Skeleton className="h-4 w-full rounded" />
-              </div>
-              <Skeleton className="h-32 w-full rounded-xl" />
+        <Card className="border-slate-200/80 dark:border-slate-800 rounded-xl">
+          <CardContent className="p-6">
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((idx) => (
+                <Skeleton key={idx} className="h-12 w-full rounded-lg" />
+              ))}
             </div>
-          ))}
-        </div>
-      ) : invoices.length === 0 ? (
-        <Card className="bg-white dark:bg-card border-slate-200/80 dark:border-slate-800 shadow-xs p-12 text-center rounded-2xl">
-          <Receipt className="size-10 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-          <h3 className="font-bold text-foreground text-base">
-            No billing records match your search filters
-          </h3>
-          <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-            Create a new invoice or adjust the filter parameters above.
-          </p>
-          <Button
-            onClick={() => {
-              setEditInvoiceState(null);
-              setIsAddInvoiceOpen(true);
-            }}
-            className="mt-4 bg-[#67B239] hover:bg-[#5aa030] text-white gap-1.5 text-xs rounded-xl cursor-pointer"
-          >
-            <Plus className="size-3.5" />
-            Create First Invoice
-          </Button>
+          </CardContent>
+        </Card>
+      ) : orders.length === 0 ? (
+        <Card className="border-slate-200/80 dark:border-slate-800 rounded-xl">
+          <CardContent className="p-12 text-center">
+            <Receipt className="size-10 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+            <h3 className="font-bold text-foreground text-base">No billing records found</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Adjust your filters or create new orders to see them here.
+            </p>
+            <Button
+              onClick={resetFilters}
+              variant="outline"
+              size="sm"
+              className="mt-4 text-xs gap-1.5"
+            >
+              <RotateCcw className="size-3" />
+              Reset Filters
+            </Button>
+          </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {invoices.map((inv) => (
-            <div
-              key={inv.id}
-              className="bg-white dark:bg-card border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3.5"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <h3
-                      className="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100 truncate"
-                      title={inv.business_name || inv.prospect_name}
+        <div className="border border-slate-200/80 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-card">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
+                  <TableHead className="text-xs font-semibold text-slate-700 dark:text-slate-300 py-3 px-4">
+                    Order #
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold text-slate-700 dark:text-slate-300 py-3 px-4">
+                    Company
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold text-slate-700 dark:text-slate-300 py-3 px-4">
+                    Status
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold text-slate-700 dark:text-slate-300 py-3 px-4 text-right">
+                    Amount
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold text-slate-700 dark:text-slate-300 py-3 px-4 text-right">
+                    Paid
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold text-slate-700 dark:text-slate-300 py-3 px-4 text-right">
+                    Due
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold text-slate-700 dark:text-slate-300 py-3 px-4">
+                    Date
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold text-slate-700 dark:text-slate-300 py-3 px-4 text-center">
+                    Action
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedOrders.map((order) => {
+                  const due = order.total_amount - order.paid_amount;
+                  return (
+                    <TableRow
+                      key={order.id}
+                      className="border-slate-200/80 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors"
                     >
-                      {inv.business_name || inv.prospect_name || "Client Business"}
-                    </h3>
-                    <p className="text-xs text-muted-foreground font-mono font-medium mt-0.5">
-                      ID: {inv.invoice_number.replace(/^INV-/, "") || inv.id}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {getStatusBadge(inv.status)}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 rounded-lg text-slate-500 hover:text-foreground hover:bg-slate-100 dark:hover:bg-muted"
-                          title="More actions"
-                        >
-                          <MoreVertical className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setEditInvoiceState(inv);
-                            setIsAddInvoiceOpen(true);
-                          }}
-                          className="cursor-pointer gap-2 text-xs font-medium text-slate-700 dark:text-slate-200"
-                        >
-                          <Edit className="size-3.5 text-blue-600" />
-                          Edit Bill
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={inv.status === "Paid" || inv.status === "Cancelled"}
-                          onClick={() => setPayModalState({ open: true, invoice: inv })}
-                          className="cursor-pointer gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400"
-                        >
-                          <CreditCard className="size-3.5 text-emerald-600" />
-                          Mark Paid
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={inv.status === "Cancelled" || inv.status === "Paid"}
-                          onClick={() => {
-                            if (
-                              confirm(`Are you sure you want to cancel Bill ${inv.invoice_number}?`)
-                            ) {
-                              cancelMutation.mutate(inv.id);
-                            }
-                          }}
-                          className="cursor-pointer gap-2 text-xs font-medium text-slate-700 dark:text-slate-300"
-                        >
-                          <Ban className="size-3.5 text-amber-600" />
-                          Cancel Bill
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          disabled={deleteMutation.isPending}
-                          onClick={() => {
-                            if (
-                              confirm(
-                                `Are you sure you want to delete Bill ID ${inv.invoice_number}?`,
-                              )
-                            ) {
-                              deleteMutation.mutate(inv.id);
-                            }
-                          }}
-                          className="cursor-pointer gap-2 text-xs font-medium text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/50"
-                        >
-                          <Trash2 className="size-3.5 text-rose-600" />
-                          Delete Bill
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 pt-3 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground font-medium">Total Amount:</span>
-                    <span className="font-bold text-slate-950 dark:text-slate-50 font-mono text-sm">
-                      {formatCurrency(inv.total_amount)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground font-medium">Paid Amount:</span>
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                      {formatCurrency(inv.paid_amount)}
-                    </span>
-                  </div>
-                  <div className="border-t border-slate-200/80 dark:border-slate-800 my-1.5" />
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground font-medium">Due Amount:</span>
-                    <span className="font-bold text-rose-600 dark:text-rose-400 font-mono text-sm">
-                      {formatCurrency(inv.due_amount)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between text-[11px] text-muted-foreground pt-2.5 border-t border-slate-100 dark:border-slate-800 mt-2 gap-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <Calendar className="size-3.5 text-slate-500 shrink-0" />
-                    <span>Bill Date: {inv.bill_date}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Calendar className="size-3.5 text-slate-500 shrink-0" />
-                    <span>Due Date: {inv.due_date}</span>
-                  </div>
-                </div>
-
-                <div className="border-t border-slate-100 dark:border-slate-800 pt-2 mt-2 space-y-1 text-xs">
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <User className="size-3.5 text-slate-500 shrink-0" />
-                    <span className="truncate">
-                      Created By:{" "}
-                      <strong className="text-foreground font-semibold">
-                        {inv.created_by_name || "TSE Agent"}
-                      </strong>
-                    </span>
-                  </div>
-                  <div
-                    className="flex items-center gap-1.5 text-muted-foreground truncate"
-                    title={inv.description}
-                  >
-                    <FileText className="size-3.5 text-slate-500 shrink-0" />
-                    <span className="text-foreground font-medium truncate">
-                      {inv.description || "Sales Won - Service"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-[#f0f5fc] dark:bg-muted/40 p-2 sm:p-2.5 rounded-xl mt-2">
-                <div className="grid grid-cols-3 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-[#fdf6e9] hover:bg-[#faebd0] text-amber-900 border-[#f2deba] font-bold text-[11px] h-8 px-1 rounded-lg gap-1 cursor-pointer"
-                    asChild
-                  >
-                    <Link href="/billing-history">
-                      View <Eye className="size-3" />
-                    </Link>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-[#e1effe] hover:bg-[#d0e5fc] text-blue-900 border-[#c3ddfd] font-bold text-[11px] h-8 px-1 rounded-lg gap-1 cursor-pointer"
-                    onClick={() => exportSingleInvoicePDF(inv)}
-                  >
-                    PDF <FileText className="size-3" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-white hover:bg-slate-100 text-slate-800 border-slate-200 font-bold text-[11px] h-8 px-1 rounded-lg gap-1 cursor-pointer"
-                    onClick={() => printInvoice(inv)}
-                  >
-                    Print <Printer className="size-3" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ))}
+                      <TableCell className="text-xs font-semibold text-slate-900 dark:text-slate-100 py-3 px-4 font-mono">
+                        {order.order_number}
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-700 dark:text-slate-300 py-3 px-4">
+                        <span title={order.company_name} className="line-clamp-1">
+                          {order.company_name || "N/A"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-xs py-3 px-4">
+                        {getStatusBadge(order.status)}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono font-semibold text-slate-900 dark:text-slate-100 py-3 px-4 text-right">
+                        {formatCurrency(order.total_amount)}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400 py-3 px-4 text-right">
+                        {formatCurrency(order.paid_amount)}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400 py-3 px-4 text-right">
+                        {formatCurrency(due)}
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-600 dark:text-slate-400 py-3 px-4">
+                        {formatDate(order.created_at)}
+                      </TableCell>
+                      <TableCell className="text-xs py-3 px-4 text-center">
+                        <Link href={`/track/${order.order_number}`}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-slate-600 dark:text-slate-400 hover:text-[#67B239] hover:dark:text-[#67B239] hover:bg-[#67B239]/10"
+                            title="View Order"
+                          >
+                            <Eye className="size-3.5" />
+                          </Button>
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
 
-      <BillingRecordPaymentModal
-        open={payModalState.open}
-        onOpenChange={(open) => setPayModalState((prev) => ({ ...prev, open }))}
-        invoice={payModalState.invoice}
-      />
+      {/* Pagination */}
+      {!isLoading && orders.length > 0 && totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <p className="text-xs text-muted-foreground">
+            Showing {(currentPage - 1) * pageSize + 1} to{" "}
+            {Math.min(currentPage * pageSize, orders.length)} of {orders.length} orders
+          </p>
 
-      <AddInvoiceDialog
-        open={isAddInvoiceOpen}
-        onOpenChange={setIsAddInvoiceOpen}
-        invoiceToEdit={editInvoiceState}
-      />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              className="text-xs h-8"
+            >
+              Previous
+            </Button>
+
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((page) => (
+                <Button
+                  key={page}
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentPage(page)}
+                  className={`h-8 w-8 p-0 text-xs ${
+                    currentPage === page
+                      ? "bg-[#67B239] hover:bg-[#5aa030] text-white"
+                      : "text-slate-600 dark:text-slate-400"
+                  }`}
+                >
+                  {page}
+                </Button>
+              ))}
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+              className="text-xs h-8"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
