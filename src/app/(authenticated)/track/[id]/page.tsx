@@ -675,96 +675,96 @@ export default function OrderTrackPage() {
                 {/* Financial Summary Box (bottom-right) */}
                 <div className="w-full sm:max-w-sm relative">
                   <div className="flex justify-between mb-1">
-                      <span className="text-sm text-muted-foreground">Items Total:</span>
+                    <span className="text-sm text-muted-foreground">Items Total:</span>
+                    <span className="text-sm font-medium text-foreground">
+                      {formatCurrency(orderSubtotal)}
+                    </span>
+                  </div>
+
+                  {giftTotal > 0 && (
+                    <div className="flex justify-between mb-1">
+                      <span className="text-sm text-muted-foreground flex items-center">
+                        <Gift className="h-3.5 w-3.5 mr-1 text-yellow-500" />
+                        Gift Value:
+                      </span>
+                      <span className="text-sm font-medium text-yellow-500">
+                        {formatCurrency(giftTotal)}
+                      </span>
+                    </div>
+                  )}
+
+                  {effectiveDiscount > 0 && (
+                    <div className="flex justify-between mb-1">
+                      <span className="text-sm text-muted-foreground flex items-center">
+                        <Percent className="h-3.5 w-3.5 mr-1 text-red-500" /> Special Discount:
+                      </span>
+                      <span className="text-sm font-medium text-red-500">
+                        - {formatCurrency(effectiveDiscount)}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between mb-2 pt-1 border-t border-dashed border-border/40">
+                    <span className="text-sm font-semibold text-foreground">Net Payable:</span>
+                    <span className="text-sm font-bold text-foreground">
+                      {formatCurrency(netPayable)}
+                    </span>
+                  </div>
+
+                  {shippingCharge > 0 && (
+                    <div className="flex justify-between mb-2">
+                      <span className="text-sm text-muted-foreground flex items-center">
+                        <Truck className="h-3.5 w-3.5 mr-1" />
+                        Shipping Charge:
+                      </span>
                       <span className="text-sm font-medium text-foreground">
-                        {formatCurrency(orderSubtotal)}
+                        + {formatCurrency(shippingCharge)}
                       </span>
                     </div>
+                  )}
 
-                    {giftTotal > 0 && (
-                      <div className="flex justify-between mb-1">
-                        <span className="text-sm text-muted-foreground flex items-center">
-                          <Gift className="h-3.5 w-3.5 mr-1 text-yellow-500" />
-                          Gift Value:
-                        </span>
-                        <span className="text-sm font-medium text-yellow-500">
-                          {formatCurrency(giftTotal)}
-                        </span>
-                      </div>
-                    )}
-
-                    {effectiveDiscount > 0 && (
-                      <div className="flex justify-between mb-1">
-                        <span className="text-sm text-muted-foreground flex items-center">
-                          <Percent className="h-3.5 w-3.5 mr-1 text-red-500" /> Special Discount:
-                        </span>
-                        <span className="text-sm font-medium text-red-500">
-                          - {formatCurrency(effectiveDiscount)}
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="flex justify-between mb-2 pt-1 border-t border-dashed border-border/40">
-                      <span className="text-sm font-semibold text-foreground">Net Payable:</span>
-                      <span className="text-sm font-bold text-foreground">
-                        {formatCurrency(netPayable)}
+                  {totalAdvancePaid > 0 && (
+                    <div className="flex justify-between mb-2">
+                      <span className="text-sm text-muted-foreground">
+                        {showPaidBadge ? "Total Paid:" : "Total Advance Paid:"}
+                      </span>
+                      <span className="text-sm font-medium text-emerald-600">
+                        - {formatCurrency(totalAdvancePaid)}
                       </span>
                     </div>
+                  )}
 
-                    {shippingCharge > 0 && (
-                      <div className="flex justify-between mb-2">
-                        <span className="text-sm text-muted-foreground flex items-center">
-                          <Truck className="h-3.5 w-3.5 mr-1" />
-                          Shipping Charge:
-                        </span>
-                        <span className="text-sm font-medium text-foreground">
-                          + {formatCurrency(shippingCharge)}
-                        </span>
-                      </div>
-                    )}
-
-                    {totalAdvancePaid > 0 && (
-                      <div className="flex justify-between mb-2">
-                        <span className="text-sm text-muted-foreground">
-                          {showPaidBadge ? "Total Paid:" : "Total Advance Paid:"}
-                        </span>
-                        <span className="text-sm font-medium text-emerald-600">
-                          - {formatCurrency(totalAdvancePaid)}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* PAID Stamp or Amount Due */}
-                    {showPaidBadge ? (
-                      <div className="absolute -left-12 -top-10 sm:-left-20 sm:-top-14 transform rotate-[-20deg] pointer-events-none select-none">
-                        <Image
-                          src="/paid-stamp.png"
-                          alt="Paid Stamp"
-                          width={140}
-                          height={140}
-                          className="opacity-80"
-                          unoptimized
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      grandTotal > 0 &&
-                      amountDue > 0.01 && (
-                        <>
-                          <Separator className="my-2 bg-border/50" />
-                          <div className="flex justify-between">
-                            <span className="text-base sm:text-lg font-bold text-[#EF1E1E] dark:text-red-400">
-                              Amount Due:
-                            </span>
-                            <span className="text-base sm:text-lg font-bold text-[#EF1E1E] dark:text-red-400">
-                              {formatCurrency(amountDue)}
-                            </span>
-                          </div>
-                        </>
-                      )
-                    )}
+                  {/* PAID Stamp or Amount Due */}
+                  {showPaidBadge ? (
+                    <div className="absolute -left-12 -top-10 sm:-left-20 sm:-top-14 transform rotate-[-20deg] pointer-events-none select-none">
+                      <Image
+                        src="/paid-stamp.png"
+                        alt="Paid Stamp"
+                        width={140}
+                        height={140}
+                        className="opacity-80"
+                        unoptimized
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    grandTotal > 0 &&
+                    amountDue > 0.01 && (
+                      <>
+                        <Separator className="my-2 bg-border/50" />
+                        <div className="flex justify-between">
+                          <span className="text-base sm:text-lg font-bold text-[#EF1E1E] dark:text-red-400">
+                            Amount Due:
+                          </span>
+                          <span className="text-base sm:text-lg font-bold text-[#EF1E1E] dark:text-red-400">
+                            {formatCurrency(amountDue)}
+                          </span>
+                        </div>
+                      </>
+                    )
+                  )}
                 </div>
               </div>
             </div>
