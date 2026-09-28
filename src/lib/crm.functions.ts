@@ -1056,6 +1056,33 @@ function extractTableNameFromSql(sql: string): string | null {
   return null;
 }
 
+/**
+ * Resolves the real table/column for an "Unknown column" error. MySQL reports
+ * alias-qualified names (e.g. `prj.assigned_artist_id`), so the alias is mapped
+ * back to its table instead of creating a column literally named "prj.x".
+ */
+function resolveMissingColumnTarget(
+  sql: string,
+  reportedColumn: string,
+): { table: string | null; column: string | null } {
+  if (!reportedColumn) return { table: null, column: null };
+  if (!reportedColumn.includes(".")) {
+    return { table: extractTableNameFromSql(sql), column: reportedColumn };
+  }
+
+  const [alias, column] = reportedColumn.split(".", 2);
+  if (!alias || !column || !/^[a-zA-Z0-9_]+$/.test(alias)) {
+    return { table: null, column: null };
+  }
+  const aliasRe = new RegExp(
+    `(?:FROM|JOIN)\\s+[\`'"]?([a-zA-Z0-9_]+)[\`'"]?\\s+(?:AS\\s+)?${alias}\\b`,
+    "i",
+  );
+  const aliasMatch = sql.match(aliasRe);
+  const table = aliasMatch?.[1] || extractTableNameFromSql(sql);
+  return { table: table === alias || aliasMatch ? table : null, column };
+}
+
 export const executeMySQLQueryFn = createServerFn({ method: "POST" })
   .validator((input: { sql: string; params?: (string | number | boolean | null)[] }) => input)
   .handler(async ({ data }): Promise<UniversalQueryResponse> => {
@@ -1070,10 +1097,12 @@ export const executeMySQLQueryFn = createServerFn({ method: "POST" })
       } catch (queryErr: unknown) {
         const errMsg = String((queryErr as { message?: string })?.message || queryErr);
         const colMatch = errMsg.match(/Unknown column '([^']+)'/i);
-        const targetTable = extractTableNameFromSql(data.sql);
+        const { table: targetTable, column: missingCol } = resolveMissingColumnTarget(
+          data.sql,
+          colMatch?.[1] || "",
+        );
 
-        if (colMatch && colMatch[1] && targetTable) {
-          const missingCol = colMatch[1];
+        if (colMatch && missingCol && targetTable) {
           const colType = inferColumnType(missingCol);
           console.warn(
             `[Self-Healing Schema] Auto-migrating missing column ${targetTable}.${missingCol} as ${colType}`,

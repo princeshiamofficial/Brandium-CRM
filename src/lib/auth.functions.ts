@@ -373,6 +373,107 @@ export async function ensureMySQLTablesExist(
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `);
 
+      // 17b. `quotations` table — Client Quotations (cloned from Projects lifecycle)
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS \`quotations\` (
+          \`id\` VARCHAR(36) NOT NULL,
+          \`quotation_code\` VARCHAR(50) NOT NULL,
+          \`title\` VARCHAR(255) NOT NULL,
+          \`prospect_id\` VARCHAR(36) NULL,
+          \`client_name\` VARCHAR(255) NOT NULL,
+          \`client_phone\` VARCHAR(50) NULL,
+          \`client_email\` VARCHAR(255) NULL,
+          \`service_id\` VARCHAR(36) NULL,
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Draft',
+          \`priority\` VARCHAR(20) NOT NULL DEFAULT 'Medium',
+          \`assigned_agent_id\` VARCHAR(36) NULL,
+          \`assigned_artist_id\` VARCHAR(36) NULL,
+          \`assigned_user_ids\` TEXT NULL,
+          \`created_by\` VARCHAR(36) NULL,
+          \`budget\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`paid_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`advance_payments\` LONGTEXT NULL,
+          \`progress\` INT NOT NULL DEFAULT 0,
+          \`order_date\` DATE NULL,
+          \`deadline\` DATE NULL,
+          \`notes\` TEXT NULL,
+          \`status_history\` LONGTEXT NULL,
+          \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`idx_quotations_code\` (\`quotation_code\`),
+          KEY \`idx_quotations_status\` (\`status\`),
+          KEY \`idx_quotations_prospect\` (\`prospect_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS \`quotation_assignees\` (
+          \`id\` VARCHAR(36) NOT NULL,
+          \`quotation_id\` VARCHAR(36) NOT NULL,
+          \`user_id\` VARCHAR(36) NOT NULL,
+          \`role\` VARCHAR(50) NULL,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`idx_quot_user\` (\`quotation_id\`, \`user_id\`),
+          KEY \`idx_quot_assignee_user\` (\`user_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      // 17c. \`orders\` table — ERPApp-style Orders (/orders & /track/[id])
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS \`orders\` (
+          \`id\` VARCHAR(36) NOT NULL,
+          \`order_number\` VARCHAR(50) NOT NULL,
+          \`job_id\` VARCHAR(100) NULL,
+          \`prospect_id\` VARCHAR(36) NULL,
+          \`client_name\` VARCHAR(255) NOT NULL,
+          \`company_name\` VARCHAR(255) NULL,
+          \`phone\` VARCHAR(50) NULL,
+          \`email\` VARCHAR(255) NULL,
+          \`address\` TEXT NULL,
+          \`service_id\` VARCHAR(36) NULL,
+          \`service_name\` VARCHAR(255) NULL,
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'order-submitted',
+          \`crm_user_id\` VARCHAR(36) NULL,
+          \`designer_id\` VARCHAR(36) NULL,
+          \`total_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`paid_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`due_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`discount_amount\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`shipping_charge\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`is_starred\` DECIMAL(3, 1) NOT NULL DEFAULT 0,
+          \`items_json\` LONGTEXT NULL,
+          \`payments_json\` LONGTEXT NULL,
+          \`status_history\` LONGTEXT NULL,
+          \`notes\` TEXT NULL,
+          \`order_date\` DATETIME NULL,
+          \`delivery_date\` DATETIME NULL,
+          \`is_deleted\` TINYINT(1) NOT NULL DEFAULT 0,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`idx_orders_number\` (\`order_number\`),
+          KEY \`idx_orders_status\` (\`status\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS \`order_comments\` (
+          \`id\` VARCHAR(36) NOT NULL,
+          \`order_id\` VARCHAR(36) NOT NULL,
+          \`parent_id\` VARCHAR(36) NULL,
+          \`user_id\` VARCHAR(36) NULL,
+          \`user_name\` VARCHAR(255) NOT NULL,
+          \`user_role\` VARCHAR(50) NULL,
+          \`text\` TEXT NOT NULL,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          KEY \`idx_order_comments_order\` (\`order_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
       // 18. \`expenses\` table — Finance & Operating Expense Management
       await conn.query(`
         CREATE TABLE IF NOT EXISTS \`expenses\` (
@@ -588,6 +689,38 @@ export async function ensureMySQLTablesExist(
         { table: "projects", column: "notes", def: "TEXT NULL" },
         { table: "projects", column: "created_by", def: "VARCHAR(36) NULL" },
         { table: "projects", column: "advance_payments", def: "LONGTEXT NULL" },
+        // quotations
+        { table: "quotations", column: "client_phone", def: "VARCHAR(50) NULL" },
+        { table: "quotations", column: "client_email", def: "VARCHAR(255) NULL" },
+        { table: "quotations", column: "client_address", def: "TEXT NULL" },
+        // orders
+        { table: "orders", column: "job_id", def: "VARCHAR(100) NULL" },
+        { table: "orders", column: "address", def: "TEXT NULL" },
+        { table: "orders", column: "crm_user_id", def: "VARCHAR(36) NULL" },
+        { table: "orders", column: "designer_id", def: "VARCHAR(36) NULL" },
+        { table: "orders", column: "discount_amount", def: "DECIMAL(12, 2) NOT NULL DEFAULT 0.00" },
+        { table: "orders", column: "shipping_charge", def: "DECIMAL(12, 2) NOT NULL DEFAULT 0.00" },
+        { table: "orders", column: "is_starred", def: "DECIMAL(3, 1) NOT NULL DEFAULT 0" },
+        { table: "orders", column: "items_json", def: "LONGTEXT NULL" },
+        { table: "orders", column: "payments_json", def: "LONGTEXT NULL" },
+        { table: "orders", column: "status_history", def: "LONGTEXT NULL" },
+        { table: "orders", column: "order_date", def: "DATETIME NULL" },
+        { table: "orders", column: "delivery_date", def: "DATETIME NULL" },
+        { table: "orders", column: "is_deleted", def: "TINYINT(1) NOT NULL DEFAULT 0" },
+        { table: "quotations", column: "priority", def: "VARCHAR(20) NOT NULL DEFAULT 'Medium'" },
+        { table: "quotations", column: "assigned_agent_id", def: "VARCHAR(36) NULL" },
+        { table: "quotations", column: "assigned_artist_id", def: "VARCHAR(36) NULL" },
+        { table: "quotations", column: "assigned_user_ids", def: "TEXT NULL" },
+        { table: "quotations", column: "created_by", def: "VARCHAR(36) NULL" },
+        { table: "quotations", column: "budget", def: "DECIMAL(12, 2) NOT NULL DEFAULT 0.00" },
+        { table: "quotations", column: "paid_amount", def: "DECIMAL(12, 2) NOT NULL DEFAULT 0.00" },
+        { table: "quotations", column: "advance_payments", def: "LONGTEXT NULL" },
+        { table: "quotations", column: "progress", def: "INT NOT NULL DEFAULT 0" },
+        { table: "quotations", column: "order_date", def: "DATE NULL" },
+        { table: "quotations", column: "deadline", def: "DATE NULL" },
+        { table: "quotations", column: "notes", def: "TEXT NULL" },
+        { table: "quotations", column: "status_history", def: "LONGTEXT NULL" },
+        { table: "quotations", column: "is_active", def: "TINYINT(1) NOT NULL DEFAULT 1" },
         // users & profiles
         { table: "users", column: "phone", def: "VARCHAR(50) NULL" },
         { table: "users", column: "avatar_url", def: "TEXT NULL" },

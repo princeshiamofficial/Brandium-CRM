@@ -18,6 +18,8 @@ import {
   DatabaseBackup,
   ShieldCheck,
   FolderKanban,
+  FileSpreadsheet,
+  ShoppingCart,
   type LucideIcon,
 } from "lucide-react";
 
@@ -39,6 +41,8 @@ export const navGroups: NavGroup[] = [
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
       { title: "Projects", url: "/projects", icon: FolderKanban },
+      { title: "Quotations", url: "/quotations", icon: FileSpreadsheet },
+      { title: "Orders", url: "/orders", icon: ShoppingCart },
       { title: "Prospects", url: "/prospects", icon: Users2 },
       { title: "Meetings", url: "/meetings", icon: CalendarDays },
       { title: "Follow-ups", url: "/follow-ups", icon: CalendarClock },
