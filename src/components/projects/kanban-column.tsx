@@ -62,7 +62,7 @@ export function KanbanColumn({
         if (orderId) onDropOrder(orderId, id);
       }}
       className={cn(
-        "w-70 sm:w-75 shrink-0 flex flex-col bg-muted/30 rounded-lg overflow-hidden transition-all duration-200 ease-in-out h-full border",
+        "w-64 shrink-0 flex flex-col bg-muted/30 rounded-lg overflow-hidden transition-all duration-200 ease-in-out h-full border",
         isOver
           ? "border-[#67B239] ring-2 ring-[#67B239] shadow-xl scale-[1.01]"
           : "border-border/30 shadow-xs",
