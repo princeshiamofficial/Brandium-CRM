@@ -14,6 +14,7 @@ export const ORDER_SUBMITTED_STATUS_ID = "order-submitted";
 /** Brandium production workflow, ids stored in `orders.status`. */
 export const ORDER_STATUSES: OrderStatus[] = [
   { id: ORDER_SUBMITTED_STATUS_ID, name: "Order Submitted", color: "#3B82F6" },
+  { id: "on-hold", name: "On Hold", color: "#FBBF24" },
   { id: "script-writer", name: "Script Writer", color: "#8B5CF6", assignable: true },
   { id: "content-planner", name: "Content Planner", color: "#EC4899", assignable: true },
   { id: "videographer", name: "Videographer", color: "#F59E0B", assignable: true },
@@ -22,7 +23,6 @@ export const ORDER_STATUSES: OrderStatus[] = [
   { id: "marketer", name: "Marketer", color: "#06B6D4", assignable: true },
   { id: "developer", name: "Developer", color: "#0284C7", assignable: true },
   { id: "delivered", name: "Delivered", color: "#16A34A" },
-  { id: "on-hold", name: "On Hold", color: "#FBBF24" },
   { id: "canceled", name: "Canceled", color: "#EF4444" },
 ];
 
