@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { endOfDay, format, startOfDay } from "date-fns";
 import type { DateRange } from "react-day-picker";
@@ -111,6 +111,9 @@ export function ProjectsKanbanBoard() {
     null,
   );
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const autoScrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     const handler = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
     return () => clearTimeout(handler);
@@ -212,6 +215,53 @@ export function ProjectsKanbanBoard() {
       description: `Your ${stage.name} projects data is being downloaded.`,
     });
   };
+
+  const handleCardDragMove = useCallback(
+    (e: DragEvent) => {
+      if (!draggingOrder || !scrollContainerRef.current) return;
+
+      const container = scrollContainerRef.current;
+      const rect = container.getBoundingClientRect();
+      const SCROLL_THRESHOLD = 60;
+      const SCROLL_SPEED = 15;
+
+      const distFromRight = rect.right - e.clientX;
+      const distFromLeft = e.clientX - rect.left;
+
+      if (distFromRight < SCROLL_THRESHOLD && container.scrollLeft < container.scrollWidth - container.clientWidth) {
+        if (!autoScrollIntervalRef.current) {
+          autoScrollIntervalRef.current = setInterval(() => {
+            container.scrollLeft += SCROLL_SPEED;
+          }, 16);
+        }
+      } else if (distFromLeft < SCROLL_THRESHOLD && container.scrollLeft > 0) {
+        if (!autoScrollIntervalRef.current) {
+          autoScrollIntervalRef.current = setInterval(() => {
+            container.scrollLeft -= SCROLL_SPEED;
+          }, 16);
+        }
+      } else {
+        if (autoScrollIntervalRef.current) {
+          clearInterval(autoScrollIntervalRef.current);
+          autoScrollIntervalRef.current = null;
+        }
+      }
+    },
+    [draggingOrder],
+  );
+
+  useEffect(() => {
+    if (draggingOrder) {
+      document.addEventListener("dragover", handleCardDragMove);
+      return () => {
+        document.removeEventListener("dragover", handleCardDragMove);
+        if (autoScrollIntervalRef.current) {
+          clearInterval(autoScrollIntervalRef.current);
+          autoScrollIntervalRef.current = null;
+        }
+      };
+    }
+  }, [draggingOrder, handleCardDragMove]);
 
   return (
     <div className="flex flex-col h-full space-y-4">
@@ -349,7 +399,7 @@ export function ProjectsKanbanBoard() {
         )}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-x-auto pb-4 custom-scrollbar">
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-x-auto pb-4 custom-scrollbar">
         <div className="flex space-x-4 h-full min-w-max">
           {ORDER_STATUSES.map((stage) => (
             <KanbanColumn
