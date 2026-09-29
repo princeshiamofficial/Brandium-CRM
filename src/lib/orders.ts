@@ -22,6 +22,8 @@ export const ORDER_STATUSES: OrderStatus[] = [
   { id: "marketer", name: "Marketer", color: "#06B6D4", assignable: true },
   { id: "developer", name: "Developer", color: "#0284C7", assignable: true },
   { id: "delivered", name: "Delivered", color: "#16A34A" },
+  { id: "on-hold", name: "On Hold", color: "#FBBF24" },
+  { id: "canceled", name: "Canceled", color: "#EF4444" },
 ];
 
 /** Earlier ERPAPP status ids that may still be stored on older orders (display only). */

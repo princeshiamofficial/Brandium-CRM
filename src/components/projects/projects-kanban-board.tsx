@@ -9,6 +9,7 @@ import {
   Check,
   CheckCircle2,
   ChevronsUpDown,
+  Clock,
   ClipboardCheck,
   Code,
   Download,
@@ -21,6 +22,7 @@ import {
   User as UserIcon,
   Users as UsersIcon,
   Video,
+  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -70,6 +72,8 @@ const STAGE_ICONS: Record<string, LucideIcon> = {
   marketer: Megaphone,
   developer: Code,
   delivered: PackageCheck,
+  "on-hold": Clock,
+  canceled: XCircle,
 };
 
 const COLUMN_IDS = new Set(ORDER_STATUSES.map((s) => s.id));
