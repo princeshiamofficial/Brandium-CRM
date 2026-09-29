@@ -179,7 +179,6 @@ export default function FollowUpsPage() {
   const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
 
-  const [viewMode, setViewMode] = useState<"grid" | "table" | "kanban">("kanban");
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState<"all" | "phone" | "business" | "note">("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -500,51 +499,6 @@ export default function FollowUpsPage() {
           )}
         </div>
 
-        {/* Right: Layout View Switcher */}
-        <div className="flex items-center gap-1 border border-slate-200 dark:border-slate-800 p-1 rounded-lg bg-slate-50 dark:bg-slate-900 shrink-0 self-end md:self-auto">
-          <Button
-            type="button"
-            variant={viewMode === "kanban" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("kanban")}
-            className={`h-7.5 px-2.5 text-xs rounded-md font-medium cursor-pointer transition-colors ${
-              viewMode === "kanban"
-                ? "bg-[#0a2e5c] text-white hover:bg-[#082244]"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-            }`}
-          >
-            <LayoutGrid className="size-3.5 mr-1" />
-            <span>Kanban</span>
-          </Button>
-          <Button
-            type="button"
-            variant={viewMode === "grid" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("grid")}
-            className={`h-7.5 px-2.5 text-xs rounded-md font-medium cursor-pointer transition-colors ${
-              viewMode === "grid"
-                ? "bg-[#0a2e5c] text-white hover:bg-[#082244]"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-            }`}
-          >
-            <LayoutGrid className="size-3.5 mr-1" />
-            <span>Cards</span>
-          </Button>
-          <Button
-            type="button"
-            variant={viewMode === "table" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("table")}
-            className={`h-7.5 px-2.5 text-xs rounded-md font-medium cursor-pointer transition-colors ${
-              viewMode === "table"
-                ? "bg-[#0a2e5c] text-white hover:bg-[#082244]"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-            }`}
-          >
-            <List className="size-3.5 mr-1" />
-            <span>Table</span>
-          </Button>
-        </div>
       </div>
 
       {/* 4. Content Area: Grid View vs Table View */}
