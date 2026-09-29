@@ -180,9 +180,11 @@ export default function FollowUpsPage() {
 
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState<"all" | "phone" | "business" | "note">("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [agentFilter, setAgentFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
+  const [dateFromFilter, setDateFromFilter] = useState<Date | undefined>(undefined);
+  const [dateToFilter, setDateToFilter] = useState<Date | undefined>(undefined);
   const [page, setPage] = useState(1);
 
   // Dialog & Modal states
@@ -224,10 +226,10 @@ export default function FollowUpsPage() {
       search: search.trim() || undefined,
       status: statusFilter !== "all" ? statusFilter : undefined,
       agent: agentFilter !== "all" ? agentFilter : undefined,
-      from: dateFilter ? format(dateFilter, "yyyy-MM-dd") : undefined,
-      to: dateFilter ? format(dateFilter, "yyyy-MM-dd") : undefined,
+      from: dateFromFilter ? format(dateFromFilter, "yyyy-MM-dd") : undefined,
+      to: dateToFilter ? format(dateToFilter, "yyyy-MM-dd") : undefined,
     }),
-    [page, search, statusFilter, agentFilter, dateFilter],
+    [page, search, statusFilter, agentFilter, dateFromFilter, dateToFilter],
   );
 
   const followUpsResult = useQuery(followUpsQuery(filters, user?.id ?? "", Boolean(isAdmin)));
@@ -254,9 +256,11 @@ export default function FollowUpsPage() {
 
   const resetFilters = () => {
     setSearch("");
+    setSearchField("all");
     setStatusFilter("all");
     setAgentFilter("all");
-    setDateFilter(undefined);
+    setDateFromFilter(undefined);
+    setDateToFilter(undefined);
     setPage(1);
   };
 
@@ -264,7 +268,8 @@ export default function FollowUpsPage() {
     search.trim() !== "" ||
     statusFilter !== "all" ||
     agentFilter !== "all" ||
-    dateFilter !== undefined;
+    dateFromFilter !== undefined ||
+    dateToFilter !== undefined;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 font-['Golos_Text',sans-serif]">
@@ -344,10 +349,37 @@ export default function FollowUpsPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="Search by prospect, phone, or note..."
+              placeholder={
+                searchField === "phone"
+                  ? "Search by phone..."
+                  : searchField === "business"
+                    ? "Search by business..."
+                    : searchField === "note"
+                      ? "Search by note..."
+                      : "Search follow-ups..."
+              }
               className="pl-9 h-9.5 text-sm rounded-lg border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900"
             />
           </div>
+
+          {/* Search Field Selector */}
+          <Select
+            value={searchField}
+            onValueChange={(val: any) => {
+              setSearchField(val);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[120px] h-9.5 text-xs font-medium rounded-lg border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <SelectValue placeholder="Search by" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800">
+              <SelectItem value="all">All Fields</SelectItem>
+              <SelectItem value="business">Business</SelectItem>
+              <SelectItem value="phone">Phone</SelectItem>
+              <SelectItem value="note">Note</SelectItem>
+            </SelectContent>
+          </Select>
 
           {/* Status Select */}
           <Select
@@ -392,34 +424,66 @@ export default function FollowUpsPage() {
             </Select>
           )}
 
-          {/* Due Date Picker Popover */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={`h-9.5 px-3 text-xs font-medium rounded-lg border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-1.5 ${
-                  dateFilter ? "text-blue-600 dark:text-blue-400 border-blue-200" : ""
-                }`}
+          {/* Date Range Picker Popovers */}
+          <div className="flex items-center gap-1.5">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={`h-9.5 px-3 text-xs font-medium rounded-lg border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-1.5 ${
+                    dateFromFilter ? "text-blue-600 dark:text-blue-400 border-blue-200" : ""
+                  }`}
+                >
+                  <CalendarIcon className="size-3.5" />
+                  <span>{dateFromFilter ? format(dateFromFilter, "dd MMM") : "From"}</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-auto p-0 rounded-2xl border-slate-200 dark:border-slate-800"
+                align="start"
               >
-                <CalendarIcon className="size-3.5" />
-                <span>{dateFilter ? format(dateFilter, "dd MMM yyyy") : "Due Date"}</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="w-auto p-0 rounded-2xl border-slate-200 dark:border-slate-800"
-              align="start"
-            >
-              <CalendarPicker
-                mode="single"
-                selected={dateFilter}
-                onSelect={(d) => {
-                  setDateFilter(d);
-                  setPage(1);
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+                <CalendarPicker
+                  mode="single"
+                  selected={dateFromFilter}
+                  onSelect={(d) => {
+                    setDateFromFilter(d);
+                    setPage(1);
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+
+            <span className="text-xs text-slate-400">—</span>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={`h-9.5 px-3 text-xs font-medium rounded-lg border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-1.5 ${
+                    dateToFilter ? "text-blue-600 dark:text-blue-400 border-blue-200" : ""
+                  }`}
+                >
+                  <CalendarIcon className="size-3.5" />
+                  <span>{dateToFilter ? format(dateToFilter, "dd MMM") : "To"}</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-auto p-0 rounded-2xl border-slate-200 dark:border-slate-800"
+                align="start"
+              >
+                <CalendarPicker
+                  mode="single"
+                  selected={dateToFilter}
+                  onSelect={(d) => {
+                    setDateToFilter(d);
+                    setPage(1);
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
 
           {/* Reset Filters */}
           {hasActiveFilters && (
@@ -746,144 +810,140 @@ export default function FollowUpsPage() {
         <div className="bg-white dark:bg-card rounded-2xl border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
-                <TableRow className="bg-slate-50/70 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800">
-                  <TableHead className="font-bold text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400 pl-5">
+              <TableHeader className="sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-10 shadow-sm">
+                <TableRow className="hover:bg-transparent border-b border-slate-50 dark:border-white/5">
+                  <TableHead className="w-[50px] md:w-[60px] pl-4 md:pl-8 py-4 md:py-5 text-[10px] md:text-[11px] font-semibold text-slate-400">
+                    SL
+                  </TableHead>
+                  <TableHead className="py-4 md:py-5 text-[10px] md:text-[11px] font-semibold text-slate-400">
                     Prospect / Business
                   </TableHead>
-                  <TableHead className="font-bold text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                    Phone
+                  <TableHead className="py-4 md:py-5 text-[10px] md:text-[11px] font-semibold text-slate-400">
+                    Contact
                   </TableHead>
-                  <TableHead className="font-bold text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                  <TableHead className="py-4 md:py-5 text-[10px] md:text-[11px] font-semibold text-slate-400">
                     Due Date & Time
                   </TableHead>
-                  <TableHead className="font-bold text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                  <TableHead className="py-4 md:py-5 text-center text-[10px] md:text-[11px] font-semibold text-slate-400">
                     Status
                   </TableHead>
-                  <TableHead className="font-bold text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                  <TableHead className="py-4 md:py-5 text-[10px] md:text-[11px] font-semibold text-slate-400">
                     Stage
                   </TableHead>
-                  <TableHead className="font-bold text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                    Assigned Agent
+                  <TableHead className="py-4 md:py-5 text-[10px] md:text-[11px] font-semibold text-slate-400">
+                    Agent
                   </TableHead>
-                  <TableHead className="font-bold text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                    Note
-                  </TableHead>
-                  <TableHead className="font-bold text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400 text-right pr-5">
-                    Actions
+                  <TableHead className="pr-4 md:pr-8 py-4 md:py-5 text-right text-[10px] md:text-[11px] font-semibold text-slate-400">
+                    Action
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {followUpItems.map((item) => (
+                {followUpItems.map((item, index) => {
+                  const sl = (page - 1) * 10 + index + 1;
+                  return (
                   <TableRow
                     key={item.id}
                     onClick={() => {
                       setDetailFollowUp(item);
                       setDetailModalOpen(true);
                     }}
-                    className="hover:bg-slate-50/80 dark:hover:bg-slate-900/40 cursor-pointer transition-colors border-b border-slate-100 dark:border-slate-800/60"
+                    className="group hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-all border-b border-slate-50 dark:border-white/5"
                   >
-                    <TableCell className="pl-5 py-3.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className="size-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700">
-                          {item.prospect_name ? item.prospect_name.slice(0, 2).toUpperCase() : "FU"}
+                    <TableCell className="pl-4 md:pl-8 py-3 md:py-4 font-semibold text-[10px] text-slate-300 dark:text-slate-600">
+                      {sl < 10 ? `0${sl}` : sl}
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm group-hover:text-primary transition-colors line-clamp-1">
+                            {item.prospect_business ? (item.prospect_business.length > 26 ? `${item.prospect_business.substring(0, 26)}...` : item.prospect_business) : "Lead"}
+                          </span>
                         </div>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 leading-snug truncate">
-                            {item.prospect_name || "Client"}
-                          </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                            {item.prospect_business || "Lead Contact"}
-                          </p>
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
+                          <User className="h-3 w-3" />
+                          {item.prospect_name ? (item.prospect_name.length > 26 ? `${item.prospect_name.substring(0, 26)}...` : item.prospect_name) : "N/A"}
                         </div>
                       </div>
                     </TableCell>
 
-                    <TableCell className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                      {item.prospect_phone ? (
-                        <a
-                          href={`tel:${item.prospect_phone}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="hover:text-blue-600 hover:underline flex items-center gap-1.5"
-                        >
-                          <Phone className="size-3 text-slate-400" />
-                          <span>{item.prospect_phone}</span>
-                        </a>
-                      ) : (
-                        <span className="text-slate-400 italic">No phone</span>
-                      )}
+                    <TableCell className="py-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-slate-600 dark:text-slate-300 font-semibold text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md inline-block w-fit">
+                          {item.prospect_phone || "N/A"}
+                        </span>
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
+                          <Phone className="h-3 w-3" />
+                          {item.prospect_phone ? (
+                            <a
+                              href={`tel:${item.prospect_phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="hover:text-blue-600 hover:underline"
+                            >
+                              Call
+                            </a>
+                          ) : (
+                            "No phone"
+                          )}
+                        </div>
+                      </div>
                     </TableCell>
 
-                    <TableCell className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <TableCell className="py-3 md:py-4">
                       <span
-                        className={
-                          item.effective_status === "overdue" ? "text-rose-600 font-semibold" : ""
-                        }
+                        className={`text-xs font-semibold ${
+                          item.effective_status === "overdue" ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-slate-300"
+                        }`}
                       >
                         {formatCrmDateTime(item.due_at)}
                       </span>
                     </TableCell>
 
-                    <TableCell>
+                    <TableCell className="py-4 text-center">
                       <FollowUpStatusBadge status={item.effective_status} />
                     </TableCell>
 
-                    <TableCell>
+                    <TableCell className="py-4">
                       {item.stage_name ? (
                         <Badge
                           variant="outline"
-                          className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                          className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                         >
-                          {item.stage_name}
+                          {item.stage_name.length > 20 ? `${item.stage_name.substring(0, 20)}...` : item.stage_name}
                         </Badge>
                       ) : (
                         <span className="text-xs text-slate-400">—</span>
                       )}
                     </TableCell>
 
-                    <TableCell className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <TableCell className="py-4 text-xs font-medium text-slate-700 dark:text-slate-300">
                       <div className="flex items-center gap-1.5">
-                        <div className="size-4.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center text-[9px] font-bold">
+                        <div className="size-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center text-[9px] font-bold shrink-0">
                           {item.agent_name ? item.agent_name.slice(0, 1).toUpperCase() : "A"}
                         </div>
-                        <span>{item.agent_name || "Unassigned"}</span>
+                        <span className="hidden sm:inline truncate">{item.agent_name || "Unassigned"}</span>
                       </div>
                     </TableCell>
 
-                    <TableCell className="text-xs text-slate-600 dark:text-slate-400 max-w-[200px] truncate">
-                      {item.note || <span className="text-slate-400 italic">No note</span>}
-                    </TableCell>
-
-                    <TableCell className="text-right pr-5" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setDetailFollowUp(item);
-                            setDetailModalOpen(true);
-                          }}
-                          className="size-7.5 p-0 text-slate-500 hover:text-blue-600"
-                          title="View Details"
-                        >
-                          <Eye className="size-4" />
-                        </Button>
-                        {item.effective_status !== "completed" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleQuickStatus(item, "completed")}
-                            className="size-7.5 p-0 text-slate-500 hover:text-emerald-600"
-                            title="Complete Task"
-                          >
-                            <Check className="size-4" />
-                          </Button>
-                        )}
-                      </div>
+                    <TableCell className="pr-4 md:pr-8 py-3 md:py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDetailFollowUp(item);
+                          setDetailModalOpen(true);
+                        }}
+                        className="rounded-xl text-[10px] md:text-[11px] font-semibold h-8 md:h-9 px-3 md:px-4 border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
+                      >
+                        <Eye className="h-3.5 w-3.5 mr-1 md:mr-2" />
+                        <span className="hidden sm:inline">DETAILS</span>
+                        <span className="sm:hidden">VIEW</span>
+                      </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                );
+                })}
               </TableBody>
             </Table>
           </div>
