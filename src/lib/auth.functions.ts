@@ -211,6 +211,23 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
+      // 10a. \`followup_stages\` table
+      await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`followup_stages\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`name\` VARCHAR(100) NOT NULL,
+        \`color\` VARCHAR(7) NOT NULL DEFAULT '#3B82F6',
+        \`position\` INT NOT NULL DEFAULT 0,
+        \`is_default\` TINYINT(1) NOT NULL DEFAULT 0,
+        \`created_by\` VARCHAR(36) NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_followup_stages_name\` (\`name\`),
+        KEY \`idx_followup_stages_position\` (\`position\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
       // 11. \`activities\` table
       await conn.query(`
       CREATE TABLE IF NOT EXISTS \`activities\` (
@@ -834,6 +851,16 @@ export async function ensureMySQLTablesExist(
           ('role-global-artist', 'perm-prospects-read'),
           ('role-global-artist', 'perm-services-read'),
           ('role-global-artist', 'perm-sales-view');
+      `);
+
+      // Seed default follow-up stages
+      await conn.query(`
+        INSERT IGNORE INTO \`followup_stages\` (\`id\`, \`name\`, \`color\`, \`position\`, \`is_default\`)
+        VALUES
+          ('stage-pending', 'Pending', '#3B82F6', 0, 1),
+          ('stage-in-progress', 'In Progress', '#8B5CF6', 1, 1),
+          ('stage-completed', 'Completed', '#10B981', 2, 1),
+          ('stage-canceled', 'Canceled', '#EF4444', 3, 1);
       `);
 
       // Mark default quotations as protected to prevent accidental deletion
