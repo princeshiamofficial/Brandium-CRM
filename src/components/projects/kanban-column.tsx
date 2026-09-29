@@ -80,8 +80,8 @@ export function KanbanColumn({
           {isLoading ? <Skeleton className="h-4 w-4 inline-block" /> : orders.length}
         </span>
       </div>
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="p-3 min-h-full space-y-3">
+      <ScrollArea className="flex-1 min-h-0 w-full">
+        <div className="p-3 min-h-full space-y-3 w-full">
           {isLoading && orders.length === 0 ? (
             <>
               <Skeleton className="h-20 w-full rounded-md" />
