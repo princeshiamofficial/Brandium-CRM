@@ -228,7 +228,10 @@ export function ProjectsKanbanBoard() {
       const distFromRight = rect.right - e.clientX;
       const distFromLeft = e.clientX - rect.left;
 
-      if (distFromRight < SCROLL_THRESHOLD && container.scrollLeft < container.scrollWidth - container.clientWidth) {
+      if (
+        distFromRight < SCROLL_THRESHOLD &&
+        container.scrollLeft < container.scrollWidth - container.clientWidth
+      ) {
         if (!autoScrollIntervalRef.current) {
           autoScrollIntervalRef.current = setInterval(() => {
             container.scrollLeft += SCROLL_SPEED;
@@ -399,7 +402,10 @@ export function ProjectsKanbanBoard() {
         )}
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-x-auto pb-4 custom-scrollbar">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 min-h-0 overflow-x-auto pb-4 custom-scrollbar"
+      >
         <div className="flex space-x-4 h-full min-w-max">
           {ORDER_STATUSES.map((stage) => (
             <KanbanColumn
