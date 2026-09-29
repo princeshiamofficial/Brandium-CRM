@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/table";
 import { FollowUpDialog } from "@/components/follow-up-dialog";
 import { FollowUpDetailModal } from "@/components/follow-up-detail-modal";
+import { FollowUpsKanban } from "@/components/follow-ups-kanban";
 import {
   followUpsQuery,
   followUpSummaryQuery,
@@ -178,7 +179,7 @@ export default function FollowUpsPage() {
   const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
 
-  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "table" | "kanban">("kanban");
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState<"all" | "phone" | "business" | "note">("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -503,6 +504,20 @@ export default function FollowUpsPage() {
         <div className="flex items-center gap-1 border border-slate-200 dark:border-slate-800 p-1 rounded-lg bg-slate-50 dark:bg-slate-900 shrink-0 self-end md:self-auto">
           <Button
             type="button"
+            variant={viewMode === "kanban" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("kanban")}
+            className={`h-7.5 px-2.5 text-xs rounded-md font-medium cursor-pointer transition-colors ${
+              viewMode === "kanban"
+                ? "bg-[#0a2e5c] text-white hover:bg-[#082244]"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            <LayoutGrid className="size-3.5 mr-1" />
+            <span>Kanban</span>
+          </Button>
+          <Button
+            type="button"
             variant={viewMode === "grid" ? "default" : "ghost"}
             size="sm"
             onClick={() => setViewMode("grid")}
@@ -580,6 +595,9 @@ export default function FollowUpsPage() {
             </Button>
           </div>
         </div>
+      ) : viewMode === "kanban" ? (
+        /* ── Kanban View ── */
+        <FollowUpsKanban followUps={followUpItems} />
       ) : viewMode === "grid" ? (
         /* ── Grid View ── */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
