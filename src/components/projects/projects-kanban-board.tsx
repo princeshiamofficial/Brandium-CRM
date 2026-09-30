@@ -258,16 +258,15 @@ export function ProjectsKanbanBoard() {
   );
 
   useEffect(() => {
-    if (draggingOrder) {
-      document.addEventListener("dragover", handleCardDragMove);
-      return () => {
-        document.removeEventListener("dragover", handleCardDragMove);
-        if (autoScrollIntervalRef.current) {
-          clearInterval(autoScrollIntervalRef.current);
-          autoScrollIntervalRef.current = null;
-        }
-      };
-    }
+    if (!draggingOrder) return undefined;
+    document.addEventListener("dragover", handleCardDragMove);
+    return () => {
+      document.removeEventListener("dragover", handleCardDragMove);
+      if (autoScrollIntervalRef.current) {
+        clearInterval(autoScrollIntervalRef.current);
+        autoScrollIntervalRef.current = null;
+      }
+    };
   }, [draggingOrder, handleCardDragMove]);
 
   return (
