@@ -603,3 +603,20 @@ Single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/agents/d
   - Animating `backgroundColor` between `#RRGGBB1A` and `#RRGGBB` left the active stage circle stuck at the tint (pale circle, invisible white number). Pass `rgba()` strings instead (see `rgba()` in `src/components/dashboard/status-timeline.tsx`), and give both box-shadow states the same number of layers.
   - The Project / Prospect Overview cards sit at the bottom of the Dashboard, after Active deals and Pending tasks.
   - Count cards (`FinanceSummaryCard isCount`): Meeting Scheduled = non-cancelled meetings whose `meeting_date` is in the range; Total Quotation = active (`is_active = 1`, deleted quotations are soft-deleted) quotations whose `order_date` is in the range; Total Delivered = orders whose `status_history` has a Delivered entry in the range (`computeDeliveredCount`). All three follow the user filter.
+
+- **Follow-ups Board (`/follow-ups`, ERPAPP `follow-up` UI/UX clone on Brandium data)**:
+  - Replaces the old KPI/cards/table follow-up page described above. Components live in `src/components/follow-ups/` (`follow-ups-kanban-board.tsx`, `follow-up-kanban-column.tsx`, `follow-up-card.tsx`, `follow-up-dialogs.tsx`); the page only renders the board.
+  - Data stays in Brandium's `follow_ups` tasks (linked to prospects). Columns are the task statuses Pending / Completed / Cancelled; overdue pending tasks get an OVERDUE badge. ERPAPP's custom stage editor and Google Sheet import are intentionally not ported (UI/UX clone only).
+  - Dropping a card on another column opens the note-required stage change dialog; `useSetFollowUpStatus` writes the status and logs the note to `activities` (it no longer overwrites `follow_ups.note`). "Add Update" logs a `follow_up_update` activity; "View Timeline" reads `followUpActivityQuery(prospectId)` (all `follow_up%` activities of that prospect). Delete is admin-only.
+  - Prospects whose stage name contains "follow" and that have no pending `follow_ups` task also appear in Pending as dashed "NO TASK" cards (`followUpStageProspectsQuery`, `is_stage_only`). They are not draggable; their menu offers "Schedule Follow-up" (`FollowUpDialog`), and once a task exists the real task card replaces them. Never auto-insert tasks for these prospects — completing a task would immediately recreate one.
+
+- **Committed CRLF Breaks the Server Build**:
+  - `next build` runs ESLint with prettier, so any file committed with Windows line endings fails the production build (`Delete ␍`) even though the local dev server runs fine. Before pushing, run `git ls-files --eol src | grep "i/crlf"`; it must print nothing. Convert with `sed -i 's/\r$//' <file>` and re-commit.
+  - Local working copies may show CRLF (`w/crlf`) while the committed copy is LF (`i/lf`); only the `i/` column matters for the server. To reproduce the server build locally, build a clean `git worktree` of the commit.
+
+- **Expenses Page Income / Expenses Cards**:
+  - `/expenses` shows Income (payments received in the date range, `computeFinanceSummary(...).cashCollection` from `ordersQueryOptions`) and Expenses (`dashboardExpenseQuery` for the range) in place of the old fixed This Month / All-Time cards. Both follow the header `DateRangePicker3`; non-admins see only their own orders and the expenses they recorded.
+
+- **File Uploads Are Images or PDF Only, Served Without Scripts**:
+  - `/api/upload` accepts only `.png .jpg .jpeg .webp .gif .avif .svg .pdf` (it previously saved any extension, so an `.html` upload could run as a page on the app's own domain). `next.config.ts` adds `X-Content-Type-Options: nosniff` and a sandboxed `Content-Security-Policy` to every `/uploads/*` response, because in dev and for files present at build time Next.js serves `public/uploads` directly and never reaches the route handler.
+  - The Expenses form uploads receipts with `uploadImageFile()` (`src/lib/upload.ts`); PDF receipts open in a new tab from the preview dialog instead of an `<img>`.

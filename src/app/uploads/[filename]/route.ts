@@ -24,12 +24,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ filenam
     else if (ext === ".svg") contentType = "image/svg+xml";
     else if (ext === ".avif") contentType = "image/avif";
     else if (ext === ".ico") contentType = "image/x-icon";
+    else if (ext === ".pdf") contentType = "application/pdf";
 
     return new NextResponse(fileBuffer, {
       status: 200,
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "public, max-age=31536000, immutable",
+        "X-Content-Type-Options": "nosniff",
+        // Uploaded files must never run scripts (e.g. an SVG opened directly).
+        "Content-Security-Policy":
+          "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
       },
     });
   } catch (err: unknown) {

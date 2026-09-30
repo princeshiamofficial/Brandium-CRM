@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+const ALLOWED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".svg", ".pdf"];
+
+const rejectType = () =>
+  NextResponse.json(
+    { success: false, error: "Only image or PDF files can be uploaded." },
+    { status: 400 },
+  );
+
 export async function POST(req: Request) {
   try {
     const contentType = req.headers.get("content-type") || "";
@@ -19,7 +27,8 @@ export async function POST(req: Request) {
       const uploadDir = path.resolve(process.cwd(), "public", "uploads");
       await fs.mkdir(uploadDir, { recursive: true });
 
-      const ext = path.extname(file.name) || ".png";
+      const ext = (path.extname(file.name) || ".png").toLowerCase();
+      if (!ALLOWED_EXTENSIONS.includes(ext)) return rejectType();
       const uniqueName = `logo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`;
       const filePath = path.join(uploadDir, uniqueName);
 
@@ -46,7 +55,8 @@ export async function POST(req: Request) {
     const uploadDir = path.resolve(process.cwd(), "public", "uploads");
     await fs.mkdir(uploadDir, { recursive: true });
 
-    const ext = path.extname(filename) || ".png";
+    const ext = (path.extname(filename) || ".png").toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) return rejectType();
     const uniqueName = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`;
     const filePath = path.join(uploadDir, uniqueName);
 

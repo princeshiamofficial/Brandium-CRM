@@ -20,6 +20,21 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Uploaded files must never run scripts, whether served from public/ or the route handler.
+  async headers() {
+    return [
+      {
+        source: "/uploads/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          {
+            key: "Content-Security-Policy",
+            value: "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+          },
+        ],
+      },
+    ];
+  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -10,9 +10,10 @@ import {
   Calendar as CalendarIcon,
   CreditCard,
   Building,
-  TrendingUp,
+  TrendingDown,
   Tag,
   FileText,
+  Upload,
   Trash2,
   Edit2,
   ExternalLink,
@@ -49,9 +50,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DateRangePicker3 } from "@/components/dashboard/date-range-picker3";
+import { FinanceSummaryCard } from "@/components/dashboard/finance-summary-card";
+import { uploadImageFile } from "@/lib/upload";
+import { computeFinanceSummary, dashboardExpenseQuery } from "@/lib/dashboard-finance";
+import { ordersQueryOptions } from "@/lib/orders";
 import { useAuth } from "@/lib/auth";
 import {
   expensesQuery,
@@ -67,12 +72,13 @@ import {
 } from "@/lib/expenses";
 
 export default function ExpensesPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [paymentMethod, setPaymentMethod] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [dateResetKey, setDateResetKey] = useState(0);
   const [page, setPage] = useState(1);
 
   // Modals state
@@ -91,6 +97,20 @@ export default function ExpensesPage() {
   const [formVendor, setFormVendor] = useState("");
   const [formReferenceNo, setFormReferenceNo] = useState("");
   const [formReceiptUrl, setFormReceiptUrl] = useState("");
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
+
+  const handleReceiptUpload = async (file: File) => {
+    setIsUploadingReceipt(true);
+    const result = await uploadImageFile(file);
+    setIsUploadingReceipt(false);
+    if (result.success && result.url) {
+      setFormReceiptUrl(result.url);
+      toast.success("Receipt uploaded");
+    } else {
+      toast.error(result.error || "Upload failed");
+    }
+  };
   const [formNotes, setFormNotes] = useState("");
 
   const { data, isLoading } = useQuery(
@@ -106,6 +126,17 @@ export default function ExpensesPage() {
   );
 
   const { data: summary, isLoading: isSummaryLoading } = useQuery(expenseSummaryQuery());
+
+  const range = { from: fromDate || undefined, to: toDate || undefined };
+  const ordersQuery = useQuery({
+    ...ordersQueryOptions(user?.id, isAdmin),
+    enabled: Boolean(user?.id),
+  });
+  const income = computeFinanceSummary(ordersQuery.data ?? [], range);
+  const expenseTotal = useQuery({
+    ...dashboardExpenseQuery(range, isAdmin ? undefined : user?.id),
+    enabled: Boolean(user?.id),
+  });
 
   const addMutation = useAddExpenseMutation();
   const updateMutation = useUpdateExpenseMutation();
@@ -203,8 +234,8 @@ export default function ExpensesPage() {
   return (
     <div className="space-y-6 pb-12 font-['Golos_Text',sans-serif]">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+        <div className="shrink-0">
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Receipt className="h-6 w-6 text-[#67B239]" />
             Expenses Management
@@ -213,7 +244,92 @@ export default function ExpensesPage() {
             Monitor operating costs, vendor bills, and daily business expenditures.
           </p>
         </div>
-        <div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
+          <div className="relative w-full sm:w-60 2xl:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search title, vendor, memo..."
+              className="pl-9 h-9 text-sm bg-card"
+            />
+          </div>
+          <Select
+            value={category}
+            onValueChange={(val) => {
+              setCategory(val);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="h-9 w-40 text-sm bg-card">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {EXPENSE_CATEGORIES.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={paymentMethod}
+            onValueChange={(val) => {
+              setPaymentMethod(val);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="h-9 w-36 text-sm bg-card">
+              <SelectValue placeholder="Payment Method" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Methods</SelectItem>
+              {PAYMENT_METHODS.map((pm) => (
+                <SelectItem key={pm} value={pm}>
+                  {pm}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {(search || category !== "all" || paymentMethod !== "all" || fromDate || toDate) && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setSearch("");
+                setCategory("all");
+                setPaymentMethod("all");
+                setFromDate("");
+                setToDate("");
+                setDateResetKey((k) => k + 1);
+                setPage(1);
+              }}
+              title="Reset filters"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+          <DateRangePicker3
+            key={dateResetKey}
+            onDateRangeChange={(range) => {
+              setFromDate(range?.from ? format(range.from, "yyyy-MM-dd") : "");
+              setToDate(
+                range?.to
+                  ? format(range.to, "yyyy-MM-dd")
+                  : range?.from
+                    ? format(range.from, "yyyy-MM-dd")
+                    : "",
+              );
+              setPage(1);
+            }}
+            align="end"
+            className="h-9 bg-card"
+          />
           <Button
             onClick={handleOpenAdd}
             className="bg-[#67B239] hover:bg-[#5aa030] text-white font-medium shadow-sm transition-all flex items-center gap-1.5"
@@ -224,187 +340,49 @@ export default function ExpensesPage() {
       </div>
 
       {/* KPI Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-border/60 bg-card shadow-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              This Month
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-[#67B239]" />
-          </CardHeader>
-          <CardContent>
-            {isSummaryLoading ? (
-              <Skeleton className="h-8 w-28" />
-            ) : (
-              <div className="text-2xl font-bold text-foreground">
-                {formatCurrencyBdt(summary?.totalThisMonth || 0)}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">Current calendar month</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/60 bg-card shadow-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              All-Time Total
-            </CardTitle>
-            <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-          </CardHeader>
-          <CardContent>
-            {isSummaryLoading ? (
-              <Skeleton className="h-8 w-32" />
-            ) : (
-              <div className="text-2xl font-bold text-foreground">
-                {formatCurrencyBdt(summary?.totalAllTime || 0)}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">Total recorded company spend</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/60 bg-card shadow-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Transactions
-            </CardTitle>
-            <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          </CardHeader>
-          <CardContent>
-            {isSummaryLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div className="text-2xl font-bold text-foreground">{summary?.totalCount || 0}</div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">Total expense entries</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/60 bg-card shadow-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Top Category
-            </CardTitle>
-            <Tag className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-          </CardHeader>
-          <CardContent>
-            {isSummaryLoading ? (
-              <Skeleton className="h-8 w-28" />
-            ) : (
-              <div className="text-xl font-bold truncate text-foreground">
-                {summary?.topCategory || "None"}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">Largest expenditure group</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters Bar */}
-      <div className="p-4 bg-card border border-border/60 rounded-xl shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {/* Search */}
-          <div className="relative sm:col-span-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search title, vendor, memo..."
-              className="pl-9 h-9 text-sm"
-            />
-          </div>
-
-          {/* Category Filter */}
-          <div>
-            <Select
-              value={category}
-              onValueChange={(val) => {
-                setCategory(val);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {EXPENSE_CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Payment Method Filter */}
-          <div>
-            <Select
-              value={paymentMethod}
-              onValueChange={(val) => {
-                setPaymentMethod(val);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Payment Method" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Methods</SelectItem>
-                {PAYMENT_METHODS.map((pm) => (
-                  <SelectItem key={pm} value={pm}>
-                    {pm}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Date Range Quick Reset */}
-          <div className="flex items-center gap-2">
-            <Input
-              type="date"
-              value={fromDate}
-              onChange={(e) => {
-                setFromDate(e.target.value);
-                setPage(1);
-              }}
-              className="h-9 text-xs px-2"
-              title="From date"
-            />
-            <Input
-              type="date"
-              value={toDate}
-              onChange={(e) => {
-                setToDate(e.target.value);
-                setPage(1);
-              }}
-              className="h-9 text-xs px-2"
-              title="To date"
-            />
-            {(search || category !== "all" || paymentMethod !== "all" || fromDate || toDate) && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  setSearch("");
-                  setCategory("all");
-                  setPaymentMethod("all");
-                  setFromDate("");
-                  setToDate("");
-                  setPage(1);
-                }}
-                title="Reset filters"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <FinanceSummaryCard
+          label="Income"
+          amount={income.cashCollection}
+          count={income.cashCollectionCount}
+          countLabel="payments received"
+          icon={DollarSign}
+          circleClass="bg-emerald-100 dark:bg-emerald-500/20"
+          iconClass="text-emerald-600 dark:text-emerald-400"
+          loading={ordersQuery.isLoading}
+        />
+        <FinanceSummaryCard
+          label="Expenses"
+          amount={expenseTotal.data?.total ?? 0}
+          count={expenseTotal.data?.count ?? 0}
+          countLabel="expenses"
+          icon={TrendingDown}
+          circleClass="bg-rose-100 dark:bg-rose-500/20"
+          iconClass="text-rose-600 dark:text-rose-400"
+          loading={expenseTotal.isLoading}
+        />
+        <FinanceSummaryCard
+          label="Transactions"
+          amount={summary?.totalCount || 0}
+          isCount
+          count={summary?.totalCount || 0}
+          countLabel="expense entries"
+          icon={FileText}
+          circleClass="bg-blue-100 dark:bg-blue-500/20"
+          iconClass="text-blue-600 dark:text-blue-400"
+          loading={isSummaryLoading}
+        />
+        <FinanceSummaryCard
+          label="Top Category"
+          amount={0}
+          displayValue={summary?.topCategory || "None"}
+          count={0}
+          countLabel="largest expenditure group"
+          icon={Tag}
+          circleClass="bg-amber-100 dark:bg-amber-500/20"
+          iconClass="text-amber-600 dark:text-amber-400"
+          loading={isSummaryLoading}
+        />
       </div>
 
       {/* Expenses Table */}
@@ -726,15 +704,41 @@ export default function ExpensesPage() {
 
             {/* Receipt URL / Image Link */}
             <div>
-              <label className="text-xs font-semibold text-foreground">
-                Receipt / Voucher Link
-              </label>
-              <Input
-                value={formReceiptUrl}
-                onChange={(e) => setFormReceiptUrl(e.target.value)}
-                placeholder="https://... or /uploads/..."
-                className="mt-1"
-              />
+              <label className="text-xs font-semibold text-foreground">Receipt / Voucher</label>
+              <div className="mt-1 flex gap-2">
+                <Input
+                  value={formReceiptUrl}
+                  onChange={(e) => setFormReceiptUrl(e.target.value)}
+                  placeholder="Upload a file or paste a link"
+                  className="min-w-0 flex-1"
+                />
+                <input
+                  ref={receiptInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void handleReceiptUpload(file);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isUploadingReceipt}
+                  onClick={() => receiptInputRef.current?.click()}
+                  className="shrink-0 gap-1.5"
+                >
+                  {isUploadingReceipt ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  {isUploadingReceipt ? "Uploading..." : "Upload"}
+                </Button>
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">Image or PDF, up to 10 MB.</p>
             </div>
 
             {/* Notes */}
@@ -787,16 +791,27 @@ export default function ExpensesPage() {
             <DialogTitle>Receipt / Document Preview</DialogTitle>
           </DialogHeader>
           <div className="p-2 flex items-center justify-center max-h-[70vh] overflow-auto">
-            {previewReceiptUrl && (
-              <img
-                src={previewReceiptUrl}
-                alt="Receipt Preview"
-                className="max-h-[65vh] object-contain rounded-md shadow-xs"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                  toast.error("Unable to render document image.");
-                }}
-              />
+            {previewReceiptUrl?.toLowerCase().endsWith(".pdf") ? (
+              <a
+                href={previewReceiptUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-md border px-4 py-3 text-sm font-medium text-[#67B239] hover:bg-muted"
+              >
+                <FileText className="h-5 w-5" /> Open PDF in a new tab
+              </a>
+            ) : (
+              previewReceiptUrl && (
+                <img
+                  src={previewReceiptUrl}
+                  alt="Receipt Preview"
+                  className="max-h-[65vh] object-contain rounded-md shadow-xs"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                    toast.error("Unable to render document image.");
+                  }}
+                />
+              )
             )}
           </div>
           <DialogFooter>

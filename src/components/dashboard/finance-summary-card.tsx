@@ -10,6 +10,8 @@ interface FinanceSummaryCardProps {
   amount: number;
   /** Show `amount` as a plain number instead of Taka. */
   isCount?: boolean;
+  /** Text shown instead of the formatted amount (e.g. a category name). */
+  displayValue?: string | undefined;
   count: number;
   countLabel: string;
   icon: LucideIcon;
@@ -28,6 +30,7 @@ export function FinanceSummaryCard({
   label,
   amount,
   isCount,
+  displayValue,
   count,
   countLabel,
   icon: Icon,
@@ -63,7 +66,7 @@ export function FinanceSummaryCard({
             <Skeleton className="mx-1 mt-1 h-7 w-24" />
           ) : (
             <p className="mt-0.5 sm:mt-0 px-1 font-mono text-[15px] sm:text-2xl font-bold leading-tight text-foreground truncate">
-              {isCount ? amount.toLocaleString("en-US") : formatTaka(amount)}
+              {displayValue ?? (isCount ? amount.toLocaleString("en-US") : formatTaka(amount))}
             </p>
           )}
         </div>
