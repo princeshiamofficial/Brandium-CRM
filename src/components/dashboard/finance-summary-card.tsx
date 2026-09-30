@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 interface FinanceSummaryCardProps {
   label: string;
   amount: number;
+  /** Show `amount` as a plain number instead of Taka. */
+  isCount?: boolean;
   count: number;
   countLabel: string;
   icon: LucideIcon;
@@ -25,6 +27,7 @@ const formatTaka = (value: number) =>
 export function FinanceSummaryCard({
   label,
   amount,
+  isCount,
   count,
   countLabel,
   icon: Icon,
@@ -60,7 +63,7 @@ export function FinanceSummaryCard({
             <Skeleton className="mx-1 mt-1 h-7 w-24" />
           ) : (
             <p className="mt-0.5 sm:mt-0 px-1 font-mono text-[15px] sm:text-2xl font-bold leading-tight text-foreground truncate">
-              {formatTaka(amount)}
+              {isCount ? amount.toLocaleString("en-US") : formatTaka(amount)}
             </p>
           )}
         </div>

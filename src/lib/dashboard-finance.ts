@@ -190,3 +190,74 @@ export const prospectStageStepsQuery = (range: DashboardDateRange, scopeUserId?:
       }));
     },
   });
+
+/** Orders whose status history records a move to Delivered inside the range (ERPAPP rule). */
+export function computeDeliveredCount(
+  allOrders: CrmOrder[],
+  range: DashboardDateRange,
+  userId?: string,
+): number {
+  return allOrders.filter((order) => {
+    if (userId && order.crm_user_id !== userId && order.designer_id !== userId) return false;
+    const deliveredEntries = order.status_history.filter(
+      (h) => resolveOrderStatus(h.status).id === "delivered",
+    );
+    if (deliveredEntries.length) return deliveredEntries.some((h) => inRange(h.timestamp, range));
+    return resolveOrderStatus(order.status).id === "delivered" && inRange(order.updated_at, range);
+  }).length;
+}
+
+/** Meetings dated in the range (not cancelled) and quotations dated in the range. */
+export const dashboardActivityCountsQuery = (range: DashboardDateRange, scopeUserId?: string) =>
+  queryOptions({
+    queryKey: ["dashboard", "activity-counts", range, scopeUserId],
+    queryFn: async (): Promise<{ meetings: number; quotations: number }> => {
+      const dateFilter = (column: string, params: string[]) => {
+        const parts: string[] = [];
+        if (range.from) {
+          parts.push(`DATE(${column}) >= ?`);
+          params.push(range.from);
+        }
+        if (range.to) {
+          parts.push(`DATE(${column}) <= ?`);
+          params.push(range.to);
+        }
+        return parts;
+      };
+
+      const meetingParams: string[] = [];
+      const meetingWhere = [
+        "COALESCE(status, '') <> 'Cancelled'",
+        ...dateFilter("COALESCE(meeting_date, scheduled_at, created_at)", meetingParams),
+      ];
+      if (scopeUserId) {
+        meetingWhere.push("(assigned_user_id = ? OR assigned_to = ? OR created_by = ?)");
+        meetingParams.push(scopeUserId, scopeUserId, scopeUserId);
+      }
+
+      const quotationParams: string[] = [];
+      const quotationWhere = [
+        "COALESCE(is_active, 1) = 1",
+        ...dateFilter("COALESCE(order_date, created_at)", quotationParams),
+      ];
+      if (scopeUserId) {
+        quotationWhere.push("(created_by = ? OR assigned_agent_id = ? OR assigned_artist_id = ?)");
+        quotationParams.push(scopeUserId, scopeUserId, scopeUserId);
+      }
+
+      const [meetingsRes, quotationsRes] = await Promise.all([
+        runMySQLQuery<Record<string, unknown>[]>(
+          `SELECT COUNT(*) AS cnt FROM \`meetings\` WHERE ${meetingWhere.join(" AND ")};`,
+          meetingParams,
+        ),
+        runMySQLQuery<Record<string, unknown>[]>(
+          `SELECT COUNT(*) AS cnt FROM \`quotations\` WHERE ${quotationWhere.join(" AND ")};`,
+          quotationParams,
+        ),
+      ]);
+      return {
+        meetings: Number(meetingsRes.data?.[0]?.["cnt"] || 0),
+        quotations: Number(quotationsRes.data?.[0]?.["cnt"] || 0),
+      };
+    },
+  });

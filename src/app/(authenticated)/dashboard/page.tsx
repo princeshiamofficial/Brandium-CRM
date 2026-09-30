@@ -10,11 +10,13 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
+  CalendarCheck,
+  FileSpreadsheet,
+  PackageCheck,
   Briefcase,
   Users,
   FileText,
   Plus,
-  Receipt,
   ReceiptText,
   Repeat,
   ShoppingCart,
@@ -41,7 +43,9 @@ import { crmUsersQueryOptions } from "@/lib/admin-users";
 import { useAuth } from "@/lib/auth";
 import { dashboardMetricsQuery, type DashboardDateRange } from "@/lib/dashboard";
 import {
+  computeDeliveredCount,
   computeFinanceSummary,
+  dashboardActivityCountsQuery,
   computeOrderStatusSteps,
   dashboardExpenseQuery,
   prospectStageStepsQuery,
@@ -83,6 +87,11 @@ export default function DashboardPage() {
   });
   const finance = computeFinanceSummary(ordersQuery.data ?? [], range, filterUserId);
   const financeLoading = ordersQuery.isLoading;
+  const deliveredCount = computeDeliveredCount(ordersQuery.data ?? [], range, filterUserId);
+  const activityCounts = useQuery({
+    ...dashboardActivityCountsQuery(range, isAdmin ? filterUserId : userId),
+    enabled: Boolean(userId),
+  });
   const projectSteps = computeOrderStatusSteps(ordersQuery.data ?? [], range, filterUserId);
   const pipelineQuery = useQuery({
     ...prospectStageStepsQuery(range, isAdmin ? filterUserId : userId),
@@ -240,16 +249,6 @@ export default function DashboardPage() {
           loading={financeLoading}
         />
         <FinanceSummaryCard
-          label="Advance Paid"
-          amount={finance.advancePaid}
-          count={finance.advancePaidCount}
-          countLabel="payments"
-          icon={Receipt}
-          circleClass="bg-teal-100 dark:bg-teal-500/20"
-          iconClass="text-teal-600 dark:text-teal-400"
-          loading={financeLoading}
-        />
-        <FinanceSummaryCard
           label="Cash Collection"
           amount={finance.cashCollection}
           count={finance.cashCollectionCount}
@@ -277,6 +276,39 @@ export default function DashboardPage() {
           icon={Repeat}
           circleClass="bg-emerald-100 dark:bg-emerald-500/20"
           iconClass="text-emerald-600 dark:text-emerald-400"
+          loading={financeLoading}
+        />
+        <FinanceSummaryCard
+          label="Meeting Scheduled"
+          amount={activityCounts.data?.meetings ?? 0}
+          isCount
+          count={activityCounts.data?.meetings ?? 0}
+          countLabel="meetings"
+          icon={CalendarCheck}
+          circleClass="bg-violet-100 dark:bg-violet-500/20"
+          iconClass="text-violet-600 dark:text-violet-400"
+          loading={activityCounts.isLoading}
+        />
+        <FinanceSummaryCard
+          label="Total Quotation"
+          amount={activityCounts.data?.quotations ?? 0}
+          isCount
+          count={activityCounts.data?.quotations ?? 0}
+          countLabel="quotations"
+          icon={FileSpreadsheet}
+          circleClass="bg-cyan-100 dark:bg-cyan-500/20"
+          iconClass="text-cyan-600 dark:text-cyan-400"
+          loading={activityCounts.isLoading}
+        />
+        <FinanceSummaryCard
+          label="Total Delivered"
+          amount={deliveredCount}
+          isCount
+          count={deliveredCount}
+          countLabel="orders delivered"
+          icon={PackageCheck}
+          circleClass="bg-green-100 dark:bg-green-500/20"
+          iconClass="text-green-600 dark:text-green-400"
           loading={financeLoading}
         />
       </div>

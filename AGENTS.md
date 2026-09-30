@@ -602,3 +602,4 @@ Single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/agents/d
 - **framer-motion Cannot Animate 8-Digit Hex Colours**:
   - Animating `backgroundColor` between `#RRGGBB1A` and `#RRGGBB` left the active stage circle stuck at the tint (pale circle, invisible white number). Pass `rgba()` strings instead (see `rgba()` in `src/components/dashboard/status-timeline.tsx`), and give both box-shadow states the same number of layers.
   - The Project / Prospect Overview cards sit at the bottom of the Dashboard, after Active deals and Pending tasks.
+  - Count cards (`FinanceSummaryCard isCount`): Meeting Scheduled = non-cancelled meetings whose `meeting_date` is in the range; Total Quotation = active (`is_active = 1`, deleted quotations are soft-deleted) quotations whose `order_date` is in the range; Total Delivered = orders whose `status_history` has a Delivered entry in the range (`computeDeliveredCount`). All three follow the user filter.
