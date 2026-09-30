@@ -3,27 +3,45 @@
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Plus,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  Lock,
   MoreVertical,
   Pencil,
-  Trash2,
+  Plus,
   Power,
   PowerOff,
-  Lock,
+  Search,
+  Trash2,
+  Workflow,
+  X,
+  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { PageHeader } from "@/components/placeholder-page";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -78,6 +96,29 @@ const stageFormSchema = z.object({
   icon: z.string().nullable().optional(),
 });
 
+const GROUP_STYLES: Record<string, { label: string; className: string }> = {
+  new: {
+    label: "New",
+    className: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
+  },
+  in_progress: {
+    label: "In Progress",
+    className: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+  },
+  won: {
+    label: "Won",
+    className: "bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30",
+  },
+  lost: {
+    label: "Lost",
+    className: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30",
+  },
+  denied: {
+    label: "Denied",
+    className: "bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30",
+  },
+};
+
 export default function StageManagementPage() {
   const router = useRouter();
   const stages = useQuery(stagesWithCountsQuery());
@@ -101,7 +142,7 @@ export default function StageManagementPage() {
     resolver: zodResolver(stageFormSchema) as Resolver<z.infer<typeof stageFormSchema>>,
     defaultValues: {
       name: "",
-      stage_group: "prospect",
+      stage_group: "new",
       sort_order: (rawStagesList.length ?? 0) + 1,
       is_follow_up: false,
       color: "#2563EB",
@@ -179,283 +220,305 @@ export default function StageManagementPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Stage Management"
-        description="Configure your sales pipeline stages, colors, and tracking rules."
-      >
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <Workflow className="size-7 text-[#67B239]" />
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Stage Management</h1>
+            <p className="text-sm text-muted-foreground">
+              Configure pipeline stages, colors, icons and follow-up rules.
+            </p>
+          </div>
+        </div>
         <Button
+          className="bg-[#67B239] hover:bg-[#5aa030] text-white gap-1.5 cursor-pointer"
           onClick={() => {
             setEditingStage(null);
             form.reset();
             setIsDialogOpen(true);
           }}
         >
-          <Plus className="mr-2 size-4" />
+          <Plus className="size-4" />
           Create Stage
         </Button>
-      </PageHeader>
-
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="relative max-w-sm flex-1">
-          <Icons.Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-          <Input
-            placeholder="Search stages by name or order..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 pr-8 bg-white dark:bg-card rounded-xl"
-          />
-        </div>
       </div>
 
-      <Card className="bg-white dark:bg-card border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden rounded-2xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b bg-slate-50/80 dark:bg-muted/50 font-semibold text-muted-foreground uppercase tracking-wider">
-                <th className="py-3.5 px-4 w-16 text-center">Order</th>
-                <th className="py-3.5 px-4">Stage Name & Color</th>
-                <th className="py-3.5 px-4">Prospects</th>
-                <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {stages.isPending ? (
-                Array.from({ length: 6 }).map((_, idx) => (
-                  <tr key={idx}>
-                    <td colSpan={5} className="py-4 px-4">
-                      <Skeleton className="h-10 w-full rounded-xl" />
-                    </td>
-                  </tr>
-                ))
-              ) : filteredStages.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-muted-foreground">
-                    <Icons.Layers className="size-8 mx-auto text-slate-300 mb-2" />
-                    <p className="font-semibold text-foreground">No stages found</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Try resetting your search filter or create a new stage.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                filteredStages.map((stage) => {
-                  const brandColor = resolveStageColor(stage.name, stage.color);
-                  const iconName = resolveStageIcon(stage.name, stage.icon);
-                  const IconComponent =
-                    (Icons as unknown as Record<string, LucideIcon>)[iconName] ||
-                    (Icons as unknown as Record<string, LucideIcon>)[stage.icon || "Circle"] ||
-                    Icons.Circle;
+      <div className="relative max-w-sm">
+        <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+        <Input
+          placeholder="Search stages by name or order..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 pr-8 bg-white dark:bg-card"
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch("")}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
 
-                  return (
-                    <tr
-                      key={stage.id}
-                      className={`hover:bg-slate-50/60 dark:hover:bg-muted/30 transition-colors ${
-                        !stage.is_active ? "opacity-60 bg-slate-50/40 dark:bg-muted/10" : ""
-                      }`}
-                    >
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="inline-flex items-center gap-1 font-mono font-bold text-slate-700 dark:text-slate-300">
-                          <span className="w-5 text-center">{stage.sort_order}</span>
-                          <div className="flex flex-col">
-                            <button
-                              type="button"
-                              className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer p-0.5"
-                              onClick={() =>
-                                updateMutation.mutate({
-                                  id: stage.id,
-                                  sort_order: Math.max(0, stage.sort_order - 1),
-                                })
-                              }
-                              title="Move Up"
-                            >
-                              <Icons.ChevronUp className="size-3" />
-                            </button>
-                            <button
-                              type="button"
-                              className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer p-0.5"
-                              onClick={() =>
-                                updateMutation.mutate({
-                                  id: stage.id,
-                                  sort_order: stage.sort_order + 1,
-                                })
-                              }
-                              title="Move Down"
-                            >
-                              <Icons.ChevronDown className="size-3" />
-                            </button>
-                          </div>
-                        </div>
-                      </td>
+      <Card className="shadow-xl border bg-card rounded-lg overflow-hidden">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="pl-6 w-24 font-semibold">Order</TableHead>
+                  <TableHead className="min-w-56 font-semibold">Stage</TableHead>
+                  <TableHead className="min-w-28 font-semibold">Group</TableHead>
+                  <TableHead className="min-w-36 font-semibold">Prospects</TableHead>
+                  <TableHead className="min-w-25 font-semibold">Status</TableHead>
+                  <TableHead className="pr-6 text-right min-w-20 font-semibold">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {stages.isPending ? (
+                  Array.from({ length: 5 }).map((_, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell colSpan={6} className="py-4 px-6">
+                        <Skeleton className="h-12 w-full rounded" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredStages.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                      <Layers className="size-8 mx-auto text-slate-300 mb-2" />
+                      <p className="font-semibold text-foreground">No stages found</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Reset your search or create a new stage.
+                      </p>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredStages.map((stage) => {
+                    const brandColor = resolveStageColor(stage.name, stage.color);
+                    const iconName = resolveStageIcon(stage.name, stage.icon);
+                    const IconComponent =
+                      (Icons as unknown as Record<string, LucideIcon>)[iconName] ||
+                      (Icons as unknown as Record<string, LucideIcon>)[stage.icon || "Circle"] ||
+                      Icons.Circle;
+                    const locked = isSystemStage(stage);
 
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="size-9 rounded-xl flex items-center justify-center shrink-0 text-white shadow-2xs transition-transform hover:scale-105"
-                            style={{ backgroundColor: brandColor }}
-                          >
-                            <IconComponent className="size-4.5 text-white" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm">
-                                {stage.name}
-                              </span>
-                              {isSystemStage(stage) && (
-                                <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-[9px] px-1.5 py-0 gap-1 font-bold border border-slate-200 dark:border-slate-700">
-                                  <Lock className="size-2.5 text-slate-500" />
-                                  System
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span
-                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border"
-                                style={{
-                                  backgroundColor: `${brandColor}15`,
-                                  color: brandColor,
-                                  borderColor: `${brandColor}35`,
-                                }}
+                    return (
+                      <TableRow
+                        key={stage.id}
+                        className={cn(
+                          "hover:bg-muted/50 transition-colors",
+                          !stage.is_active && "opacity-60",
+                        )}
+                      >
+                        <TableCell className="pl-6">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-6 text-center font-mono text-sm font-semibold text-foreground">
+                              {stage.sort_order}
+                            </span>
+                            <div className="flex flex-col">
+                              <button
+                                type="button"
+                                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                                onClick={() =>
+                                  updateMutation.mutate({
+                                    id: stage.id,
+                                    sort_order: Math.max(0, stage.sort_order - 1),
+                                  })
+                                }
+                                title="Move up"
                               >
+                                <ChevronUp className="size-3" />
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                                onClick={() =>
+                                  updateMutation.mutate({
+                                    id: stage.id,
+                                    sort_order: stage.sort_order + 1,
+                                  })
+                                }
+                                title="Move down"
+                              >
+                                <ChevronDown className="size-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="size-9 rounded-full flex items-center justify-center shrink-0 shadow-2xs"
+                              style={{ backgroundColor: brandColor }}
+                            >
+                              <IconComponent className="size-4 text-white" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-medium text-foreground text-sm truncate">
+                                  {stage.name}
+                                </span>
+                                {locked && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] px-1.5 py-0 gap-1 rounded-full text-muted-foreground"
+                                  >
+                                    <Lock className="size-2.5" /> System
+                                  </Badge>
+                                )}
+                                {stage.is_follow_up && (
+                                  <Badge
+                                    variant="outline"
+                                    className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px] px-1.5 py-0 rounded-full"
+                                  >
+                                    Follow-up
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="inline-flex items-center gap-1.5 text-xs font-mono text-muted-foreground">
                                 <span
-                                  className="size-2 rounded-full inline-block shadow-2xs"
+                                  className="size-2 rounded-full"
                                   style={{ backgroundColor: brandColor }}
                                 />
                                 {brandColor.toUpperCase()}
                               </span>
                             </div>
                           </div>
-                        </div>
-                      </td>
+                        </TableCell>
 
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs font-bold gap-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-                          onClick={() =>
-                            router.push(`/prospects?search=${encodeURIComponent(stage.name)}`)
-                          }
-                          title="View prospects in this stage"
-                        >
-                          <span className="text-foreground">{stage.prospect_count}</span>
-                          <span className="text-muted-foreground font-normal">
-                            ({stage.prospect_percentage}%)
-                          </span>
-                          <Icons.ChevronRight className="size-3 text-slate-400" />
-                        </Button>
-                      </td>
+                        <TableCell className="whitespace-nowrap">
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-xs font-semibold px-2.5 py-0.5 rounded-full",
+                              GROUP_STYLES[stage.stage_group]?.className ?? "text-muted-foreground",
+                            )}
+                          >
+                            {GROUP_STYLES[stage.stage_group]?.label ?? stage.stage_group}
+                          </Badge>
+                        </TableCell>
 
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => toggleActive(stage)}
-                          className={`cursor-pointer ${isSystemStage(stage) ? "cursor-default" : ""}`}
-                          title={
-                            isSystemStage(stage)
-                              ? "System stages remain active"
-                              : "Click to toggle status"
-                          }
-                        >
+                        <TableCell className="whitespace-nowrap">
+                          <button
+                            type="button"
+                            className="group flex items-center gap-2 cursor-pointer"
+                            onClick={() =>
+                              router.push(`/prospects?search=${encodeURIComponent(stage.name)}`)
+                            }
+                            title="View prospects in this stage"
+                          >
+                            <span className="font-mono text-sm font-semibold text-foreground group-hover:text-[#67B239]">
+                              {stage.prospect_count}
+                            </span>
+                            <span className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
+                              <span
+                                className="block h-full rounded-full"
+                                style={{
+                                  width: `${Math.min(100, stage.prospect_percentage)}%`,
+                                  backgroundColor: brandColor,
+                                }}
+                              />
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {stage.prospect_percentage}%
+                            </span>
+                          </button>
+                        </TableCell>
+
+                        <TableCell className="whitespace-nowrap">
                           {stage.is_active ? (
-                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 text-[10px] px-2 py-0.5 font-semibold gap-1">
-                              <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
+                            <Badge
+                              variant="outline"
+                              className="bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30 text-xs font-semibold px-2.5 py-0.5 rounded-full gap-1"
+                            >
+                              <CheckCircle2 className="size-3 text-green-600 dark:text-green-400" />{" "}
                               Active
                             </Badge>
                           ) : (
                             <Badge
                               variant="outline"
-                              className="text-slate-400 border-slate-200 text-[10px] px-2 py-0.5 font-semibold gap-1"
+                              className="bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30 text-xs font-semibold px-2.5 py-0.5 rounded-full gap-1"
                             >
-                              <span className="size-1.5 rounded-full bg-slate-400 inline-block" />
-                              Inactive
+                              <XCircle className="size-3 text-red-600 dark:text-red-400" /> Inactive
                             </Badge>
                           )}
-                        </button>
-                      </td>
+                        </TableCell>
 
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          {isSystemStage(stage) ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled
-                              className="h-7 px-2 text-xs font-semibold rounded-lg gap-1 opacity-50 cursor-not-allowed bg-slate-50 dark:bg-muted/20 border-slate-200 dark:border-slate-800 text-slate-500"
+                        <TableCell className="pr-6 text-right whitespace-nowrap">
+                          {locked ? (
+                            <span
+                              className="inline-flex h-8 w-8 items-center justify-center text-muted-foreground"
                               title="System stage is protected and cannot be edited or deleted"
                             >
-                              <Lock className="size-3 text-slate-400" />
-                              System Locked
-                            </Button>
+                              <Lock className="size-4" />
+                            </span>
                           ) : (
-                            <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 px-2 text-xs font-semibold rounded-lg gap-1 cursor-pointer"
-                                onClick={() => handleEdit(stage)}
-                              >
-                                <Icons.Pencil className="size-3 text-blue-600" />
-                                Edit
-                              </Button>
-
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
-                                  >
-                                    <MoreVertical className="size-3.5" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                  align="end"
-                                  className="rounded-xl shadow-xl border-slate-200 dark:border-slate-800"
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 rounded-full"
+                                  title="Stage Actions"
                                 >
-                                  <DropdownMenuItem
-                                    onClick={() => handleEdit(stage)}
-                                    className="text-xs font-semibold cursor-pointer rounded-lg"
-                                  >
-                                    <Pencil className="mr-2 size-3.5 text-blue-500" />
-                                    Edit Properties
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => toggleActive(stage)}
-                                    className="text-xs font-semibold cursor-pointer rounded-lg"
-                                  >
-                                    {stage.is_active ? (
-                                      <>
-                                        <PowerOff className="mr-2 size-3.5 text-rose-500" />{" "}
-                                        Deactivate
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Power className="mr-2 size-3.5 text-emerald-500" />{" "}
-                                        Activate
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    className="text-destructive text-xs font-semibold cursor-pointer rounded-lg"
-                                    onClick={() => handleDelete(stage.id)}
-                                  >
-                                    <Trash2 className="mr-2 size-3.5" />
-                                    Delete Stage
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </>
+                                  <span className="sr-only">Open menu</span>
+                                  <MoreVertical className="size-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56 p-1 rounded-[10px]">
+                                <DropdownMenuLabel className="px-2 py-1.5 text-sm font-semibold truncate">
+                                  Actions for {stage.name}
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator className="-mx-1 my-1 h-px bg-muted" />
+                                <DropdownMenuItem
+                                  onClick={() => handleEdit(stage)}
+                                  className="cursor-pointer text-sm gap-2 rounded-md px-2 py-1.5"
+                                >
+                                  <Pencil className="mr-2 h-4 w-4" /> Edit Stage
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => toggleActive(stage)}
+                                  className={cn(
+                                    "cursor-pointer text-sm gap-2 rounded-md px-2 py-1.5",
+                                    stage.is_active
+                                      ? "text-destructive focus:text-destructive"
+                                      : "text-emerald-600 focus:text-emerald-700",
+                                  )}
+                                >
+                                  {stage.is_active ? (
+                                    <>
+                                      <PowerOff className="mr-2 h-4 w-4 text-destructive" />{" "}
+                                      Deactivate
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Power className="mr-2 h-4 w-4 text-emerald-600" /> Activate
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator className="-mx-1 my-1 h-px bg-muted" />
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(stage.id)}
+                                  className="cursor-pointer text-destructive focus:text-destructive text-sm gap-2 rounded-md px-2 py-1.5"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4 text-destructive" /> Delete Stage
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -497,7 +560,7 @@ export default function StageManagementPage() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="new">New</SelectItem>
-                          <SelectItem value="progress">In Progress</SelectItem>
+                          <SelectItem value="in_progress">In Progress</SelectItem>
                           <SelectItem value="won">Won</SelectItem>
                           <SelectItem value="lost">Lost</SelectItem>
                           <SelectItem value="denied">Denied</SelectItem>
@@ -589,6 +652,7 @@ export default function StageManagementPage() {
               <DialogFooter>
                 <Button
                   type="submit"
+                  className="bg-[#67B239] hover:bg-[#5aa030] text-white"
                   disabled={createMutation.isPending || updateMutation.isPending}
                 >
                   {editingStage ? "Save Changes" : "Create Stage"}

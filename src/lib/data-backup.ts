@@ -79,79 +79,101 @@ export async function fetchBackupSummaryMetrics(): Promise<BackupSummaryMetrics>
   }
 }
 
+/** Tables never exported: they hold login sessions and the SMS gateway API key. */
+export const EXCLUDED_BACKUP_TABLES = ["sessions", "sms_gateway_settings"];
+
+/** Columns stripped from every exported row (passwords, tokens, keys). */
+const SENSITIVE_COLUMN = /pass(word)?|secret|token|api_key/i;
+
+async function listDatabaseTables(): Promise<string[]> {
+  const res = await runMySQLQuery<Record<string, unknown>[]>(
+    "SELECT TABLE_NAME AS name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME;",
+  );
+  if (!res.success) throw new Error(res.error || "Could not list database tables.");
+  return (res.data || []).map((r) => String(r["name"]));
+}
+
+export async function listBackupTables(): Promise<string[]> {
+  return (await listDatabaseTables()).filter((t) => !EXCLUDED_BACKUP_TABLES.includes(t));
+}
+
+async function fetchSanitizedRows(table: string): Promise<Record<string, unknown>[]> {
+  const res = await runMySQLQuery<Record<string, unknown>[]>(
+    `SELECT * FROM \`${table.replace(/`/g, "")}\`;`,
+  );
+  if (!res.success) throw new Error(res.error || `Could not read table ${table}.`);
+  return (res.data || []).map((row) =>
+    Object.fromEntries(Object.entries(row).filter(([key]) => !SENSITIVE_COLUMN.test(key))),
+  );
+}
+
+export type BackupTableStatus = {
+  table: string;
+  records: number;
+  included: boolean;
+  note: string | null;
+};
+
+export async function fetchBackupTableStatus(): Promise<BackupTableStatus[]> {
+  const names = await listDatabaseTables();
+
+  const rows = await Promise.all(
+    names.map(async (name) => {
+      const countRes = await runMySQLQuery<Record<string, unknown>[]>(
+        `SELECT COUNT(*) AS cnt FROM \`${name.replace(/`/g, "")}\`;`,
+      );
+      const included = !EXCLUDED_BACKUP_TABLES.includes(name);
+      return {
+        table: name,
+        records: Number(countRes.data?.[0]?.["cnt"] || 0),
+        included,
+        note: included
+          ? name === "users"
+            ? "Passwords excluded"
+            : null
+          : "Holds secrets or login sessions",
+      };
+    }),
+  );
+
+  return rows.sort((a, b) => Number(b.included) - Number(a.included) || b.records - a.records);
+}
+
+export const backupTableStatusQueryOptions = () =>
+  queryOptions({
+    queryKey: ["admin-backup-table-status"],
+    queryFn: fetchBackupTableStatus,
+  });
+
 /**
- * Generates a full sanitized CRM JSON backup directly from MySQL.
- * Users table is sanitized to exclude passwords and secret tokens.
+ * Full JSON backup of every table except secrets; password/token/key columns are removed.
+ * Throws if any table cannot be read, so a partial backup is never saved as a complete one.
  */
 export async function generateBackupPayload(): Promise<BackupPayload> {
-  const now = new Date().toISOString();
-  try {
-    const tables = [
-      "prospects",
-      "stages",
-      "services",
-      "follow_ups",
-      "opportunities",
-      "meetings",
-      "invoices",
-      "payments",
-      "activities",
-    ];
-    const backupData: Record<string, unknown[]> = {};
-
-    for (const tbl of tables) {
-      const res = await runMySQLQuery<unknown[]>(`SELECT * FROM \`${tbl}\`;`);
-      backupData[tbl] = Array.isArray(res?.data) ? res.data : [];
-    }
-
-    const uRes = await runMySQLQuery<unknown[]>(
-      "SELECT id, name, email, role, status, created_at FROM users;",
-    );
-    backupData["users"] = Array.isArray(uRes?.data) ? uRes.data : [];
-
-    const counts: BackupCounts = {
-      prospects: backupData["prospects"]?.length || 0,
-      stage_history: 0,
-      followups: backupData["follow_ups"]?.length || 0,
-      opportunities: backupData["opportunities"]?.length || 0,
-      meetings: backupData["meetings"]?.length || 0,
-      invoices: backupData["invoices"]?.length || 0,
-      payments: backupData["payments"]?.length || 0,
-      services: backupData["services"]?.length || 0,
-      sms_logs: 0,
-      users: backupData["users"]?.length || 0,
-      activities: backupData["activities"]?.length || 0,
-    };
-
-    return {
-      schema_version: "2026.1",
-      app_name: "Brandium CRM",
-      generated_at: now,
-      counts,
-      data: backupData,
-    };
-  } catch (err) {
-    console.warn("generateBackupPayload fallback:", err);
+  const backupData: Record<string, unknown[]> = {};
+  for (const table of await listBackupTables()) {
+    backupData[table] = await fetchSanitizedRows(table);
   }
 
+  const len = (key: string) => backupData[key]?.length || 0;
   return {
-    schema_version: "2026.1",
+    schema_version: "2026.2",
     app_name: "Brandium CRM",
-    generated_at: now,
+    generated_at: new Date().toISOString(),
     counts: {
-      prospects: 0,
-      stage_history: 0,
-      followups: 0,
-      opportunities: 0,
-      meetings: 0,
-      invoices: 0,
-      payments: 0,
-      services: 0,
-      sms_logs: 0,
-      users: 0,
-      activities: 0,
+      prospects: len("prospects"),
+      stage_history: len("prospect_stage_history"),
+      followups: len("follow_ups"),
+      opportunities: len("opportunities"),
+      meetings: len("meetings"),
+      invoices: len("invoices"),
+      payments: len("payments"),
+      services: len("services"),
+      sms_logs: len("sms_logs"),
+      users: len("users"),
+      activities: len("activities"),
     },
-    data: {},
+    data: backupData,
   };
 }
 
@@ -190,8 +212,16 @@ export function validateBackupFile(fileContent: string): RestoreValidationResult
     const dataObj = parsed.data || {};
     const counts: BackupCounts = {
       prospects: Array.isArray(dataObj["prospects"]) ? dataObj["prospects"].length : 0,
-      stage_history: Array.isArray(dataObj["stage_history"]) ? dataObj["stage_history"].length : 0,
-      followups: Array.isArray(dataObj["followups"]) ? dataObj["followups"].length : 0,
+      stage_history: Array.isArray(dataObj["prospect_stage_history"])
+        ? dataObj["prospect_stage_history"].length
+        : Array.isArray(dataObj["stage_history"])
+          ? dataObj["stage_history"].length
+          : 0,
+      followups: Array.isArray(dataObj["follow_ups"])
+        ? dataObj["follow_ups"].length
+        : Array.isArray(dataObj["followups"])
+          ? dataObj["followups"].length
+          : 0,
       opportunities: Array.isArray(dataObj["opportunities"]) ? dataObj["opportunities"].length : 0,
       meetings: Array.isArray(dataObj["meetings"]) ? dataObj["meetings"].length : 0,
       invoices: Array.isArray(dataObj["invoices"]) ? dataObj["invoices"].length : 0,
@@ -313,27 +343,39 @@ export async function downloadJsonBackup(): Promise<void> {
   document.body.removeChild(link);
 }
 
-/**
- * Triggers CSV data bundle export
- */
-export async function downloadCsvExport(): Promise<void> {
-  const headers = ["Table Entity", "Record ID", "Primary Title / Name", "Status", "Created Date"];
-  const rows = [
-    ["Prospects", "p-101", "AurevixSoft", "Qualified", "2026-08-01"],
-    ["Invoices", "inv-801", "INV-2026-801", "Paid", "2026-08-05"],
-    ["Services", "srv-1", "Product Photography", "Active", "2026-07-15"],
-    ["Meetings", "m-101", "Quarterly Retainer Call", "Completed", "2026-08-08"],
-  ];
+const csvCell = (value: unknown): string => {
+  if (value === null || value === undefined) return "";
+  let text = typeof value === "object" ? JSON.stringify(value) : String(value);
+  // Stop spreadsheet apps from running cell text as a formula (CSV injection).
+  if (/^[=+@\t\r]/.test(text) || /^-[^\d.]/.test(text)) text = `'${text}`;
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
 
-  const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+/** Builds CSV text; the header is the union of all row keys. */
+export function toCsv(rows: Record<string, unknown>[]): string {
+  const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  const lines = [columns.map(csvCell).join(",")];
+  for (const row of rows) lines.push(columns.map((c) => csvCell(row[c])).join(","));
+  return lines.join("\r\n");
+}
+
+/** Downloads one table as an Excel-friendly UTF-8 CSV (sensitive columns removed). */
+export async function downloadCsvExport(table: string): Promise<number> {
+  if (EXCLUDED_BACKUP_TABLES.includes(table)) {
+    throw new Error("This table cannot be exported.");
+  }
+  const rows = await fetchSanitizedRows(table);
+  const bom = String.fromCharCode(0xfeff);
+  const blob = new Blob([bom + toCsv(rows)], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `Brandium_CRM_CSV_Export_${new Date().toISOString().split("T")[0]}.csv`;
+  link.download = `Brandium_${table}_${new Date().toISOString().split("T")[0]}.csv`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  return rows.length;
 }
 
 /**

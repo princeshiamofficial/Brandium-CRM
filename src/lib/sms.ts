@@ -42,16 +42,6 @@ export type SmsRecipientInput = {
   prospect_name?: string | undefined;
 };
 
-const getEnvVar = (key: string) => {
-  if (typeof process !== "undefined" && process.env) {
-    return process.env[`NEXT_PUBLIC_${key}`] || process.env[key] || "";
-  }
-  return "";
-};
-const SMS_API_KEY = getEnvVar("VITE_SMS_API_KEY") || getEnvVar("SMS_API_KEY");
-const SMS_SENDER_ID = getEnvVar("VITE_SMS_SENDER_ID") || getEnvVar("SMS_SENDER_ID") || "BRANDIUM";
-const SMS_GATEWAY_URL = getEnvVar("VITE_SMS_GATEWAY_URL") || getEnvVar("SMS_GATEWAY_URL");
-
 export const SMS_PRESET_TEMPLATES: SmsPresetTemplate[] = [
   {
     id: "tmpl-1",
@@ -149,24 +139,26 @@ export async function sendSms(
   const cleanPhone = phone.trim();
   const cleanMessage = message.trim();
   const now = getMySQLTimestamp();
-  const apiRespId = `SMS-REQ-${Math.floor(10000 + Math.random() * 90000)}`;
   const logId = generateUUID();
 
-  if (SMS_GATEWAY_URL && SMS_GATEWAY_URL.startsWith("http")) {
-    try {
-      await fetch(SMS_GATEWAY_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          api_key: SMS_API_KEY,
-          sender_id: SMS_SENDER_ID,
-          phone: cleanPhone,
-          message: cleanMessage,
-        }),
-      });
-    } catch (err) {
-      console.warn("SMS Gateway dispatch notice:", err);
-    }
+  const gatewayRes = await fetch("/api/sms/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      phones: [cleanPhone],
+      message: cleanMessage,
+      recipient_name: prospectName || null,
+      prospect_id: prospectId || null,
+      mode,
+      sent_by: sentByUserId || null,
+    }),
+  });
+  const gateway = (await gatewayRes.json().catch(() => null)) as {
+    success?: boolean;
+    response?: string;
+  } | null;
+  if (!gateway?.success) {
+    throw new Error(gateway?.response || "SMS gateway rejected the message.");
   }
 
   // Persist to activities in MySQL
@@ -185,7 +177,7 @@ export async function sendSms(
   return {
     success: true,
     logId,
-    apiResponseId: apiRespId,
+    apiResponseId: gateway.response || "",
   };
 }
 
@@ -225,21 +217,16 @@ export async function sendBulkSms(
 export async function fetchSmsLogs(): Promise<SmsLogEntry[]> {
   try {
     const res = await runMySQLQuery<Record<string, unknown>[]>(
-      `SELECT 
-        a.id,
-        a.prospect_id,
+      `SELECT
+        l.*,
         p.contact_name AS prospect_name,
-        p.phone AS recipient_phone,
-        a.message,
-        a.actor_id AS sent_by,
-        COALESCE(u.name, 'Agent') AS sent_by_name,
-        a.created_at
-      FROM \`activities\` a
-      LEFT JOIN \`prospects\` p ON a.prospect_id = p.id
-      LEFT JOIN \`users\` u ON a.actor_id = u.id
-      WHERE a.activity_type = 'sms_sent'
-      ORDER BY a.created_at DESC
-      LIMIT 100;`,
+        COALESCE(u.name, 'System') AS sent_by_name,
+        u.role AS sender_role
+      FROM \`sms_logs\` l
+      LEFT JOIN \`prospects\` p ON l.prospect_id = p.id
+      LEFT JOIN \`users\` u ON l.sent_by = u.id
+      ORDER BY l.created_at DESC
+      LIMIT 1000;`,
     );
 
     if (!res.success || !Array.isArray(res.data)) {
@@ -250,16 +237,20 @@ export async function fetchSmsLogs(): Promise<SmsLogEntry[]> {
       id: String(item["id"]),
       prospect_id: (item["prospect_id"] as string) || null,
       prospect_name: (item["prospect_name"] as string) || undefined,
-      recipient_name: (item["prospect_name"] as string) || "Client",
-      recipient_phone: String(item["recipient_phone"] || "+8801700000000"),
+      recipient_name:
+        (item["recipient_name"] as string) || (item["prospect_name"] as string) || undefined,
+      recipient_phone: String(item["recipient_phone"] || ""),
       message: String(item["message"] || ""),
-      status: "Sent",
-      mode: "Single",
+      status: (["Sent", "Failed", "Pending"].includes(String(item["status"]))
+        ? item["status"]
+        : "Sent") as SmsStatus,
+      mode: item["mode"] === "Bulk" ? "Bulk" : "Single",
       sent_by: (item["sent_by"] as string) || null,
-      sent_by_name: String(item["sent_by_name"] || "Agent"),
-      sender_role: "Tele-sales Specialist",
-      provider: "BulksmsBD",
-      api_response_id: `SMS-REQ-${String(item["id"]).substring(0, 5)}`,
+      sent_by_name: String(item["sent_by_name"] || "System"),
+      sender_role: (item["sender_role"] as string) || undefined,
+      provider: "MRAM Technologies",
+      api_response_id: String(item["id"]).substring(0, 8),
+      provider_response: (item["provider_response"] as string) || undefined,
       created_at: String(item["created_at"] || new Date().toISOString()),
     }));
   } catch (err) {

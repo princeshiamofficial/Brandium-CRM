@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -42,6 +41,21 @@ export function KanbanColumn({
   const [visibleCount, setVisibleCount] = useState(PROJECTS_PER_PAGE);
   const [isOver, setIsOver] = useState(false);
   const visibleOrders = orders.slice(0, visibleCount);
+  const hasMore = visibleCount < orders.length;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) setVisibleCount((c) => c + PROJECTS_PER_PAGE);
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, visibleCount]);
   const textColor = getContrastTextColor(color);
 
   return (
@@ -106,16 +120,9 @@ export function KanbanColumn({
               />
             ))
           )}
-          {visibleCount < orders.length && (
-            <div className="flex justify-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs"
-                onClick={() => setVisibleCount((c) => c + PROJECTS_PER_PAGE)}
-              >
-                Load {Math.min(PROJECTS_PER_PAGE, orders.length - visibleCount)} more
-              </Button>
+          {hasMore && (
+            <div ref={sentinelRef} className="flex justify-center py-2">
+              <Skeleton className="h-20 w-full rounded-md" />
             </div>
           )}
         </div>

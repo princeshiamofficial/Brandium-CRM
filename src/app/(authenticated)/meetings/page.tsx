@@ -32,7 +32,16 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -54,6 +63,8 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -263,6 +274,7 @@ export default function MeetingsPage() {
         setSmsResultText("");
       }, 1500);
     },
+    onError: (err: Error) => toast.error("SMS not sent", { description: err.message }),
   });
 
   const handleOpenDeleteModal = (m: Meeting) => {
@@ -447,220 +459,222 @@ export default function MeetingsPage() {
         </div>
       </div>
 
-      <Card className="bg-white dark:bg-card border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="border-b bg-slate-50/80 dark:bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <th className="py-3 px-4">Title</th>
-                <th className="py-3 px-4">Prospect</th>
-                <th className="py-3 px-4">Date & Time</th>
-                <th className="py-3 px-4">Location / Link</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Notes</th>
-                <th className="py-3 px-4">SMS Badge</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {meetings.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-muted-foreground">
-                    <Calendar className="size-8 mx-auto text-slate-300 mb-2" />
-                    <p className="font-semibold text-foreground">No meetings found</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Try resetting search filters or schedule a new meeting.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                meetings.map((m) => {
-                  const TypeIcon = getTypeIcon(m.meeting_type);
-                  return (
-                    <tr
-                      key={m.id}
-                      className="hover:bg-slate-50/60 dark:hover:bg-muted/30 transition-colors"
-                    >
-                      <td className="py-3.5 px-4 max-w-56">
-                        <div className="flex items-center gap-1.5 flex-wrap">
+      <Card className="shadow-xl border bg-card rounded-lg overflow-hidden">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="pl-6 w-12.5 font-semibold">SL</TableHead>
+                  <TableHead className="min-w-45 font-semibold">Title</TableHead>
+                  <TableHead className="min-w-45 font-semibold">Prospect</TableHead>
+                  <TableHead className="min-w-32.5 font-semibold">Date & Time</TableHead>
+                  <TableHead className="min-w-40 font-semibold">Location / Link</TableHead>
+                  <TableHead className="min-w-25 font-semibold">Status</TableHead>
+                  <TableHead className="min-w-40 font-semibold">Notes</TableHead>
+                  <TableHead className="min-w-25 font-semibold">SMS</TableHead>
+                  <TableHead className="pr-6 text-right min-w-20 font-semibold">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {meetingsQuery.isLoading ? (
+                  Array.from({ length: 4 }).map((_, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell colSpan={9} className="py-4 px-6">
+                        <Skeleton className="h-12 w-full rounded" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : meetings.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
+                      <Calendar className="size-8 mx-auto text-slate-300 mb-2" />
+                      <p className="font-semibold text-foreground">No meetings found</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Try resetting search filters or schedule a new meeting.
+                      </p>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  meetings.map((m, index) => {
+                    const TypeIcon = getTypeIcon(m.meeting_type);
+                    return (
+                      <TableRow key={m.id} className="hover:bg-muted/50 transition-colors">
+                        <TableCell className="pl-6 text-muted-foreground text-xs font-medium">
+                          {index + 1}
+                        </TableCell>
+
+                        <TableCell className="max-w-56">
                           <button
                             type="button"
                             onClick={() => setViewDetailMeeting(m)}
-                            className="font-semibold text-foreground hover:text-[#67B239] transition-colors truncate block text-left cursor-pointer"
+                            className="font-medium text-foreground text-sm hover:text-[#67B239] transition-colors truncate block max-w-full text-left cursor-pointer"
                           >
                             {m.title}
                           </button>
-                          <Badge
-                            variant="outline"
-                            className="gap-1 text-[10px] px-1.5 py-0 border-slate-300 dark:border-border font-normal text-muted-foreground"
-                          >
-                            <TypeIcon className="size-2.5 text-[#67B239]" /> {m.meeting_type}
-                          </Badge>
-                        </div>
-                      </td>
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <TypeIcon className="size-3 text-[#67B239]" /> {m.meeting_type}
+                          </span>
+                        </TableCell>
 
-                      <td className="py-3.5 px-4 max-w-56 text-xs">
-                        <p className="font-medium text-foreground truncate">
-                          {m.business_name || m.prospect_name || "Direct Client"}
-                        </p>
-                        <p className="text-muted-foreground truncate">
-                          {m.business_name && m.prospect_name ? `${m.prospect_name}` : ""}
-                          {m.phone && (
-                            <span className="font-mono">
-                              {m.business_name && m.prospect_name ? " · " : ""}
-                              {m.phone}
-                            </span>
+                        <TableCell className="max-w-56">
+                          <p className="font-medium text-foreground text-sm truncate">
+                            {m.business_name || m.prospect_name || "Direct Client"}
+                          </p>
+                          <p className="text-muted-foreground text-xs font-mono truncate">
+                            {m.phone || (m.business_name ? m.prospect_name : "")}
+                          </p>
+                        </TableCell>
+
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="size-3 text-slate-400" />
+                            {m.meeting_date}
+                          </div>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <Clock3 className="size-3 text-slate-400" />
+                            {m.meeting_time}
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="text-muted-foreground text-xs max-w-50 truncate">
+                          <span title={m.location || undefined}>{m.location || "N/A"}</span>
+                        </TableCell>
+
+                        <TableCell className="whitespace-nowrap">
+                          {getStatusBadge(m.status)}
+                        </TableCell>
+
+                        <TableCell className="max-w-52 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenNotesModal(m)}
+                            className="text-left flex items-start gap-1.5 text-muted-foreground hover:text-[#67B239] transition-colors cursor-pointer"
+                            title={m.notes ? "Click to view/edit notes" : "Add notes"}
+                          >
+                            {m.notes ? (
+                              <>
+                                <FileText className="size-3.5 shrink-0 mt-0.5" />
+                                <span className="line-clamp-2 leading-snug">{m.notes}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="size-3.5 shrink-0" />
+                                <span>Add Note</span>
+                              </>
+                            )}
+                          </button>
+                        </TableCell>
+
+                        <TableCell className="whitespace-nowrap">
+                          {m.sms_sent ? (
+                            <Badge
+                              variant="outline"
+                              className="bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30 text-xs font-semibold px-2.5 py-0.5 rounded-full gap-1"
+                            >
+                              <Check className="size-3 text-green-600 dark:text-green-400" /> Sent
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30 text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                            >
+                              Pending
+                            </Badge>
                           )}
-                        </p>
-                      </td>
+                        </TableCell>
 
-                      <td className="py-3.5 px-4 whitespace-nowrap text-xs">
-                        <div className="font-medium text-foreground">{m.meeting_date}</div>
-                        <div className="text-muted-foreground">{m.meeting_time}</div>
-                      </td>
-
-                      <td className="py-3.5 px-4 max-w-50 text-xs">
-                        <p
-                          className="truncate text-muted-foreground"
-                          title={m.location || undefined}
-                        >
-                          {m.location || "N/A"}
-                        </p>
-                      </td>
-
-                      <td className="py-3.5 px-4 whitespace-nowrap">{getStatusBadge(m.status)}</td>
-
-                      <td className="py-3.5 px-4 max-w-52 text-xs">
-                        {m.notes ? (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenNotesModal(m)}
-                            className="group text-left flex items-start gap-1.5 text-slate-700 dark:text-slate-300 hover:text-[#67B239] dark:hover:text-[#67B239] transition-colors cursor-pointer"
-                            title="Click to view/edit notes"
-                          >
-                            <FileText className="size-3.5 text-slate-400 group-hover:text-[#67B239] shrink-0 mt-0.5" />
-                            <span className="line-clamp-2 text-xs leading-snug">{m.notes}</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenNotesModal(m)}
-                            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-[#67B239] transition-colors cursor-pointer"
-                            title="Add notes"
-                          >
-                            <Plus className="size-3 text-slate-400" />
-                            <span>Add Note</span>
-                          </button>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        {m.sms_sent ? (
-                          <Badge
-                            variant="outline"
-                            className="bg-[#67B239]/15 text-[#468026] dark:text-[#7AC142] border-[#67B239]/30 text-xs font-semibold px-2.5 py-0.5 rounded-full gap-1.5"
-                          >
-                            <Check className="size-3.5 text-[#67B239] stroke-[2.5]" />
-                            Sent
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="outline"
-                            className="bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 text-xs font-medium px-2.5 py-0.5 rounded-full"
-                          >
-                            Pending
-                          </Badge>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end">
+                        <TableCell className="pr-6 text-right whitespace-nowrap">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="size-8 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-accent transition-colors cursor-pointer"
+                                className="h-8 w-8 p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 rounded-full"
+                                title="Meeting Actions"
                               >
+                                <span className="sr-only">Open menu</span>
                                 <MoreVertical className="size-4" />
-                                <span className="sr-only">Open actions menu</span>
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-52">
-                              <DropdownMenuItem
-                                onClick={() => setViewDetailMeeting(m)}
-                                className="cursor-pointer font-medium text-xs py-2"
-                              >
-                                <Eye className="size-3.5 text-slate-500 mr-2" /> View Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => setEditingMeeting(m)}
-                                className="cursor-pointer font-medium text-xs py-2"
-                              >
-                                <Pencil className="size-3.5 text-blue-600 mr-2" /> Edit Meeting
-                                Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleOpenSmsModal(m)}
-                                className="cursor-pointer font-medium text-xs py-2 text-[#468026] dark:text-[#7AC142]"
-                              >
-                                <Send className="size-3.5 text-[#67B239] mr-2" /> Send SMS Reminder
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleOpenNotesModal(m)}
-                                className="cursor-pointer font-medium text-xs py-2"
-                              >
-                                <FileText className="size-3.5 text-slate-500 mr-2" /> Meeting Notes
-                                & Agenda
-                              </DropdownMenuItem>
-
-                              <DropdownMenuSeparator />
-
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  statusMutation.mutate({ id: m.id, status: "Scheduled" })
-                                }
-                                className="cursor-pointer font-medium text-xs py-2"
-                              >
-                                <Clock3 className="size-3.5 text-amber-500 mr-2" /> Mark Scheduled
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  statusMutation.mutate({ id: m.id, status: "Completed" })
-                                }
-                                className="cursor-pointer font-medium text-xs py-2 text-green-600 dark:text-green-400"
-                              >
-                                <CheckCircle2 className="size-3.5 text-[#67B239] mr-2" /> Mark
-                                Completed
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  statusMutation.mutate({ id: m.id, status: "Cancelled" })
-                                }
-                                className="cursor-pointer font-medium text-xs py-2 text-rose-600 dark:text-rose-400"
-                              >
-                                <XCircle className="size-3.5 text-rose-500 mr-2" /> Mark Cancelled
-                              </DropdownMenuItem>
-
-                              <DropdownMenuSeparator />
-
+                            <DropdownMenuContent align="end" className="w-60 p-1 rounded-[10px]">
+                              <DropdownMenuLabel className="px-2 py-1.5 text-sm font-semibold truncate">
+                                Actions for {m.title}
+                              </DropdownMenuLabel>
+                              <DropdownMenuSeparator className="-mx-1 my-1 h-px bg-muted" />
+                              <DropdownMenuGroup>
+                                <DropdownMenuItem
+                                  onClick={() => setViewDetailMeeting(m)}
+                                  className="cursor-pointer text-sm gap-2 rounded-md px-2 py-1.5"
+                                >
+                                  <Eye className="mr-2 h-4 w-4" /> View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setEditingMeeting(m)}
+                                  className="cursor-pointer text-sm gap-2 rounded-md px-2 py-1.5"
+                                >
+                                  <Pencil className="mr-2 h-4 w-4" /> Edit Meeting
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleOpenSmsModal(m)}
+                                  className="cursor-pointer text-sm gap-2 rounded-md px-2 py-1.5"
+                                >
+                                  <Send className="mr-2 h-4 w-4" /> Send SMS Reminder
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleOpenNotesModal(m)}
+                                  className="cursor-pointer text-sm gap-2 rounded-md px-2 py-1.5"
+                                >
+                                  <FileText className="mr-2 h-4 w-4" /> Notes & Agenda
+                                </DropdownMenuItem>
+                              </DropdownMenuGroup>
+                              <DropdownMenuSeparator className="-mx-1 my-1 h-px bg-muted" />
+                              <DropdownMenuGroup>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    statusMutation.mutate({ id: m.id, status: "Scheduled" })
+                                  }
+                                  className="cursor-pointer text-sm gap-2 rounded-md px-2 py-1.5"
+                                >
+                                  <Clock3 className="mr-2 h-4 w-4 text-amber-600" /> Mark Scheduled
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    statusMutation.mutate({ id: m.id, status: "Completed" })
+                                  }
+                                  className="cursor-pointer text-emerald-600 focus:text-emerald-700 text-sm gap-2 rounded-md px-2 py-1.5"
+                                >
+                                  <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-600" /> Mark
+                                  Completed
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    statusMutation.mutate({ id: m.id, status: "Cancelled" })
+                                  }
+                                  className="cursor-pointer text-destructive focus:text-destructive text-sm gap-2 rounded-md px-2 py-1.5"
+                                >
+                                  <XCircle className="mr-2 h-4 w-4 text-destructive" /> Mark
+                                  Cancelled
+                                </DropdownMenuItem>
+                              </DropdownMenuGroup>
+                              <DropdownMenuSeparator className="-mx-1 my-1 h-px bg-muted" />
                               <DropdownMenuItem
                                 onClick={() => handleOpenDeleteModal(m)}
-                                className="cursor-pointer font-semibold text-xs py-2 text-destructive focus:text-destructive focus:bg-rose-50 dark:focus:bg-rose-950/40"
+                                className="cursor-pointer text-destructive focus:text-destructive text-sm gap-2 rounded-md px-2 py-1.5"
                               >
-                                <Trash2 className="size-3.5 text-destructive mr-2" /> Delete Meeting
+                                <Trash2 className="mr-2 h-4 w-4 text-destructive" /> Delete Meeting
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
       </Card>
 
       <Dialog

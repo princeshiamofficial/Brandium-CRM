@@ -346,6 +346,43 @@ export async function ensureMySQLTablesExist(
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `);
 
+      // `sms_gateway_settings` — single-row SMS provider config (MRAM Technologies)
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS \`sms_gateway_settings\` (
+          \`id\` VARCHAR(36) NOT NULL,
+          \`provider\` VARCHAR(100) NOT NULL DEFAULT 'MRAM Technologies',
+          \`api_url\` VARCHAR(500) NOT NULL DEFAULT 'https://sms.mram.com.bd/smsapi',
+          \`balance_url\` VARCHAR(500) NOT NULL DEFAULT 'https://sms.mram.com.bd/miscapi/{API_KEY}/getBalance',
+          \`api_key\` VARCHAR(255) NULL,
+          \`sender_id\` VARCHAR(50) NULL,
+          \`label\` VARCHAR(20) NOT NULL DEFAULT 'transactional',
+          \`is_enabled\` TINYINT(1) NOT NULL DEFAULT 1,
+          \`updated_by\` VARCHAR(36) NULL,
+          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+      await conn.query("INSERT IGNORE INTO `sms_gateway_settings` (`id`) VALUES ('default');");
+
+      // `sms_logs` — one row per SMS attempt, written by the server after the gateway replies
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS \`sms_logs\` (
+          \`id\` VARCHAR(36) NOT NULL,
+          \`recipient_phone\` VARCHAR(20) NOT NULL,
+          \`recipient_name\` VARCHAR(255) NULL,
+          \`prospect_id\` VARCHAR(36) NULL,
+          \`message\` TEXT NOT NULL,
+          \`status\` VARCHAR(20) NOT NULL DEFAULT 'Sent',
+          \`mode\` VARCHAR(20) NOT NULL DEFAULT 'Single',
+          \`provider_response\` TEXT NULL,
+          \`sent_by\` VARCHAR(36) NULL,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          KEY \`idx_sms_logs_created\` (\`created_at\`),
+          KEY \`idx_sms_logs_sent_by\` (\`sent_by\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
       // 17. `projects` table — ERPApp-style Projects & Creative Production Lifecycle
       await conn.query(`
         CREATE TABLE IF NOT EXISTS \`projects\` (

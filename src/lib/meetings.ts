@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { runMySQLQuery } from "@/lib/mysql-api";
 import { generateUUID, getMySQLTimestamp } from "@/lib/mysql-client";
+import { sendSms } from "@/lib/sms";
 
 export type MeetingType = "Office" | "Online" | "Client Location" | "Other";
 export type MeetingStatus = "Scheduled" | "Completed" | "Cancelled";
@@ -380,28 +381,21 @@ export async function updateMeetingNotes(id: string, notes: string): Promise<Mee
 
 export async function sendMeetingReminderSms(
   meetingId: string,
-  _customMessage?: string,
+  customMessage?: string,
 ): Promise<{ success: boolean; message: string }> {
   const meeting = await fetchMeetingById(meetingId);
   if (!meeting) throw new Error("Meeting not found");
+  if (!meeting.phone) throw new Error("This meeting has no phone number to send SMS to.");
 
-  const phone = meeting.phone || "+8801700000000";
+  const message =
+    customMessage?.trim() ||
+    `Reminder: Your meeting "${meeting.title}" is scheduled for ${meeting.meeting_date} at ${meeting.meeting_time}. Brandium CRM.`;
+  await sendSms(meeting.phone, message, meeting.prospect_id, meeting.prospect_name);
   await updateMeeting(meetingId, { sms_sent: true });
-
-  const now = getMySQLTimestamp();
-  await runMySQLQuery(
-    `INSERT INTO \`activities\` (\`id\`, \`message\`, \`activity_type\`, \`created_at\`)
-     VALUES (?, ?, 'sms_sent', ?);`,
-    [
-      generateUUID(),
-      `SMS reminder sent to ${meeting.prospect_name || meeting.phone || "prospect"} for meeting "${meeting.title}"`,
-      now,
-    ],
-  );
 
   return {
     success: true,
-    message: `SMS reminder sent successfully to ${phone}`,
+    message: `SMS reminder sent successfully to ${meeting.phone}`,
   };
 }
 

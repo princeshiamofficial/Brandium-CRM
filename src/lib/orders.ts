@@ -330,13 +330,19 @@ export function useSaveOrderMutation() {
           notes: "Order created.",
         },
       ];
-      await runMySQLQuery(
+      // Blank Job ID: next numeric Job ID is computed by MySQL inside the same INSERT.
+      const insertRes = await runMySQLQuery(
         `INSERT INTO orders (
           job_id, client_name, company_name, phone, address, service_name,
           items_json, discount_amount, shipping_charge, total_amount, paid_amount,
           due_amount, payments_json, is_starred, notes, order_date, delivery_date,
           id, order_number, status, crm_user_id, status_history, is_deleted
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);`,
+        ) SELECT
+          COALESCE(?, (
+            SELECT CAST(COALESCE(MAX(CAST(job_id AS UNSIGNED)), 1000) + 1 AS CHAR)
+            FROM orders WHERE job_id REGEXP '^[0-9]+$'
+          )),
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0;`,
         [
           ...common,
           id,
@@ -346,6 +352,7 @@ export function useSaveOrderMutation() {
           JSON.stringify(history),
         ],
       );
+      if (!insertRes.success) throw new Error(insertRes.error || "Failed to create order");
       return { id, order_number: orderNumber };
     },
     onSuccess: (_, variables) => {

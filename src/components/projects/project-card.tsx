@@ -9,7 +9,7 @@ import {
   formatDistanceToNowStrict,
   isAfter,
 } from "date-fns";
-import { CalendarDays, ReceiptText, Star } from "lucide-react";
+import { Building2, CalendarDays, Phone, ReceiptText, Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -198,9 +198,30 @@ function ProjectCardComponent({
             </Link>
           </div>
 
-          <p className="text-xs font-medium text-muted-foreground" title={name}>
-            {truncatedName}
-          </p>
+          <div className="space-y-1">
+            <p
+              className="flex items-center gap-1.5 text-xs font-medium text-foreground"
+              title={name}
+            >
+              <Building2 className="size-3.5 shrink-0 text-[#67B239]" />
+              <span className="truncate">{truncatedName}</span>
+            </p>
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Phone className="size-3.5 shrink-0 text-[#67B239]" />
+              {order.phone ? (
+                <a
+                  href={`tel:${order.phone}`}
+                  onClick={(e) => e.stopPropagation()}
+                  draggable={false}
+                  className="font-mono hover:text-[#67B239] hover:underline"
+                >
+                  {order.phone}
+                </a>
+              ) : (
+                <span className="italic">No phone</span>
+              )}
+            </p>
+          </div>
 
           <Link
             href={`/track/${order.order_number}`}

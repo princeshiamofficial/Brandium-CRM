@@ -283,7 +283,7 @@ export default function OrdersPage() {
                         <TableCell className="pl-6">
                           <Link
                             href={`/track/${order.order_number}`}
-                            className="font-medium text-[#0a2e5c] dark:text-sky-300 hover:underline"
+                            className="font-semibold text-[#67B239] hover:text-[#5aa030] dark:text-[#7ac142] hover:underline"
                           >
                             {order.order_number}
                           </Link>

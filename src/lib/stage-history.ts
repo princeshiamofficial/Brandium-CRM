@@ -23,6 +23,7 @@ export type StageHistoryDetail = {
   to_stage_icon?: string | undefined;
   changer_name: string | null;
   changer_email: string | null;
+  changer_avatar?: string | null | undefined;
 };
 
 export type StageHistoryFilters = {
@@ -109,8 +110,9 @@ export const stageHistoryDetailsQuery = (filters: StageHistoryFilters) =>
              p.phone AS prospect_phone,
              COALESCE(st_from.name, psh.from_stage_id) AS from_stage_name,
              COALESCE(st_to.name, psh.to_stage_id, 'Updated Stage') AS to_stage_name,
-             COALESCE(prof.full_name, u.name, u.email, 'Admin Agent') AS changer_name,
-             COALESCE(prof.email, u.email, 'agent@brandium.io') AS changer_email
+             COALESCE(prof.full_name, u.name, u.email) AS changer_name,
+             COALESCE(prof.email, u.email) AS changer_email,
+             COALESCE(prof.avatar_url, u.avatar_url) AS changer_avatar
            FROM \`prospect_stage_history\` psh
            LEFT JOIN \`prospects\` p ON p.id = psh.prospect_id
            LEFT JOIN \`stages\` st_from ON st_from.id = psh.from_stage_id
@@ -149,8 +151,9 @@ export const stageHistoryDetailsQuery = (filters: StageHistoryFilters) =>
               to_stage_color: resolveStageColor(normTo),
               from_stage_icon: resolveStageIcon(normFrom),
               to_stage_icon: resolveStageIcon(normTo),
-              changer_name: String(r["changer_name"] || "System Agent"),
+              changer_name: String(r["changer_name"] || "System"),
               changer_email: (r["changer_email"] as string) || null,
+              changer_avatar: (r["changer_avatar"] as string) || null,
             };
           });
 

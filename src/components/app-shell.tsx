@@ -7,7 +7,9 @@ import {
   LogOut,
   PanelLeft,
   ChevronDown,
-  User as UserIcon,
+  UserPen,
+  ImageUp,
+  KeyRound,
   Bell,
   CheckCheck,
   Trophy,
@@ -18,6 +20,9 @@ import {
 import { useState, type ReactNode } from "react";
 
 import { AccountSuspendedModal } from "@/components/account-suspended-modal";
+import { AdminChangeOwnPasswordModal } from "@/components/admin-change-own-password-modal";
+import { AdminEditUserInfoModal } from "@/components/admin-edit-user-info-modal";
+import { AdminSetAvatarModal } from "@/components/admin-set-avatar-modal";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -151,6 +156,7 @@ function Brand({ collapsed }: { collapsed: boolean }) {
 export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [accountDialog, setAccountDialog] = useState<"name" | "avatar" | "password" | null>(null);
   const { profile, user, role, signOut } = useAuth();
 
   const { data: usersList } = useQuery(crmUsersQueryOptions());
@@ -380,9 +386,22 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem disabled>
-                  <UserIcon className="mr-2 size-4" /> Profile
+                <DropdownMenuItem
+                  disabled={!currentUserRecord}
+                  onClick={() => setAccountDialog("name")}
+                >
+                  <UserPen className="mr-2 size-4" /> Change Name
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!currentUserRecord}
+                  onClick={() => setAccountDialog("avatar")}
+                >
+                  <ImageUp className="mr-2 size-4" /> Change Avatar
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAccountDialog("password")}>
+                  <KeyRound className="mr-2 size-4" /> Change Password
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => void signOut()}>
                   <LogOut className="mr-2 size-4" /> Log out
                 </DropdownMenuItem>
@@ -392,6 +411,21 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <main className="flex-1 p-4 md:p-6">{children}</main>
+
+        <AdminEditUserInfoModal
+          open={accountDialog === "name"}
+          onOpenChange={(open) => !open && setAccountDialog(null)}
+          user={currentUserRecord ?? null}
+        />
+        <AdminSetAvatarModal
+          open={accountDialog === "avatar"}
+          onOpenChange={(open) => !open && setAccountDialog(null)}
+          user={currentUserRecord ?? null}
+        />
+        <AdminChangeOwnPasswordModal
+          open={accountDialog === "password"}
+          onOpenChange={(open) => !open && setAccountDialog(null)}
+        />
       </div>
 
       <AccountSuspendedModal

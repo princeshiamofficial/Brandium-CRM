@@ -1,239 +1,312 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  CheckCircle2,
+  Database,
   DatabaseBackup,
   Download,
-  FileSpreadsheet,
-  RotateCcw,
-  Users2,
-  CalendarClock,
-  Receipt,
-  ShieldCheck,
-  ShieldAlert,
-  CheckCircle2,
   FileCode,
+  FileSpreadsheet,
+  Loader2,
+  RotateCcw,
+  RotateCw,
+  Search,
+  ShieldCheck,
+  X,
+  XCircle,
+  type LucideIcon,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { StatCard } from "@/components/stat-card";
-
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
-  backupSummaryQueryOptions,
-  downloadJsonBackup,
-  downloadCsvExport,
-} from "@/lib/data-backup";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { AdminRestoreBackupModal } from "@/components/admin-restore-backup-modal";
+import {
+  backupTableStatusQueryOptions,
+  downloadCsvExport,
+  downloadJsonBackup,
+} from "@/lib/data-backup";
+
+const formatTableName = (name: string) =>
+  name
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+
+function ActionCard({
+  icon: Icon,
+  title,
+  description,
+  action,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  action: React.ReactNode;
+}) {
+  return (
+    <Card className="shadow-xl border bg-card rounded-lg">
+      <CardContent className="flex h-full flex-col gap-4 p-5">
+        <div className="flex items-start gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#67B239]/15 text-[#67B239]">
+            <Icon className="size-5" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">{title}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+          </div>
+        </div>
+        <div className="mt-auto">{action}</div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function AdminBackupPage() {
-  const [restoreModalOpen, setRestoreModalOpen] = useState<boolean>(false);
-  const { data: metrics, isLoading } = useQuery(backupSummaryQueryOptions());
+  const queryClient = useQueryClient();
+  const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+  const [busy, setBusy] = useState<"json" | "csv" | null>(null);
+  const [search, setSearch] = useState("");
+  const [csvTable, setCsvTable] = useState("prospects");
+  const tablesQuery = useQuery(backupTableStatusQueryOptions());
 
-  const handleDownloadJson = async () => {
-    try {
-      toast.info("Generating sanitized JSON backup file (passwords/secrets excluded)...");
-      await downloadJsonBackup();
-      toast.success("JSON backup downloaded successfully!");
-    } catch {
-      toast.error("Failed to generate JSON backup.");
-    }
-  };
+  const tables = tablesQuery.data ?? [];
+  const includedTables = tables.filter((t) => t.included);
+  const includedRecords = includedTables.reduce((sum, t) => sum + t.records, 0);
+  const term = search.toLowerCase().trim();
+  const visibleTables = term ? tables.filter((t) => t.table.includes(term)) : tables;
 
-  const handleDownloadCsv = async () => {
+  const runDownload = async (kind: "json" | "csv") => {
+    setBusy(kind);
     try {
-      toast.info("Generating CSV data bundle export...");
-      await downloadCsvExport();
-      toast.success("CSV export downloaded successfully!");
-    } catch {
-      toast.error("Failed to generate CSV export.");
+      if (kind === "json") {
+        await downloadJsonBackup();
+        toast.success("JSON backup downloaded");
+      } else {
+        const count = await downloadCsvExport(csvTable);
+        toast.success(`${formatTableName(csvTable)} exported (${count} rows)`);
+      }
+    } catch (err) {
+      toast.error(kind === "json" ? "Backup failed" : "CSV export failed", {
+        description: (err as Error).message,
+      });
+    } finally {
+      setBusy(null);
     }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <DatabaseBackup className="size-7 text-[#67B239]" />
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Admin — Data Backup & Transactional Restore
-            </h1>
+        <div className="flex items-center gap-2">
+          <DatabaseBackup className="size-7 text-[#67B239]" />
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Data Backup</h1>
+            <p className="text-sm text-muted-foreground">
+              Download or restore CRM data. Passwords are never included.
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Admin-only backup management. Downloads include all 11 CRM tables with passwords &
-            secrets strictly excluded.
-          </p>
         </div>
-
-        <Badge
+        <Button
           variant="outline"
-          className="bg-purple-50 text-purple-700 border-purple-300 text-xs px-3 py-1.5 font-semibold gap-1.5 self-start sm:self-auto"
+          className="gap-1.5 cursor-pointer bg-white dark:bg-card"
+          onClick={() => queryClient.invalidateQueries({ queryKey: ["admin-backup-table-status"] })}
         >
-          <ShieldCheck className="size-4" />
-          Admin Access Granted
-        </Badge>
+          <RotateCw className={tablesQuery.isFetching ? "size-4 animate-spin" : "size-4"} />
+          Refresh
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Prospects Records"
-          value={isLoading ? "..." : String(metrics?.prospects_count || 0)}
-          icon={Users2}
-          colorScheme="pastelPurple"
-          loading={isLoading}
-        />
-        <StatCard
-          label="Tasks / Meetings"
-          value={isLoading ? "..." : String(metrics?.tasks_count || 0)}
-          icon={CalendarClock}
-          colorScheme="pastelYellow"
-          loading={isLoading}
-        />
-        <StatCard
-          label="Bills & Invoices"
-          value={isLoading ? "..." : String(metrics?.bills_count || 0)}
-          icon={Receipt}
-          colorScheme="pastelEmerald"
-          loading={isLoading}
-        />
-        <StatCard
-          label="CRM Users (Sanitized)"
-          value={isLoading ? "..." : String(metrics?.users_count || 0)}
-          icon={ShieldCheck}
-          colorScheme="pastelTeal"
-          loading={isLoading}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-white dark:bg-card border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <CardHeader>
-            <div className="h-10 w-10 rounded-lg bg-emerald-50 text-[#67B239] flex items-center justify-center mb-2">
-              <FileCode className="size-5" />
-            </div>
-            <CardTitle className="text-base">Download JSON Backup</CardTitle>
-            <CardDescription className="text-xs">
-              Full versioned JSON payload including all 11 tables. Passwords and secrets are
-              automatically sanitized.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <ActionCard
+          icon={FileCode}
+          title="JSON Backup"
+          description={
+            tablesQuery.isLoading
+              ? "Counting records..."
+              : `${includedTables.length} tables · ${includedRecords.toLocaleString()} records`
+          }
+          action={
             <Button
-              className="w-full bg-[#67B239] hover:bg-[#5aa030] text-white gap-2 text-xs"
-              onClick={handleDownloadJson}
+              className="w-full bg-[#67B239] hover:bg-[#5aa030] text-white gap-1.5"
+              disabled={busy !== null}
+              onClick={() => void runDownload("json")}
             >
-              <Download className="size-4" />
-              Download JSON Backup
+              {busy === "json" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Download className="size-4" />
+              )}
+              Download JSON
             </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white dark:bg-card border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <CardHeader>
-            <div className="h-10 w-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mb-2">
-              <FileSpreadsheet className="size-5" />
+          }
+        />
+        <ActionCard
+          icon={FileSpreadsheet}
+          title="CSV Export"
+          description="Download one table as a spreadsheet for Excel or Google Sheets."
+          action={
+            <div className="flex gap-2">
+              <Select value={csvTable} onValueChange={setCsvTable}>
+                <SelectTrigger className="min-w-0 flex-1 text-xs">
+                  <SelectValue placeholder="Choose table" />
+                </SelectTrigger>
+                <SelectContent>
+                  {includedTables.map((t) => (
+                    <SelectItem key={t.table} value={t.table}>
+                      {formatTableName(t.table)} ({t.records})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                className="shrink-0 gap-1.5"
+                disabled={busy !== null || !csvTable}
+                onClick={() => void runDownload("csv")}
+              >
+                {busy === "csv" ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Download className="size-4" />
+                )}
+                CSV
+              </Button>
             </div>
-            <CardTitle className="text-base">Download CSV Export</CardTitle>
-            <CardDescription className="text-xs">
-              Formatted CSV spreadsheet data bundle for external auditing and reporting tools.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
+          }
+        />
+        <ActionCard
+          icon={RotateCcw}
+          title="Restore Backup"
+          description="Upload a JSON backup. A safety copy is taken before restoring."
+          action={
             <Button
               variant="outline"
-              className="w-full border-blue-300 text-blue-700 dark:text-blue-400 hover:bg-blue-50 gap-2 text-xs"
-              onClick={handleDownloadCsv}
-            >
-              <Download className="size-4" />
-              Download CSV Bundle
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white dark:bg-card border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <CardHeader>
-            <div className="h-10 w-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center mb-2">
-              <RotateCcw className="size-5" />
-            </div>
-            <CardTitle className="text-base">Restore JSON Backup</CardTitle>
-            <CardDescription className="text-xs">
-              7-stage transactional restore wizard with schema verification, conflict detection, and
-              safety snapshots.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <Button
-              variant="outline"
-              className="w-full border-purple-300 text-purple-700 dark:text-purple-400 hover:bg-purple-50 gap-2 text-xs font-semibold"
+              className="w-full gap-1.5"
               onClick={() => setRestoreModalOpen(true)}
             >
               <RotateCcw className="size-4" />
-              Restore JSON Backup
+              Restore JSON
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       </div>
 
-      <Card className="bg-white dark:bg-card border-slate-200/80 shadow-xs">
-        <CardHeader>
-          <CardTitle className="text-sm font-bold flex items-center gap-2">
-            <CheckCircle2 className="size-4 text-[#67B239]" />
-            Included Backup Tables Scope & Security Principles
-          </CardTitle>
-          <CardDescription className="text-xs">
-            The following 11 CRM entities are included in JSON backups:
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 pt-0">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs font-mono">
-            <div className="p-2.5 rounded bg-slate-50 border flex items-center gap-2">
-              <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
-              <span>1. Prospects</span>
-            </div>
-            <div className="p-2.5 rounded bg-slate-50 border flex items-center gap-2">
-              <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
-              <span>2. Stage History</span>
-            </div>
-            <div className="p-2.5 rounded bg-slate-50 border flex items-center gap-2">
-              <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
-              <span>3. Follow-ups</span>
-            </div>
-            <div className="p-2.5 rounded bg-slate-50 border flex items-center gap-2">
-              <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
-              <span>4. Opportunities</span>
-            </div>
-            <div className="p-2.5 rounded bg-slate-50 border flex items-center gap-2">
-              <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
-              <span>5. Meetings</span>
-            </div>
-            <div className="p-2.5 rounded bg-slate-50 border flex items-center gap-2">
-              <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
-              <span>6. Invoices</span>
-            </div>
-            <div className="p-2.5 rounded bg-slate-50 border flex items-center gap-2">
-              <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
-              <span>7. Payments</span>
-            </div>
-            <div className="p-2.5 rounded bg-slate-50 border flex items-center gap-2">
-              <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
-              <span>8. Services</span>
-            </div>
-            <div className="p-2.5 rounded bg-slate-50 border flex items-center gap-2">
-              <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
-              <span>9. SMS Logs</span>
-            </div>
-            <div className="p-2.5 rounded bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-2">
-              <ShieldAlert className="size-3.5 text-amber-600 shrink-0" />
-              <span>10. Users (No Passwords)</span>
-            </div>
-            <div className="p-2.5 rounded bg-slate-50 border flex items-center gap-2 col-span-2 sm:col-span-1">
-              <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
-              <span>11. Activity Logs</span>
-            </div>
+      <div className="relative max-w-sm">
+        <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+        <Input
+          placeholder="Search tables..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 pr-8 bg-white dark:bg-card"
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch("")}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
+
+      <Card className="shadow-xl border bg-card rounded-lg overflow-hidden">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="pl-6 w-12.5 font-semibold">SL</TableHead>
+                  <TableHead className="min-w-52 font-semibold">Table</TableHead>
+                  <TableHead className="text-right min-w-28 font-semibold">Records</TableHead>
+                  <TableHead className="min-w-36 font-semibold">In JSON Backup</TableHead>
+                  <TableHead className="pr-6 min-w-40 font-semibold">Note</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tablesQuery.isLoading ? (
+                  Array.from({ length: 5 }).map((_, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell colSpan={5} className="py-4 px-6">
+                        <Skeleton className="h-10 w-full rounded" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : visibleTables.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
+                      <Database className="size-8 mx-auto text-slate-300 mb-2" />
+                      <p className="font-semibold text-foreground">No tables found</p>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  visibleTables.map((t, index) => (
+                    <TableRow key={t.table} className="hover:bg-muted/50 transition-colors">
+                      <TableCell className="pl-6 text-muted-foreground text-xs font-medium">
+                        {index + 1}
+                      </TableCell>
+                      <TableCell>
+                        <p className="font-medium text-foreground text-sm">
+                          {formatTableName(t.table)}
+                        </p>
+                        <p className="font-mono text-xs text-muted-foreground">{t.table}</p>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {t.records.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {t.included ? (
+                          <Badge
+                            variant="outline"
+                            className="bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30 text-xs font-semibold px-2.5 py-0.5 rounded-full gap-1"
+                          >
+                            <CheckCircle2 className="size-3" /> Included
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30 text-xs font-semibold px-2.5 py-0.5 rounded-full gap-1"
+                          >
+                            <XCircle className="size-3" /> Not included
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="pr-6 text-xs text-muted-foreground">
+                        {t.note ? (
+                          <span className="inline-flex items-center gap-1">
+                            <ShieldCheck className="size-3.5 text-[#67B239]" />
+                            {t.note}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>

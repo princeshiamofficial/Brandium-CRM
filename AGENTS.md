@@ -567,3 +567,38 @@ Canonical triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-
 ### Domain docs
 
 Single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
+- **SMS Gateway (MRAM Technologies) Server-Side Integration (`/admin/sms-gateway`)**:
+  - Gateway config lives in the single-row MySQL table `sms_gateway_settings` (`id = 'default'`): `api_url`, `balance_url` (with `{API_KEY}` placeholder), `api_key`, `sender_id`, `label`, `is_enabled`.
+  - All provider calls run on the server in `src/lib/sms-gateway-server.ts` via Route Handlers `/api/sms/gateway` (GET masked settings / PUT save), `/api/sms/balance` and `/api/sms/send`. Never send the API key to the browser: GET returns only `has_api_key` and `api_key_masked`, and a blank `api_key` on PUT keeps the saved key.
+  - `sendSms()` in `src/lib/sms.ts` and `sendMeetingReminderSms()` in `src/lib/meetings.ts` must call `/api/sms/send` and throw when the gateway rejects the message; never mark an SMS as sent without a real gateway call.
+  - Phones are normalised to `8801XXXXXXXXX` (`normalizeBdPhone`); `type` is `unicode` automatically for Bangla text.
+  - SMS attempts are logged by the server in MySQL table `sms_logs` (phone, full message, `Sent`/`Failed`, `provider_response`, `sent_by`) inside `/api/sms/send`; `/sms/logs` (`src/app/(authenticated)/sms/logs/page.tsx`) reads that table. Never rebuild SMS logs from `activities`, which has no phone number or full message.
+
+- **Routes Lost in the TanStack → Next.js Migration**:
+  - `src/routes/_authenticated/sms.logs.tsx` was deleted in commit `5de6e7d` without a Next.js port, so the sidebar link returned 404. When a nav link 404s, check `git log --all -- src/routes/` for the old route and port it to `src/app/(authenticated)/...`.
+
+- **Stage Group Values (`stages.stage_group`)**:
+  - Valid groups are `new`, `in_progress`, `won`, `lost`, `denied` (seeded in `ensureMySQLTablesExist()` and read by `src/lib/dashboard.ts`). The Stage Management form previously saved `progress` and defaulted to `prospect`, so new stages dropped out of the dashboard's In Progress group and the Group select rendered blank. Always use these exact values in forms and badges.
+
+- **Python Edit Scripts on Windows Write CRLF**:
+  - `open(p, "w")` in text mode on Windows converts `\n` to `\r\n`, and ESLint then reports `Delete ␍` (prettier) on every line. Open files with `newline=""` or run `npx eslint --fix <file>` after scripted edits.
+
+- **Data Backup Covers Every Table Except Secrets**:
+  - `generateBackupPayload()` in `src/lib/data-backup.ts` exports every MySQL table listed by `INFORMATION_SCHEMA` except `EXCLUDED_BACKUP_TABLES` (`sessions`, `sms_gateway_settings`), and strips columns matching `/pass(word)?|secret|token|api_key/i` from every row. The old hand-written table list silently skipped orders, quotations, projects, stage history and SMS logs; never go back to a fixed list.
+  - It throws when any table cannot be read, so an empty or partial file is never downloaded as a backup.
+  - CSV export (`downloadCsvExport(table)`) writes one real table with a UTF-8 BOM (for Bangla in Excel), RFC 4180 quoting and a formula-injection guard (`toCsv`). It previously downloaded 4 hard-coded fake rows.
+
+- **Dashboard User Selector & No Fake Minimum Counts**:
+  - Admins pick a user in `src/app/(authenticated)/dashboard/page.tsx`; the choice is passed as `agentFilter` to `dashboardMetricsQuery`, which matches `assigned_to`, `assigned_artist_id` or `created_by`. Non-admins never see the selector and stay scoped to themselves.
+  - The top cards previously used `Math.max(real, 12)`-style floors and a fake `$7260,00` revenue, which hid real numbers and made per-user filtering look broken. Show the real value (0 when empty).
+  - The dashboard date filter is `DateRangePicker3` (defaults to This Month). `dashboardMetricsQuery` takes `{ from, to }` as `yyyy-MM-dd` strings and compares them with the date part of `prospects.created_at`. The old string filter silently ignored "Last Month", so that option showed all-time numbers.
+
+- **Dashboard Sales Summary Cards (ERPAPP definitions)**:
+  - `computeFinanceSummary()` in `src/lib/dashboard-finance.ts` builds Total Sales, Invoice Due, Advance Paid, Cash Collection and Repeat Sales from `ordersQueryOptions` data; Expense comes from `dashboardExpenseQuery` (`expenses.expense_date`, `recorded_by`).
+  - Sales, due and repeat use orders created in the range (`canceled` excluded). Advance Paid and Cash Collection use payments whose own date is in the range, on any order; Advance Paid skips COD/courier methods. Repeat Sales = orders whose Job ID appeared on an earlier non-cancelled order. The admin user filter matches `crm_user_id` or `designer_id`.
+  - Project Overview and Pipeline Overview (ERPAPP `StatusTimeline` clone, `src/components/dashboard/status-timeline.tsx`) show orders per `ORDER_STATUSES` stage (`computeOrderStatusSteps`, legacy statuses count as Order Submitted) and active prospects per active stage (`prospectStageStepsQuery`), both for the selected date range and user. The highlighted stage rotates every 3 seconds.
+
+- **framer-motion Cannot Animate 8-Digit Hex Colours**:
+  - Animating `backgroundColor` between `#RRGGBB1A` and `#RRGGBB` left the active stage circle stuck at the tint (pale circle, invisible white number). Pass `rgba()` strings instead (see `rgba()` in `src/components/dashboard/status-timeline.tsx`), and give both box-shadow states the same number of layers.
+  - The Project / Prospect Overview cards sit at the bottom of the Dashboard, after Active deals and Pending tasks.

@@ -2,7 +2,18 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Users, Trophy, TrendingUp, XCircle, Zap, Search, X } from "lucide-react";
+import {
+  Calendar,
+  CheckCircle2,
+  Eye,
+  Search,
+  TrendingUp,
+  Trophy,
+  Users,
+  X,
+  XCircle,
+  Zap,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -10,6 +21,17 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import { formatCrmDateTime } from "@/lib/mysql-client";
 import { StatCard } from "@/components/stat-card";
 
 import {
@@ -18,6 +40,20 @@ import {
   type AgentMetrics,
 } from "@/lib/agent-reports";
 import { AdminAgentDetailModal } from "@/components/admin-agent-detail-modal";
+
+const RANK_STYLES = [
+  "bg-amber-400 text-amber-950",
+  "bg-slate-300 text-slate-900",
+  "bg-amber-700 text-white",
+];
+
+const getInitials = (name: string) =>
+  name
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "AG";
 
 function formatCurrency(amount: number): string {
   return `৳${Number(amount || 0).toLocaleString("en-US", {
@@ -143,151 +179,170 @@ export default function AdminAgentReportsPage() {
             />
           </div>
 
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white dark:bg-card p-4 rounded-2xl border border-slate-200/80 shadow-xs">
-              <div>
-                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <Zap className="size-4 text-[#67B239]" />
-                  Tele-sales Agent Performance Matrix ({filteredRankedAgents.length})
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Ranked holistically by Won Revenue Value, Conversion Rate &amp; Completed
-                  Follow-ups.
-                </p>
+          <Card className="shadow-xl border bg-card rounded-lg overflow-hidden">
+            <CardContent className="p-0">
+              <div className="flex items-center justify-between gap-2 border-b px-6 py-4">
+                <div>
+                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                    <Trophy className="size-4 text-[#67B239]" />
+                    Agent Leaderboard ({filteredRankedAgents.length})
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Ranked by won value, conversion rate and completed follow-ups.
+                  </p>
+                </div>
               </div>
-            </div>
-
-            {isLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {Array.from({ length: 8 }).map((_, idx) => (
-                  <div key={idx} className="rounded-2xl border bg-white p-4 space-y-4 shadow-2xs">
-                    <Skeleton className="h-6 w-1/2 rounded" />
-                    <Skeleton className="h-28 w-full rounded-xl" />
-                    <Skeleton className="h-9 w-full rounded-xl" />
-                  </div>
-                ))}
-              </div>
-            ) : filteredRankedAgents.length === 0 ? (
-              <div className="rounded-2xl border bg-white p-12 text-center text-muted-foreground shadow-2xs">
-                <p className="text-sm font-medium">
-                  No agent activity metrics found matching your search.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {filteredRankedAgents.map((ag, idx) => (
-                  <div
-                    key={ag.agent_id}
-                    className="group relative rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-card p-5 shadow-2xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/80">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="relative shrink-0">
-                            <Avatar className="size-9 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                              {ag.avatar_url && <AvatarImage src={ag.avatar_url} alt={ag.name} />}
-                              <AvatarFallback className="bg-linear-to-br from-indigo-500 to-purple-600 text-white font-bold text-xs">
-                                {ag.name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .slice(0, 2)
-                                  .join("")
-                                  .toUpperCase() || "AG"}
-                              </AvatarFallback>
-                            </Avatar>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="pl-6 w-16 font-semibold">Rank</TableHead>
+                      <TableHead className="min-w-52 font-semibold">Agent</TableHead>
+                      <TableHead className="min-w-25 font-semibold">Status</TableHead>
+                      <TableHead className="text-right font-semibold">Prospects</TableHead>
+                      <TableHead className="text-right font-semibold">Won</TableHead>
+                      <TableHead className="text-right min-w-28 font-semibold">Won Value</TableHead>
+                      <TableHead className="min-w-36 font-semibold">Conversion</TableHead>
+                      <TableHead className="text-right min-w-28 font-semibold">
+                        Follow-ups
+                      </TableHead>
+                      <TableHead className="min-w-36 font-semibold">Last Activity</TableHead>
+                      <TableHead className="pr-6 text-right font-semibold">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      Array.from({ length: 4 }).map((_, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell colSpan={10} className="py-4 px-6">
+                            <Skeleton className="h-12 w-full rounded" />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : filteredRankedAgents.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={10} className="py-12 text-center text-muted-foreground">
+                          <Users className="size-8 mx-auto text-slate-300 mb-2" />
+                          <p className="font-semibold text-foreground">No agents found</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Try a different name or email.
+                          </p>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredRankedAgents.map((ag, idx) => (
+                        <TableRow
+                          key={ag.agent_id}
+                          className="hover:bg-muted/50 transition-colors cursor-pointer"
+                          onClick={() => setDetailModalState({ open: true, agent: ag })}
+                        >
+                          <TableCell className="pl-6">
                             <span
-                              className={`absolute -bottom-1 -right-1 size-4 rounded-full flex items-center justify-center font-mono font-bold text-[9px] border border-white dark:border-slate-900 ${
-                                idx === 0
-                                  ? "bg-amber-400 text-amber-950"
-                                  : idx === 1
-                                    ? "bg-slate-300 text-slate-900"
-                                    : idx === 2
-                                      ? "bg-amber-700 text-white"
-                                      : "bg-slate-200 text-slate-700"
-                              }`}
+                              className={cn(
+                                "inline-flex size-7 items-center justify-center rounded-full text-xs font-bold",
+                                RANK_STYLES[idx] ?? "bg-muted text-muted-foreground",
+                              )}
                             >
-                              #{idx + 1}
+                              {idx + 1}
                             </span>
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="font-semibold text-slate-900 dark:text-slate-100 text-sm truncate leading-tight">
-                              {ag.name}
-                            </h4>
-                            <p className="text-xs font-mono text-slate-400 dark:text-slate-500 truncate mt-0.5">
-                              {ag.email}
-                            </p>
-                          </div>
-                        </div>
-
-                        {ag.status === "Active" ? (
-                          <span className="inline-flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 text-[11px] px-2.5 py-0.5 font-medium rounded-full shrink-0">
-                            <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 text-slate-500 border border-slate-200 dark:border-slate-800 text-[11px] px-2.5 py-0.5 font-medium rounded-full shrink-0">
-                            <span className="size-1.5 rounded-full bg-slate-400" />
-                            Inactive
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-3.5 bg-slate-50/70 dark:bg-slate-900/40 rounded-xl p-3.5 space-y-2 text-xs border border-slate-100 dark:border-slate-800/60">
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-500 dark:text-slate-400 font-medium">
-                            Prospects
-                          </span>
-                          <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <Avatar className="size-9 border border-border/70 shadow-2xs">
+                                {ag.avatar_url && <AvatarImage src={ag.avatar_url} alt={ag.name} />}
+                                <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
+                                  {getInitials(ag.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <p className="font-medium text-foreground text-sm truncate">
+                                  {ag.name}
+                                </p>
+                                <p className="text-muted-foreground text-xs font-mono truncate">
+                                  {ag.email}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {ag.status === "Active" ? (
+                              <Badge
+                                variant="outline"
+                                className="bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30 text-xs font-semibold px-2.5 py-0.5 rounded-full gap-1"
+                              >
+                                <CheckCircle2 className="size-3" /> Active
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30 text-xs font-semibold px-2.5 py-0.5 rounded-full gap-1"
+                              >
+                                <XCircle className="size-3" /> Inactive
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">
                             {ag.prospects_count}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-500 dark:text-slate-400 font-medium">
-                            Stage Changes
-                          </span>
-                          <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                            {ag.stage_changes}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-500 dark:text-slate-400 font-medium">
-                            Status Changes
-                          </span>
-                          <span className="font-mono font-semibold text-rose-500 dark:text-rose-400">
-                            {ag.status_changes}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between pt-1 border-t border-slate-200/50 dark:border-slate-800/50">
-                          <span className="text-slate-400 dark:text-slate-500 text-[11px]">
-                            Last Activity
-                          </span>
-                          <span className="font-mono text-slate-600 dark:text-slate-300 text-[11px]">
-                            {ag.last_activity
-                              ? new Date(ag.last_activity).toLocaleTimeString("en-US", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  month: "short",
-                                  day: "numeric",
-                                })
-                              : "No Activity"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <Button
-                        className="w-full bg-[#67B239] hover:bg-[#5aa130] text-white font-medium rounded-xl h-9 text-xs shadow-2xs transition-all"
-                        onClick={() => setDetailModalState({ open: true, agent: ag })}
-                      >
-                        View Details
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">
+                            {ag.sales_won}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm font-semibold text-[#67B239]">
+                            {formatCurrency(ag.won_value)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className="h-full rounded-full bg-[#67B239]"
+                                  style={{ width: `${Math.min(100, ag.conversion_rate)}%` }}
+                                />
+                              </div>
+                              <span className="font-mono text-xs text-muted-foreground">
+                                {ag.conversion_rate}%
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right whitespace-nowrap text-sm">
+                            <span className="font-mono">{ag.followups_completed}</span>
+                            {ag.overdue_followups > 0 && (
+                              <span className="ml-1.5 text-xs text-destructive">
+                                ({ag.overdue_followups} overdue)
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                            {ag.last_activity ? (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="size-3 text-slate-400" />
+                                {formatCrmDateTime(ag.last_activity)}
+                              </span>
+                            ) : (
+                              "No activity"
+                            )}
+                          </TableCell>
+                          <TableCell className="pr-6 text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+                              title="View details"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDetailModalState({ open: true, agent: ag });
+                              }}
+                            >
+                              <Eye className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
               </div>
-            )}
-          </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

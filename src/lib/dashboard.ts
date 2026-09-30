@@ -134,11 +134,14 @@ export function filterByDateRange(dateStr: string | null | undefined, range: str
 
 // ─── PRIMARY: All dashboard data comes directly from MySQL database ───
 
+/** Inclusive date range as `yyyy-MM-dd` strings; empty means all time. */
+export type DashboardDateRange = { from?: string | undefined; to?: string | undefined };
+
 export const dashboardMetricsQuery = (
   userId: string,
   isAdmin: boolean = false,
   agentFilter?: string,
-  dateRange: string = "This Month",
+  dateRange: DashboardDateRange = {},
 ) =>
   queryOptions({
     queryKey: ["dashboard", "metrics", userId, isAdmin, agentFilter, dateRange],
@@ -177,9 +180,15 @@ export const dashboardMetricsQuery = (
         );
       }
 
-      // Filter by date range
-      if (dateRange && dateRange !== "All Time") {
-        all = all.filter((p) => filterByDateRange(p["created_at"] as string, dateRange));
+      // Filter by date range (inclusive, compared on the yyyy-MM-dd part of created_at)
+      if (dateRange.from || dateRange.to) {
+        all = all.filter((p) => {
+          const day = String(p["created_at"] ?? "").slice(0, 10);
+          if (!day) return false;
+          if (dateRange.from && day < dateRange.from) return false;
+          if (dateRange.to && day > dateRange.to) return false;
+          return true;
+        });
       }
 
       if (all.length === 0) return EMPTY_METRICS;

@@ -1,12 +1,29 @@
 "use client";
 
 import { useState } from "react";
+import { format } from "date-fns";
+import type { DateRange } from "react-day-picker";
+import {
+  DateRangePicker3,
+  getDateRangeForPredefined,
+} from "@/components/dashboard/date-range-picker3";
 import { useQuery } from "@tanstack/react-query";
-import { Briefcase, Users2, Gift, Eye, CheckCircle2, Plus, ArrowRight } from "lucide-react";
+import {
+  ArrowRight,
+  Briefcase,
+  Users,
+  FileText,
+  Plus,
+  Receipt,
+  ReceiptText,
+  Repeat,
+  ShoppingCart,
+  UserRound,
+  Wallet,
+} from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 
-import { DashboardTopCard } from "@/components/dashboard/dashboard-top-card";
 import { RevenueExpenseChart } from "@/components/dashboard/revenue-expense-chart";
 import { PerformanceGauge } from "@/components/dashboard/performance-gauge";
 import { ActiveDealsTable, DealItem } from "@/components/dashboard/active-deals-table";
@@ -19,38 +36,63 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { crmUsersQueryOptions } from "@/lib/admin-users";
 import { useAuth } from "@/lib/auth";
-import { dashboardMetricsQuery } from "@/lib/dashboard";
+import { dashboardMetricsQuery, type DashboardDateRange } from "@/lib/dashboard";
+import {
+  computeFinanceSummary,
+  computeOrderStatusSteps,
+  dashboardExpenseQuery,
+  prospectStageStepsQuery,
+} from "@/lib/dashboard-finance";
+import { StatusOverviewCard } from "@/components/dashboard/status-timeline";
+import { ordersQueryOptions } from "@/lib/orders";
+import { FinanceSummaryCard } from "@/components/dashboard/finance-summary-card";
 
 export default function DashboardPage() {
   const { user, isAdmin } = useAuth();
   const userId = user?.id ?? "";
 
-  const [timeRange, setTimeRange] = useState<string>("last_month");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() =>
+    getDateRangeForPredefined("thisMonth"),
+  );
+  const [selectedUser, setSelectedUser] = useState<string>("all");
+  const { data: crmUsers = [] } = useQuery({ ...crmUsersQueryOptions(), enabled: isAdmin });
+  const userOptions = crmUsers.filter((u) => u.status === "Active" && !u.is_deleted);
   const [isNewPitchOpen, setIsNewPitchOpen] = useState(false);
 
-  // Real MySQL Database metrics query
+  const range: DashboardDateRange = {
+    from: dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : undefined,
+    to: dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : undefined,
+  };
+  const filterUserId = isAdmin && selectedUser !== "all" ? selectedUser : undefined;
+
   const metrics = useQuery({
-    ...dashboardMetricsQuery(
-      userId,
-      isAdmin,
-      undefined,
-      timeRange === "last_month" ? "Last Month" : "This Month",
-    ),
+    ...dashboardMetricsQuery(userId, isAdmin, filterUserId, range),
+    enabled: Boolean(userId),
+  });
+
+  const ordersQuery = useQuery({
+    ...ordersQueryOptions(userId, isAdmin),
+    enabled: Boolean(userId),
+  });
+  const expenseQuery = useQuery({
+    ...dashboardExpenseQuery(range, isAdmin ? filterUserId : userId),
+    enabled: Boolean(userId),
+  });
+  const finance = computeFinanceSummary(ordersQuery.data ?? [], range, filterUserId);
+  const financeLoading = ordersQuery.isLoading;
+  const projectSteps = computeOrderStatusSteps(ordersQuery.data ?? [], range, filterUserId);
+  const pipelineQuery = useQuery({
+    ...prospectStageStepsQuery(range, isAdmin ? filterUserId : userId),
     enabled: Boolean(userId),
   });
   const m = metrics.data;
 
-  // Real database metrics with high-fidelity reference fallbacks
-  const projectsCount = m?.total_prospects ? Math.max(m.total_prospects, 12) : 12;
-  const activeClientsCount = m?.active_prospects ? Math.max(m.active_prospects, 9) : 9;
-  const pitchesSentCount = m?.qualified_leads ? Math.max(m.qualified_leads, 18) : 18;
-  const openRatePct = "72%";
-  const dealsBookedCount = m?.won_sales ? Math.max(m.won_sales, 2) : 2;
-
-  const revenueFormatted = m?.total_sales
-    ? `$${m.total_sales.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
-    : "$7260,00";
+  const revenueFormatted = `৳${(m?.total_sales ?? 0).toLocaleString("en-US", {
+    maximumFractionDigits: 0,
+  })}`;
 
   const expenseFormatted = m?.paid_sales
     ? `$${(m.total_sales - m.paid_sales > 0 ? m.total_sales - m.paid_sales : 2523).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
@@ -131,19 +173,38 @@ export default function DashboardPage() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          {/* Timeframe Dropdown */}
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="h-10 px-4 rounded-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors w-32.5">
-              <SelectValue placeholder="Timeframe" />
-            </SelectTrigger>
-            <SelectContent className="rounded-2xl border-slate-200 dark:border-slate-800">
-              <SelectItem value="last_month">Last month</SelectItem>
-              <SelectItem value="this_month">This month</SelectItem>
-              <SelectItem value="this_quarter">This quarter</SelectItem>
-              <SelectItem value="this_year">This year</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          {isAdmin && (
+            <Select value={selectedUser} onValueChange={setSelectedUser}>
+              <SelectTrigger className="h-10 px-4 rounded-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors w-48 gap-2">
+                <UserRound className="size-4 text-slate-400 shrink-0" />
+                <SelectValue placeholder="All users" />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl border-slate-200 dark:border-slate-800">
+                <SelectItem value="all">All users</SelectItem>
+                {userOptions.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    <span className="flex items-center gap-2">
+                      <Avatar className="size-5">
+                        {u.avatar_url && <AvatarImage src={u.avatar_url} alt={u.name} />}
+                        <AvatarFallback className="bg-[#67B239]/15 text-[#67B239] text-[10px] font-semibold">
+                          {u.name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      {u.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          <DateRangePicker3
+            initialRange={dateRange}
+            onDateRangeChange={(range) => setDateRange(range)}
+            align="end"
+            className="h-10 rounded-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm"
+          />
 
           {/* New Pitch CTA Button */}
           <button
@@ -156,47 +217,67 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 2. Top 5 Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <DashboardTopCard
-          label="Projects"
-          value={projectsCount}
-          icon={Briefcase}
-          change="+7.4%"
-          isPositive={true}
-          delay={0}
+      {/* Sales summary cards (ERPAPP definitions, driven by orders, payments and expenses) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <FinanceSummaryCard
+          label="Total Sales"
+          amount={finance.totalSales}
+          count={finance.salesCount}
+          countLabel="orders"
+          icon={ShoppingCart}
+          circleClass="bg-sky-100 dark:bg-sky-500/20"
+          iconClass="text-sky-600 dark:text-sky-400"
+          loading={financeLoading}
         />
-        <DashboardTopCard
-          label="Active clients"
-          value={activeClientsCount}
-          icon={Users2}
-          change="+2%"
-          isPositive={true}
-          delay={0.05}
+        <FinanceSummaryCard
+          label="Invoice Due"
+          amount={finance.invoiceDue}
+          count={finance.dueCount}
+          countLabel="orders with due"
+          icon={FileText}
+          circleClass="bg-amber-100 dark:bg-amber-500/20"
+          iconClass="text-amber-600 dark:text-amber-400"
+          loading={financeLoading}
         />
-        <DashboardTopCard
-          label="Pitches Sent"
-          value={pitchesSentCount}
-          icon={Gift}
-          change="+3.5%"
-          isPositive={true}
-          delay={0.1}
+        <FinanceSummaryCard
+          label="Advance Paid"
+          amount={finance.advancePaid}
+          count={finance.advancePaidCount}
+          countLabel="payments"
+          icon={Receipt}
+          circleClass="bg-teal-100 dark:bg-teal-500/20"
+          iconClass="text-teal-600 dark:text-teal-400"
+          loading={financeLoading}
         />
-        <DashboardTopCard
-          label="Open Rate"
-          value={openRatePct}
-          icon={Eye}
-          change="-3%"
-          isPositive={false}
-          delay={0.15}
+        <FinanceSummaryCard
+          label="Cash Collection"
+          amount={finance.cashCollection}
+          count={finance.cashCollectionCount}
+          countLabel="payments"
+          icon={Wallet}
+          circleClass="bg-indigo-100 dark:bg-indigo-500/20"
+          iconClass="text-indigo-600 dark:text-indigo-400"
+          loading={financeLoading}
         />
-        <DashboardTopCard
-          label="Deals Booked"
-          value={dealsBookedCount}
-          icon={CheckCircle2}
-          change="-4.3%"
-          isPositive={false}
-          delay={0.2}
+        <FinanceSummaryCard
+          label="Expense"
+          amount={expenseQuery.data?.total ?? 0}
+          count={expenseQuery.data?.count ?? 0}
+          countLabel="expenses"
+          icon={ReceiptText}
+          circleClass="bg-rose-100 dark:bg-rose-500/20"
+          iconClass="text-rose-600 dark:text-rose-400"
+          loading={expenseQuery.isLoading}
+        />
+        <FinanceSummaryCard
+          label="Repeat Sales"
+          amount={finance.repeatSales}
+          count={finance.repeatSalesCount}
+          countLabel="repeat orders"
+          icon={Repeat}
+          circleClass="bg-emerald-100 dark:bg-emerald-500/20"
+          iconClass="text-emerald-600 dark:text-emerald-400"
+          loading={financeLoading}
         />
       </div>
 
@@ -214,7 +295,7 @@ export default function DashboardPage() {
               Revenues and expenses
             </h2>
             <Link
-              href="/billing"
+              href="/expenses"
               className="text-[12px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100/90 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-3.5 py-1.5 rounded-full transition-colors inline-flex items-center gap-1 group"
             >
               <span>View all</span>
@@ -301,6 +382,23 @@ export default function DashboardPage() {
 
           <PendingTasksList tasks={pendingTasks} />
         </motion.div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 print:hidden">
+        <StatusOverviewCard
+          title="Project Overview"
+          description="Project distribution by status for the selected period."
+          icon={Briefcase}
+          steps={projectSteps}
+          isLoading={financeLoading}
+        />
+        <StatusOverviewCard
+          title="Prospect Overview"
+          description="Prospect distribution by stage for the selected period."
+          icon={Users}
+          steps={pipelineQuery.data ?? []}
+          isLoading={pipelineQuery.isLoading}
+        />
       </div>
 
       {/* Add Prospect / New Pitch Modal */}
