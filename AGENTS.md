@@ -78,7 +78,7 @@ Welcome to the **Brandium CRM** repository.
     (`createServerFn`) connecting directly to MySQL.
   - Automatically create all database tables (`users`, `profiles`, `user_roles`,
     `services`, `stages`, `prospects`, `prospect_stage_history`, `sales`,
-    `follow_ups`, `activities`, `meetings`, `opportunities`, `invoices`,
+    `activities`, `meetings`, `opportunities`, `invoices`,
     `payments`) with `CREATE TABLE IF NOT EXISTS` schema bootstrapping during
     connection (modeled after `C:\Transfer\Running Projects\erpapp`).
 
@@ -601,7 +601,7 @@ Single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/agents/d
 
 - **framer-motion Cannot Animate 8-Digit Hex Colours**:
   - Animating `backgroundColor` between `#RRGGBB1A` and `#RRGGBB` left the active stage circle stuck at the tint (pale circle, invisible white number). Pass `rgba()` strings instead (see `rgba()` in `src/components/dashboard/status-timeline.tsx`), and give both box-shadow states the same number of layers.
-  - The Project / Prospect Overview cards sit at the bottom of the Dashboard, after Active deals and Pending tasks.
+  - The Project / Prospect Overview cards sit at the bottom of the Dashboard, after Scheduled follow-ups and Project assignments.
   - Count cards (`FinanceSummaryCard isCount`): Meeting Scheduled = non-cancelled meetings whose `meeting_date` is in the range; Total Quotation = active (`is_active = 1`, deleted quotations are soft-deleted) quotations whose `order_date` is in the range; Total Delivered = orders whose `status_history` has a Delivered entry in the range (`computeDeliveredCount`). All three follow the user filter.
 
 - **Committed CRLF Breaks the Server Build**:
@@ -614,3 +614,39 @@ Single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/agents/d
 - **File Uploads Are Images or PDF Only, Served Without Scripts**:
   - `/api/upload` accepts only `.png .jpg .jpeg .webp .gif .avif .svg .pdf` (it previously saved any extension, so an `.html` upload could run as a page on the app's own domain). `next.config.ts` adds `X-Content-Type-Options: nosniff` and a sandboxed `Content-Security-Policy` to every `/uploads/*` response, because in dev and for files present at build time Next.js serves `public/uploads` directly and never reaches the route handler.
   - The Expenses form uploads receipts with `uploadImageFile()` (`src/lib/upload.ts`); PDF receipts open in a new tab from the preview dialog instead of an `<img>`.
+
+- **Follow-ups Live in `prospect_stage_history` (No `follow_ups` Table)**:
+  - Per user request, follow-ups are not stored in a separate table. `useCreateFollowUp()` (`src/lib/follow-ups.ts`) writes one `prospect_stage_history` row (stage = Follow-up) with `follow_up_due_at`, `follow_up_assigned_to`, `follow_up_status` and `changed_by` = creator. A follow-up is any stage history row where `follow_up_due_at IS NOT NULL`.
+  - Store `follow_up_due_at` with `getMySQLTimestamp(new Date(due))` (Dhaka local). The old `follow_ups.due_at` used `toISOString()` (UTC), so pools with `dateStrings: true` showed it 6 hours early.
+  - The legacy `follow_ups` table is no longer created; old rows stay in existing databases untouched. Never add new reads or writes to it.
+  - `ensureMySQLTablesExist()` copies legacy `follow_ups` rows into stage history once (same id, `INSERT IGNORE`, due time +6h), so old follow-ups appear on the board.
+
+- **Follow-ups Board (`/follow-ups`, ERPAPP `/follow-up` clone)**:
+  - `src/components/follow-ups/follow-up-board.tsx` + `follow-up-card.tsx`: Kanban with columns from table `followup_stages` (`followUpStagesQueryOptions`), one card per prospect (its latest follow-up row, `followUpBoardQueryOptions`). Statuses match columns by normalised name, so legacy `pending` / `cancelled` land in Pending / Canceled; unknown values fall into the first column.
+  - Native HTML5 drag-and-drop (no `@dnd-kit`). Dropping on another column opens the required-notes dialog, then `useUpdateFollowUp` sets `follow_up_status` and appends the note to that stage history row via `addStageNote()`, so the note also shows in the prospect's stage timeline. "Add Update" appends a note without a status change; "View Timeline" lists those notes; admin "Delete Record" (`useRemoveFollowUp`) clears the follow-up fields only, keeping stage history.
+  - Admin "Columns" button opens `ManageFollowUpStagesDialog` (`src/components/follow-ups/manage-follow-up-stages-dialog.tsx`): add, rename/recolour, reorder (up/down, saves `position`) and delete `followup_stages`. A rename also rewrites `follow_up_status` of the cards in that column (by row id) so they stay in it. Delete is blocked while the column has cards and for the last column.
+  - Note box on each card shows the newest stage note (`parseNotesToItems(note).at(-1)`).
+  - The stage-change / Add Update dialog has an optional **Next Follow-up Schedule** (ERPAPP pipeline-style calendar popover with past days disabled, plus a time box; empty by default). `useUpdateFollowUp` saves it to `follow_up_due_at` only when a date is picked, and the card labels the date badge "Next Follow-up". Notes are stored exactly as typed (no "Status changed to X:" prefix); the outcome text only goes to `activities`.
+  - Not ported from ERPAPP: CSV import, Job ID search and customer type badges (no matching Brandium data).
+
+- **Stage Note Arrays Must Not Embed Base64 Avatars (TEXT Overflow)**:
+  - `prospect_stage_history.note` is `TEXT` (65,535 bytes). Old note items stored `createdByAvatar` as a `data:` base64 image, so one note hit the limit, MySQL cut it off and the JSON no longer parsed; the follow-up timeline then printed raw JSON. `addStageNote()` now drops `data:` avatars, and `parseNotesToItems()` salvages every complete `"text"` entry from a truncated array.
+  - Re-saving a note array also copied the fallback author avatar (base64) into old items, so a stage note grew to ~56 KB and every later note pushed it past 65,535: MySQL rejected the UPDATE, `addStageNote()` ignored the failed result and the dialog still said "Note added". All note writes in `src/lib/stages.ts` now go through `serializeNoteItems()` (drops `data:` avatars) and `runNoteWrite()` (throws when the query fails), and `ViewStageDialog` throws when `addStageNote` / `deleteStageNote` return `false`.
+  - Do not use Radix `ScrollArea` around long wrapping text inside a dialog: its viewport child is `display: table`, so text grows past the dialog edge. Use a plain `overflow-y-auto` div with `wrap-anywhere` text.
+
+- **Dashboard "Scheduled follow-ups" Card (replaces fake "Active deals")**:
+  - `src/components/dashboard/scheduled-follow-ups-table.tsx` keeps the old Active deals table styling but shows real data from `followUpBoardQueryOptions`: open follow-ups (columns whose name matches complete/cancel/done/closed are hidden), upcoming only (date part of `follow_up_due_at` >= today; earlier dates hidden), soonest first, max 5; today's already-passed times show in rose. Status badges are filled with the card's follow-up board column colour (`followup_stages.color`, same as the board header), with `getContrastTextColor()` text. The user wants the board column colour, not the prospect pipeline's Follow-up stage colour. It follows the dashboard admin user filter (`assigned_to` or `created_by`) and the header date range (`range.from`/`range.to` compared with the date part of `follow_up_due_at`; default This Month). "View all" links to `/follow-ups`. The hard-coded `activeDeals` list and `active-deals-table.tsx` were removed.
+  - Use `table-fixed` with column widths on dashboard tables; with the default auto layout, long names ignore `truncate` and the table scrolls sideways.
+
+- **MySQL "Too many connections" in `next dev` (Pool Recreated on Hot Reload)**:
+  - `getMySQLPool()` (`src/lib/mysql-server.ts`) kept its pool in a module-level variable. `next dev` re-evaluates that module on every hot reload and per route bundle, so each edit opened another pool (up to 20 connections each) and never closed the old ones; MySQL hit `max_connections` (151) and every save failed with "Too many connections".
+  - The pool now lives on `globalThis.__brandiumMySQLPool`, with `maxIdle: 5` and `idleTimeout: 60000` so idle connections close. Never cache a pool, connection or other long-lived resource in a plain module variable in server code.
+  - If it happens again, restart the dev server: stopping it frees the leaked connections. Other `next dev` processes still running older code (other worktrees) can still leak until they are restarted.
+
+- **Dashboard "Project assignments" Card (replaces fake "Pending tasks")**:
+  - `src/components/dashboard/project-assignments-list.tsx` keeps the old Pending tasks row styling but lists real stage assignments read from `orders.status_history` (from `ordersQueryOptions`, already loaded by the dashboard). An entry counts when its note matches `assigned to <name>` (written by `useAssignStageMutation`, plus legacy "Assigned to Designer Representative X."). Rows show assignee initials, assignee name, company, date and a stage badge in the `ORDER_STATUSES` colour; newest first, up to 50 rows inside a plain `max-h-90 overflow-y-auto` scroll box (not Radix `ScrollArea`, which breaks `truncate`). "View all" links to `/projects`.
+  - It follows the dashboard date range (assignment date) and the admin user filter (`crm_user_id` or `designer_id`). The hard-coded `pendingTasks` list and `pending-tasks-list.tsx` were removed.
+
+- **Dashboard "Sales and expenses" Card (was fake "Revenues and expenses")**:
+  - `src/components/dashboard/revenue-expense-chart.tsx` keeps the old bar/pill chart look but takes real data: Sales = `computeFinanceSummary(...).totalSales` / `salesCount` (same rule as the Total Sales card), Expenses = `dashboardExpenseQuery` total/count, all shown in BDT (`৳`). The fake `$2523,00`, `+5.2%` / `-1.7%` badges and the hard-coded 30-day `DAYS_DATA` were removed; the badges now show order / expense counts.
+  - Chart buckets come from `computeSalesExpenseSeries()` + `dashboardExpenseSeriesQuery()` in `src/lib/dashboard-finance.ts`: one bar per day when the range is 31 days or less, otherwise one per month (last 24). "All Time" uses the first and last day that has data. The y-axis scale is rounded from the tallest sales + expense bucket.

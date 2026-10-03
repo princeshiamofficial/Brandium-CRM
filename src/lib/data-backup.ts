@@ -49,7 +49,7 @@ export async function fetchBackupSummaryMetrics(): Promise<BackupSummaryMetrics>
       "SELECT COUNT(*) AS cnt FROM prospects;",
     );
     const resF = await runMySQLQuery<Record<string, unknown>[]>(
-      "SELECT COUNT(*) AS cnt FROM follow_ups;",
+      "SELECT COUNT(*) AS cnt FROM prospect_stage_history WHERE follow_up_due_at IS NOT NULL;",
     );
     const resI = await runMySQLQuery<Record<string, unknown>[]>(
       "SELECT COUNT(*) AS cnt FROM invoices;",

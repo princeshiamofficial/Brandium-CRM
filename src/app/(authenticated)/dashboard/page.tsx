@@ -28,8 +28,8 @@ import { motion } from "framer-motion";
 
 import { RevenueExpenseChart } from "@/components/dashboard/revenue-expense-chart";
 import { PerformanceGauge } from "@/components/dashboard/performance-gauge";
-import { ActiveDealsTable, DealItem } from "@/components/dashboard/active-deals-table";
-import { PendingTasksList, PendingTaskItem } from "@/components/dashboard/pending-tasks-list";
+import { ScheduledFollowUpsTable } from "@/components/dashboard/scheduled-follow-ups-table";
+import { ProjectAssignmentsList } from "@/components/dashboard/project-assignments-list";
 import { AddProspectDialog } from "@/components/add-prospect-dialog";
 import {
   Select,
@@ -48,6 +48,8 @@ import {
   dashboardActivityCountsQuery,
   computeOrderStatusSteps,
   dashboardExpenseQuery,
+  dashboardExpenseSeriesQuery,
+  computeSalesExpenseSeries,
   prospectStageStepsQuery,
 } from "@/lib/dashboard-finance";
 import { StatusOverviewCard } from "@/components/dashboard/status-timeline";
@@ -99,78 +101,16 @@ export default function DashboardPage() {
   });
   const m = metrics.data;
 
-  const revenueFormatted = `৳${(m?.total_sales ?? 0).toLocaleString("en-US", {
-    maximumFractionDigits: 0,
-  })}`;
-
-  const expenseFormatted = m?.paid_sales
-    ? `$${(m.total_sales - m.paid_sales > 0 ? m.total_sales - m.paid_sales : 2523).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
-    : "$2523,00";
-
-  // Active Deals List
-  const activeDeals: DealItem[] = [
-    {
-      id: "1",
-      clientName: "Lena Harper",
-      clientEmail: "lena.harper@influxmedia.co",
-      clientAvatar:
-        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80",
-      task: "Summer Collab with Glossi..",
-      dueDate: "May 21",
-      dueDateRaw: "2025-05-21",
-      revenue: 125,
-      status: "In progress",
-    },
-    {
-      id: "2",
-      clientName: "Sophie Kim",
-      clientEmail: "sophie.kim@creatorhive.com",
-      clientAvatar:
-        "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80",
-      task: "Back-to-School with Notio..",
-      dueDate: "May 11",
-      dueDateRaw: "2025-05-11",
-      revenue: 320,
-      status: "Pending",
-    },
-    {
-      id: "3",
-      clientName: "Noah Bennett",
-      clientEmail: "noah.b@bennettstudio.com",
-      clientAvatar:
-        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80",
-      task: "YouTube Integration for Sq..",
-      dueDate: "May 19",
-      dueDateRaw: "2025-05-19",
-      revenue: 450,
-      status: "Completed",
-    },
-  ];
-
-  // Pending Tasks List
-  const pendingTasks: PendingTaskItem[] = [
-    {
-      id: "1",
-      title: "Invoice for Notion collab",
-      dueDate: "May 4, 2025",
-      priority: "High",
-      platform: "notion",
-    },
-    {
-      id: "2",
-      title: "Tik Tok reels for Nical..",
-      dueDate: "May 7, 2025",
-      priority: "Medium",
-      platform: "tiktok",
-    },
-    {
-      id: "3",
-      title: "Follow up with Gymshark",
-      dueDate: "May 13, 2025",
-      priority: "Low",
-      platform: "instagram",
-    },
-  ];
+  const expenseSeriesQuery = useQuery({
+    ...dashboardExpenseSeriesQuery(range, isAdmin ? filterUserId : userId),
+    enabled: Boolean(userId),
+  });
+  const salesExpenseSeries = computeSalesExpenseSeries(
+    ordersQuery.data ?? [],
+    expenseSeriesQuery.data ?? {},
+    range,
+    filterUserId,
+  );
 
   return (
     <div className="w-full space-y-6 pb-8">
@@ -315,7 +255,7 @@ export default function DashboardPage() {
 
       {/* 3. Middle Section: Revenues and Expenses (Left) & Your Performance (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Left: Revenues and expenses (8 cols) */}
+        {/* Left: Sales and expenses (8 cols) */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -324,7 +264,7 @@ export default function DashboardPage() {
         >
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-[17px] font-bold text-slate-900 dark:text-white tracking-tight">
-              Revenues and expenses
+              Sales and expenses
             </h2>
             <Link
               href="/expenses"
@@ -336,10 +276,12 @@ export default function DashboardPage() {
           </div>
 
           <RevenueExpenseChart
-            revenueTotal={revenueFormatted}
-            revenueChange="+5.2%"
-            expenseTotal={expenseFormatted}
-            expenseChange="-1.7%"
+            salesTotal={finance.totalSales}
+            salesCount={finance.salesCount}
+            expenseTotal={expenseQuery.data?.total ?? 0}
+            expenseCount={expenseQuery.data?.count ?? 0}
+            series={salesExpenseSeries}
+            isLoading={financeLoading || expenseQuery.isLoading || expenseSeriesQuery.isLoading}
           />
         </motion.div>
 
@@ -367,9 +309,9 @@ export default function DashboardPage() {
         </motion.div>
       </div>
 
-      {/* 4. Bottom Section: Active deals (Left) & Pending tasks (Right) */}
+      {/* 4. Bottom Section: Scheduled follow-ups (Left) & Project assignments (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Left: Active deals (8 cols) */}
+        {/* Left: Scheduled follow-ups (8 cols) */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -378,10 +320,10 @@ export default function DashboardPage() {
         >
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[17px] font-bold text-slate-900 dark:text-white tracking-tight">
-              Active deals
+              Scheduled follow-ups
             </h2>
             <Link
-              href="/prospects"
+              href="/follow-ups"
               className="text-[12px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100/90 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-3.5 py-1.5 rounded-full transition-colors inline-flex items-center gap-1 group"
             >
               <span>View all</span>
@@ -389,10 +331,15 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          <ActiveDealsTable deals={activeDeals} />
+          <ScheduledFollowUpsTable
+            userId={userId}
+            isAdmin={isAdmin}
+            filterUserId={filterUserId}
+            range={range}
+          />
         </motion.div>
 
-        {/* Right: Pending tasks (4 cols) */}
+        {/* Right: Project assignments (4 cols) */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -401,10 +348,10 @@ export default function DashboardPage() {
         >
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[17px] font-bold text-slate-900 dark:text-white tracking-tight">
-              Pending tasks
+              Project assignments
             </h2>
             <Link
-              href="/meetings"
+              href="/projects"
               className="text-[12px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100/90 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-3.5 py-1.5 rounded-full transition-colors inline-flex items-center gap-1 group"
             >
               <span>View all</span>
@@ -412,7 +359,12 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          <PendingTasksList tasks={pendingTasks} />
+          <ProjectAssignmentsList
+            orders={ordersQuery.data ?? []}
+            isLoading={ordersQuery.isLoading}
+            range={range}
+            filterUserId={filterUserId}
+          />
         </motion.div>
       </div>
 

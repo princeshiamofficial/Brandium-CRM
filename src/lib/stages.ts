@@ -821,6 +821,32 @@ export function parseNotesToItems(
     }
   }
 
+  // A note array cut off by the TEXT column limit (old notes embedded base64 avatars):
+  // recover each complete "text" entry instead of showing raw JSON.
+  if (cleaned.startsWith('[{"')) {
+    const salvaged: StageNoteItem[] = [];
+    const entry =
+      /"text":"((?:[^"\\]|\\.)*)"(?:,"createdAt":"([^"]*)")?(?:,"createdByName":"((?:[^"\\]|\\.)*)")?/g;
+    const unescape = (value: string) => {
+      try {
+        return JSON.parse(`"${value}"`) as string;
+      } catch {
+        return value;
+      }
+    };
+    for (const match of cleaned.matchAll(entry)) {
+      const text = unescape(match[1] || "").trim();
+      if (!text) continue;
+      salvaged.push({
+        text,
+        createdAt: match[2] || fallbackDate || null,
+        createdByName: match[3] ? unescape(match[3]) : fallbackAuthor || null,
+        createdByAvatar: fallbackAvatar || null,
+      });
+    }
+    if (salvaged.length > 0) return salvaged;
+  }
+
   // Split by newlines or semicolon / bullet lists
   const lines = cleaned
     .split(/\r?\n+/)
@@ -850,6 +876,21 @@ export function parseNotesToArray(notes?: string | null): string[] {
   return parseNotesToItems(notes).map((item) => item.text);
 }
 
+/** Note arrays live in TEXT columns, so never persist base64 avatars inside them. */
+const serializeNoteItems = (items: StageNoteItem[]) =>
+  JSON.stringify(
+    items.map((item) => ({
+      ...item,
+      createdByAvatar: item.createdByAvatar?.startsWith("data:") ? null : item.createdByAvatar,
+    })),
+  );
+
+/** Note writes must fail loudly; a rejected UPDATE used to still report "Note added". */
+const runNoteWrite = async (sql: string, params: unknown[]) => {
+  const res = await runMySQLQuery(sql, params);
+  if (!res.success) throw new Error(res.error || "Failed to save stage note");
+};
+
 export async function addStageNote(params: {
   prospectId: string;
   historyId?: string | null;
@@ -870,7 +911,8 @@ export async function addStageNote(params: {
     text: trimmedNote,
     createdAt: nowStr,
     createdByName: userName || null,
-    createdByAvatar: userAvatar || null,
+    // A base64 avatar can overflow the TEXT `note` column and corrupt the whole note array
+    createdByAvatar: userAvatar && !userAvatar.startsWith("data:") ? userAvatar : null,
   };
 
   try {
@@ -896,10 +938,10 @@ export async function addStageNote(params: {
         originalAvatar,
       );
       const updatedItems = [...currentItems, newNoteItem];
-      const newNotePayload = JSON.stringify(updatedItems);
+      const newNotePayload = serializeNoteItems(updatedItems);
 
       // Preserve original changed_at timestamp of the stage transition
-      await runMySQLQuery(`UPDATE \`prospect_stage_history\` SET \`note\` = ? WHERE \`id\` = ?;`, [
+      await runNoteWrite(`UPDATE \`prospect_stage_history\` SET \`note\` = ? WHERE \`id\` = ?;`, [
         newNotePayload,
         historyId,
       ]);
@@ -928,13 +970,13 @@ export async function addStageNote(params: {
           originalAvatar,
         );
         const updatedItems = [...currentItems, newNoteItem];
-        const newNotePayload = JSON.stringify(updatedItems);
+        const newNotePayload = serializeNoteItems(updatedItems);
 
         // Preserve original changed_at timestamp
-        await runMySQLQuery(
-          `UPDATE \`prospect_stage_history\` SET \`note\` = ? WHERE \`id\` = ?;`,
-          [newNotePayload, targetId],
-        );
+        await runNoteWrite(`UPDATE \`prospect_stage_history\` SET \`note\` = ? WHERE \`id\` = ?;`, [
+          newNotePayload,
+          targetId,
+        ]);
       } else {
         // Append to prospects.notes
         const pRes = await runMySQLQuery<Record<string, unknown>[]>(
@@ -952,9 +994,9 @@ export async function addStageNote(params: {
 
         const currentItems = parseNotesToItems(existingNotes, origDate, origAuthor, origAvatar);
         const updatedItems = [...currentItems, newNoteItem];
-        const newNotePayload = JSON.stringify(updatedItems);
+        const newNotePayload = serializeNoteItems(updatedItems);
 
-        await runMySQLQuery(`UPDATE \`prospects\` SET \`notes\` = ? WHERE \`id\` = ?;`, [
+        await runNoteWrite(`UPDATE \`prospects\` SET \`notes\` = ? WHERE \`id\` = ?;`, [
           newNotePayload,
           prospectId,
         ]);
@@ -962,7 +1004,7 @@ export async function addStageNote(params: {
         // Also insert into prospect_stage_history for full timeline tracking
         const currentStageId = String(stageId || pRes.data?.[0]?.["stage_id"] || "prospect");
         const newHistId = generateUUID();
-        await runMySQLQuery(
+        await runNoteWrite(
           `INSERT INTO \`prospect_stage_history\` (\`id\`, \`prospect_id\`, \`from_stage_id\`, \`to_stage_id\`, \`note\`, \`changed_by\`, \`changed_at\`)
            VALUES (?, ?, ?, ?, ?, ?, ?);`,
           [
@@ -1015,9 +1057,9 @@ export async function deleteStageNote(params: {
         originalAvatar,
       );
       const updatedItems = currentItems.filter((_, idx) => idx !== noteIndex);
-      const newNotePayload = updatedItems.length > 0 ? JSON.stringify(updatedItems) : null;
+      const newNotePayload = updatedItems.length > 0 ? serializeNoteItems(updatedItems) : null;
 
-      await runMySQLQuery(`UPDATE \`prospect_stage_history\` SET \`note\` = ? WHERE \`id\` = ?;`, [
+      await runNoteWrite(`UPDATE \`prospect_stage_history\` SET \`note\` = ? WHERE \`id\` = ?;`, [
         newNotePayload,
         historyId,
       ]);
@@ -1037,9 +1079,9 @@ export async function deleteStageNote(params: {
 
       const currentItems = parseNotesToItems(existingNotes, origDate, origAuthor, origAvatar);
       const updatedItems = currentItems.filter((_, idx) => idx !== noteIndex);
-      const newNotePayload = updatedItems.length > 0 ? JSON.stringify(updatedItems) : null;
+      const newNotePayload = updatedItems.length > 0 ? serializeNoteItems(updatedItems) : null;
 
-      await runMySQLQuery(`UPDATE \`prospects\` SET \`notes\` = ? WHERE \`id\` = ?;`, [
+      await runNoteWrite(`UPDATE \`prospects\` SET \`notes\` = ? WHERE \`id\` = ?;`, [
         newNotePayload,
         prospectId,
       ]);

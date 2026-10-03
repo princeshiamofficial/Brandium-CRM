@@ -115,7 +115,7 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
         (user?.user_metadata?.["avatar_url"] as string) ||
         null;
 
-      return addStageNote({
+      const saved = await addStageNote({
         prospectId: prospect.id,
         historyId: payload.historyId,
         stageId: payload.stageId || prospect.stage_id,
@@ -124,6 +124,8 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
         userName: currentUserName,
         userAvatar: currentUserAvatar,
       });
+      if (!saved) throw new Error("Note was not saved");
+      return saved;
     },
     onSuccess: () => {
       toast.success("Note added to stage!");
@@ -144,11 +146,13 @@ export function ViewStageDialog({ prospect, open, onOpenChange }: ViewStageDialo
   const deleteNoteMutation = useMutation({
     mutationFn: async (payload: { historyId: string | null; noteIndex: number }) => {
       if (!prospect) return false;
-      return deleteStageNote({
+      const removed = await deleteStageNote({
         prospectId: prospect.id,
         historyId: payload.historyId,
         noteIndex: payload.noteIndex,
       });
+      if (!removed) throw new Error("Note was not removed");
+      return removed;
     },
     onSuccess: () => {
       toast.success("Note removed.");

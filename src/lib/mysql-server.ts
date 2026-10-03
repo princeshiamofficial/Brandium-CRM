@@ -1,16 +1,19 @@
 import mysql from "mysql2/promise";
 import { getMySQLConfig } from "./mysql-client";
 
-let globalPool: mysql.Pool | null = null;
+// Kept on globalThis: `next dev` re-evaluates this module on every hot reload and per route
+// bundle, and a module-level variable then opened a new pool each time until MySQL refused
+// connections ("Too many connections").
+const poolCache = globalThis as typeof globalThis & { __brandiumMySQLPool?: mysql.Pool };
 
 export async function getMySQLPool(): Promise<mysql.Pool> {
-  if (globalPool) {
-    return globalPool;
+  if (poolCache.__brandiumMySQLPool) {
+    return poolCache.__brandiumMySQLPool;
   }
 
   const config = getMySQLConfig();
 
-  globalPool = mysql.createPool({
+  const globalPool = mysql.createPool({
     host: config.host === "localhost" ? "127.0.0.1" : config.host,
     port: config.port,
     user: config.user,
@@ -19,6 +22,9 @@ export async function getMySQLPool(): Promise<mysql.Pool> {
     waitForConnections: true,
     connectionLimit: config.connectionLimit,
     queueLimit: 0,
+    // Close idle connections instead of holding the whole limit open forever
+    maxIdle: 5,
+    idleTimeout: 60000,
     enableKeepAlive: true,
     keepAliveInitialDelay: 10000,
     charset: "utf8mb4",
@@ -34,6 +40,7 @@ export async function getMySQLPool(): Promise<mysql.Pool> {
     // Ignore
   }
 
+  poolCache.__brandiumMySQLPool = globalPool;
   return globalPool;
 }
 

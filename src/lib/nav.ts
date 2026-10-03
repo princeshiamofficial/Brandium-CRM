@@ -17,6 +17,7 @@ import {
   FolderKanban,
   FileSpreadsheet,
   ShoppingCart,
+  PhoneCall,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,6 +39,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
       { title: "Prospects", url: "/prospects", icon: Users2 },
+      { title: "Follow UP", url: "/follow-ups", icon: PhoneCall },
       { title: "Meetings", url: "/meetings", icon: CalendarDays },
       { title: "Quotations", url: "/quotations", icon: FileSpreadsheet },
       { title: "Orders", url: "/orders", icon: ShoppingCart },

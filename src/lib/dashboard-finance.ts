@@ -1,3 +1,4 @@
+import { format } from "date-fns";
 import { queryOptions } from "@tanstack/react-query";
 import { runMySQLQuery } from "@/lib/mysql-api";
 import {
@@ -261,3 +262,101 @@ export const dashboardActivityCountsQuery = (range: DashboardDateRange, scopeUse
       };
     },
   });
+
+/** Expenses per day (`yyyy-MM-dd` → amount) for the Revenues and expenses chart. */
+export const dashboardExpenseSeriesQuery = (range: DashboardDateRange, recordedBy?: string) =>
+  queryOptions({
+    queryKey: ["dashboard", "expense-series", range, recordedBy],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const conditions = ["expense_date IS NOT NULL"];
+      const params: string[] = [];
+      if (range.from) {
+        conditions.push("DATE(expense_date) >= ?");
+        params.push(range.from);
+      }
+      if (range.to) {
+        conditions.push("DATE(expense_date) <= ?");
+        params.push(range.to);
+      }
+      if (recordedBy) {
+        conditions.push("recorded_by = ?");
+        params.push(recordedBy);
+      }
+      const res = await runMySQLQuery<Record<string, unknown>[]>(
+        `SELECT DATE_FORMAT(expense_date, '%Y-%m-%d') AS day, COALESCE(SUM(amount), 0) AS total
+         FROM \`expenses\` WHERE ${conditions.join(" AND ")} GROUP BY day;`,
+        params,
+      );
+      const byDay: Record<string, number> = {};
+      for (const row of (res.data || []) as Record<string, unknown>[]) {
+        byDay[String(row["day"])] = Number(row["total"] || 0);
+      }
+      return byDay;
+    },
+  });
+
+export type SalesExpenseBucket = { label: string; title: string; sales: number; expense: number };
+
+/**
+ * Chart buckets for the selected range: one per day up to 31 days, otherwise one per month
+ * (last 24). Sales use the Total Sales rule (orders created in the bucket, cancelled excluded).
+ */
+export function computeSalesExpenseSeries(
+  allOrders: CrmOrder[],
+  expensesByDay: Record<string, number>,
+  range: DashboardDateRange,
+  userId?: string,
+): SalesExpenseBucket[] {
+  const orders = allOrders.filter(
+    (o) =>
+      o.status !== CANCELLED_STATUS &&
+      (!userId || o.crm_user_id === userId || o.designer_id === userId),
+  );
+  const salesByDay: Record<string, number> = {};
+  for (const o of orders) {
+    const day = String(o.created_at || "").slice(0, 10);
+    if (day) salesByDay[day] = (salesByDay[day] ?? 0) + o.total_amount;
+  }
+
+  // "All Time" has no bounds: use the data's own first/last day
+  const days = [...Object.keys(salesByDay), ...Object.keys(expensesByDay)].sort();
+  const today = new Date().toISOString().slice(0, 10);
+  const from = range.from || days[0] || today;
+  const to = range.to || days[days.length - 1] || today;
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
+
+  const sumFor = (map: Record<string, number>, test: (day: string) => boolean) =>
+    Object.entries(map).reduce((total, [day, value]) => (test(day) ? total + value : total), 0);
+  const inBounds = (day: string) => day >= from && day <= to;
+  const totalDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+
+  if (totalDays <= 31) {
+    return Array.from({ length: totalDays }, (_, i) => {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      const key = format(d, "yyyy-MM-dd");
+      return {
+        label: format(d, "d"),
+        title: format(d, "MMM d, yyyy"),
+        sales: salesByDay[key] ?? 0,
+        expense: expensesByDay[key] ?? 0,
+      };
+    });
+  }
+
+  const buckets: SalesExpenseBucket[] = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  while (cursor <= end) {
+    const month = format(cursor, "yyyy-MM");
+    const test = (day: string) => day.startsWith(month) && inBounds(day);
+    buckets.push({
+      label: format(cursor, "MMM"),
+      title: format(cursor, "MMMM yyyy"),
+      sales: sumFor(salesByDay, test),
+      expense: sumFor(expensesByDay, test),
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return buckets.slice(-24);
+}

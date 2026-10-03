@@ -194,23 +194,6 @@ export async function ensureMySQLTablesExist(
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-      // 10. \`follow_ups\` table
-      await conn.query(`
-      CREATE TABLE IF NOT EXISTS \`follow_ups\` (
-        \`id\` VARCHAR(36) NOT NULL,
-        \`prospect_id\` VARCHAR(36) NOT NULL,
-        \`assigned_to\` VARCHAR(36) NULL,
-        \`created_by\` VARCHAR(36) NULL,
-        \`due_at\` DATETIME NOT NULL,
-        \`status\` VARCHAR(50) NOT NULL DEFAULT 'pending',
-        \`note\` TEXT NULL,
-        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        PRIMARY KEY (\`id\`),
-        KEY \`idx_follow_ups_prospect\` (\`prospect_id\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
       // 10a. \`followup_stages\` table
       await conn.query(`
       CREATE TABLE IF NOT EXISTS \`followup_stages\` (
@@ -791,6 +774,14 @@ export async function ensureMySQLTablesExist(
         { table: "expenses", column: "receipt_url", def: "TEXT NULL" },
         { table: "expenses", column: "reference_no", def: "VARCHAR(100) NULL" },
         { table: "expenses", column: "vendor", def: "VARCHAR(255) NULL" },
+        // follow-ups live on their stage history row (no separate table)
+        { table: "prospect_stage_history", column: "follow_up_due_at", def: "DATETIME NULL" },
+        {
+          table: "prospect_stage_history",
+          column: "follow_up_assigned_to",
+          def: "VARCHAR(36) NULL",
+        },
+        { table: "prospect_stage_history", column: "follow_up_status", def: "VARCHAR(20) NULL" },
       ];
 
       for (const col of ensureColumns) {
@@ -807,6 +798,44 @@ export async function ensureMySQLTablesExist(
         } catch {
           // Ignore if table does not exist yet or column already exists
         }
+      }
+
+      // Copy legacy `follow_ups` rows onto stage history (follow-ups no longer have a table).
+      // Rows already written alongside a stage change get the follow-up fields; the rest are
+      // inserted with the same id, so this is safe to re-run. Legacy due_at was UTC; +6h = Dhaka.
+      try {
+        const [legacyTables] = await conn.query<mysql.RowDataPacket[]>(
+          "SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'follow_ups'",
+        );
+        if (legacyTables.length > 0) {
+          await conn.query(`
+            UPDATE \`prospect_stage_history\` h
+            JOIN \`follow_ups\` f ON f.prospect_id = h.prospect_id
+              AND ABS(TIMESTAMPDIFF(SECOND, h.changed_at, f.created_at)) <= 120
+            SET h.follow_up_due_at = DATE_ADD(f.due_at, INTERVAL 6 HOUR),
+                h.follow_up_assigned_to = f.assigned_to,
+                h.follow_up_status = f.status,
+                h.changed_by = COALESCE(h.changed_by, f.created_by)
+            WHERE h.follow_up_due_at IS NULL AND h.note LIKE '%Follow-up scheduled for%'
+          `);
+          await conn.query(`
+            INSERT IGNORE INTO \`prospect_stage_history\`
+              (id, prospect_id, from_stage_id, to_stage_id, changed_by, note, changed_at, created_at,
+               follow_up_due_at, follow_up_assigned_to, follow_up_status)
+            SELECT f.id, f.prospect_id, NULL,
+              COALESCE((SELECT s.id FROM \`stages\` s WHERE LOWER(s.name) LIKE '%follow%' LIMIT 1), 'follow-up'),
+              f.created_by, f.note, f.created_at, f.created_at,
+              DATE_ADD(f.due_at, INTERVAL 6 HOUR), f.assigned_to, f.status
+            FROM \`follow_ups\` f
+            WHERE NOT EXISTS (
+              SELECT 1 FROM \`prospect_stage_history\` h
+              WHERE h.prospect_id = f.prospect_id AND h.follow_up_due_at IS NOT NULL
+                AND ABS(TIMESTAMPDIFF(SECOND, h.changed_at, f.created_at)) <= 120
+            )
+          `);
+        }
+      } catch (err) {
+        console.warn("Legacy follow_ups copy skipped:", err);
       }
 
       // Loosen strict NOT NULL constraints on legacy columns for smooth insertion
