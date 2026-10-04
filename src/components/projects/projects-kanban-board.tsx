@@ -52,6 +52,7 @@ import {
   ORDER_STATUSES,
   ORDER_SUBMITTED_STATUS_ID,
   ordersQueryOptions,
+  requiresStatusReason,
   resolveOrderStatus,
   useAssignStageMutation,
   useUpdateOrderStatusMutation,
@@ -59,6 +60,7 @@ import {
 } from "@/lib/orders";
 import { DateRangePicker3 } from "@/components/dashboard/date-range-picker3";
 import { AssignStageDialog, getInitials } from "@/components/orders/assign-stage-dialog";
+import { StatusReasonDialog } from "@/components/orders/status-reason-dialog";
 import { KanbanColumn } from "./kanban-column";
 import { getStageStartedAt } from "./project-card";
 
@@ -112,6 +114,9 @@ export function ProjectsKanbanBoard() {
   const [isUserFilterOpen, setIsUserFilterOpen] = useState(false);
   const [draggingOrder, setDraggingOrder] = useState<CrmOrder | null>(null);
   const [stageAssign, setStageAssign] = useState<{ order: CrmOrder; statusId: string } | null>(
+    null,
+  );
+  const [reasonTarget, setReasonTarget] = useState<{ order: CrmOrder; statusId: string } | null>(
     null,
   );
 
@@ -178,6 +183,10 @@ export function ProjectsKanbanBoard() {
     const target = resolveOrderStatus(statusId);
     if (target.assignable) {
       setStageAssign({ order, statusId });
+      return;
+    }
+    if (requiresStatusReason(statusId)) {
+      setReasonTarget({ order, statusId });
       return;
     }
     updateStatusMutation.mutate({ order, statusId, changedByName });
@@ -439,6 +448,22 @@ export function ProjectsKanbanBoard() {
           </div>
         )}
       </div>
+
+      {reasonTarget && (
+        <StatusReasonDialog
+          key={`${reasonTarget.order.id}-${reasonTarget.statusId}`}
+          order={reasonTarget.order}
+          statusId={reasonTarget.statusId}
+          isSaving={updateStatusMutation.isPending}
+          onCancel={() => setReasonTarget(null)}
+          onConfirm={(reason) =>
+            updateStatusMutation.mutate(
+              { ...reasonTarget, changedByName, reason },
+              { onSuccess: () => setReasonTarget(null) },
+            )
+          }
+        />
+      )}
 
       {stageAssign && (
         <AssignStageDialog

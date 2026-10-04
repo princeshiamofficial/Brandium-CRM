@@ -71,6 +71,7 @@ import {
   getContrastTextColor,
   ORDER_STATUSES,
   ordersQueryOptions,
+  requiresStatusReason,
   resolveOrderStatus,
   useAssignStageMutation,
   useDeleteOrderMutation,
@@ -82,6 +83,7 @@ import { CreateOrderDialog } from "@/components/orders/create-order-dialog";
 import { EditOrderDialog } from "@/components/orders/edit-order-dialog";
 import { DateRangePicker3 } from "@/components/dashboard/date-range-picker3";
 import { AssignStageDialog, getInitials } from "@/components/orders/assign-stage-dialog";
+import { StatusReasonDialog } from "@/components/orders/status-reason-dialog";
 
 const ITEMS_PER_PAGE = 25;
 
@@ -119,6 +121,9 @@ export default function OrdersPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [orderToEdit, setOrderToEdit] = useState<CrmOrder | null>(null);
   const [stageAssign, setStageAssign] = useState<{ order: CrmOrder; statusId: string } | null>(
+    null,
+  );
+  const [reasonTarget, setReasonTarget] = useState<{ order: CrmOrder; statusId: string } | null>(
     null,
   );
   const [orderToDelete, setOrderToDelete] = useState<CrmOrder | null>(null);
@@ -359,11 +364,13 @@ export default function OrdersPage() {
                                       onSelect={() =>
                                         st.assignable
                                           ? setStageAssign({ order, statusId: st.id })
-                                          : updateStatusMutation.mutate({
-                                              order,
-                                              statusId: st.id,
-                                              changedByName,
-                                            })
+                                          : requiresStatusReason(st.id)
+                                            ? setReasonTarget({ order, statusId: st.id })
+                                            : updateStatusMutation.mutate({
+                                                order,
+                                                statusId: st.id,
+                                                changedByName,
+                                              })
                                       }
                                       className="cursor-pointer focus:opacity-90"
                                       style={{
@@ -525,6 +532,22 @@ export default function OrdersPage() {
             setOrderToEdit(null);
           }}
           isSaving={saveOrderMutation.isPending}
+        />
+      )}
+
+      {reasonTarget && (
+        <StatusReasonDialog
+          key={`${reasonTarget.order.id}-${reasonTarget.statusId}`}
+          order={reasonTarget.order}
+          statusId={reasonTarget.statusId}
+          isSaving={updateStatusMutation.isPending}
+          onCancel={() => setReasonTarget(null)}
+          onConfirm={(reason) =>
+            updateStatusMutation.mutate(
+              { ...reasonTarget, changedByName, reason },
+              { onSuccess: () => setReasonTarget(null) },
+            )
+          }
         />
       )}
 

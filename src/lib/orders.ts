@@ -398,16 +398,34 @@ async function writeStatusChange(
   }
 }
 
+/** Stages that need a written reason before an order can move into them. */
+const REASON_REQUIRED_STATUS_IDS = new Set(["canceled", "on-hold"]);
+
+export const requiresStatusReason = (statusId: string) =>
+  REASON_REQUIRED_STATUS_IDS.has(resolveOrderStatus(statusId).id);
+
 export function useUpdateOrderStatusMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (p: { order: CrmOrder; statusId: string; changedByName: string }) => {
+    mutationFn: async (p: {
+      order: CrmOrder;
+      statusId: string;
+      changedByName: string;
+      /** Required for Canceled / On Hold (`requiresStatusReason`). */
+      reason?: string | undefined;
+    }) => {
       const status = resolveOrderStatus(p.statusId);
+      const reason = p.reason?.trim() || "";
+      if (requiresStatusReason(p.statusId) && !reason) {
+        throw new Error(`A reason is required to move an order to "${status.name}".`);
+      }
       await writeStatusChange(
         p.order,
         p.statusId,
         p.changedByName,
-        `Order moved to "${status.name}".`,
+        reason
+          ? `Order moved to "${status.name}". Reason: ${reason}`
+          : `Order moved to "${status.name}".`,
       );
     },
     onSuccess: (_, p) => {
