@@ -101,6 +101,10 @@ export default function DashboardPage() {
   });
   const m = metrics.data;
 
+  // Your Performance: share of prospects (created in the range, user-filtered) that reached Sales Won
+  const totalLeads = m?.total_prospects ?? 0;
+  const conversionRate = totalLeads > 0 ? Math.round(((m?.won_sales ?? 0) / totalLeads) * 100) : 0;
+
   const expenseSeriesQuery = useQuery({
     ...dashboardExpenseSeriesQuery(range, isAdmin ? filterUserId : userId),
     enabled: Boolean(userId),
@@ -279,7 +283,6 @@ export default function DashboardPage() {
             salesTotal={finance.totalSales}
             salesCount={finance.salesCount}
             expenseTotal={expenseQuery.data?.total ?? 0}
-            expenseCount={expenseQuery.data?.count ?? 0}
             series={salesExpenseSeries}
             isLoading={financeLoading || expenseQuery.isLoading || expenseSeriesQuery.isLoading}
           />
@@ -305,7 +308,33 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          <PerformanceGauge percentage={88} successLabel="Success" />
+          <PerformanceGauge
+            percentage={conversionRate}
+            successLabel="Lead conversion"
+            tasks={[
+              {
+                id: "qualified",
+                label: "Qualified leads",
+                progressText: `(${m?.qualified_leads ?? 0}/${totalLeads})`,
+                completed: (m?.qualified_leads ?? 0) > 0,
+                color: "yellow",
+              },
+              {
+                id: "meetings",
+                label: "Meetings scheduled",
+                progressText: `(${activityCounts.data?.meetings ?? 0})`,
+                completed: (activityCounts.data?.meetings ?? 0) > 0,
+                color: "blue",
+              },
+              {
+                id: "won",
+                label: "Sales won",
+                progressText: `(${m?.won_sales ?? 0}/${totalLeads})`,
+                completed: (m?.won_sales ?? 0) > 0,
+                color: "green",
+              },
+            ]}
+          />
         </motion.div>
       </div>
 

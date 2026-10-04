@@ -16,31 +16,9 @@ interface PerformanceGaugeProps {
 }
 
 export function PerformanceGauge({
-  percentage = 88,
+  percentage = 0,
   successLabel = "Success",
-  tasks = [
-    {
-      id: "1",
-      label: "Send 3 pitches",
-      progressText: "(2/3)",
-      completed: false,
-      color: "yellow",
-    },
-    {
-      id: "2",
-      label: "Complete 2 campaigns",
-      progressText: "(2/2)",
-      completed: true,
-      color: "blue",
-    },
-    {
-      id: "3",
-      label: "Upload a new brief",
-      progressText: "(1/1)",
-      completed: true,
-      color: "green",
-    },
-  ],
+  tasks = [],
 }: PerformanceGaugeProps) {
   // Center (150, 125), Radius: 85, Stroke width: 22
   // Upward semi-circle arch from 180° (left) up to 90° (top) down to 0° (right)
@@ -67,50 +45,69 @@ export function PerformanceGauge({
   // 1. Lime Green (Left): 180° to 138°
   // 2. Vibrant Blue (Middle / Peak): 133° to 47°
   // 3. Warm Orange / Golden Yellow (Right): 42° to 0°
-  const pathGreen = createArc(180, 138);
-  const pathBlue = createArc(133, 47);
-  const pathYellow = createArc(42, 0);
+  // Coloured segments are filled only up to the percentage; the rest of the arch is a grey track.
+  const progressAngle = 180 - (180 * Math.min(100, Math.max(0, percentage))) / 100;
+  const filledArc = (start: number, end: number) =>
+    progressAngle < start ? createArc(start, Math.max(end, progressAngle)) : null;
+  const pathTrack = createArc(180, 0);
+  const pathGreen = filledArc(180, 138);
+  const pathBlue = filledArc(133, 47);
+  const pathYellow = filledArc(42, 0);
 
   return (
     <div className="flex flex-col h-full justify-between">
       {/* Semi-circle Gauge Arch */}
       <div className="relative flex items-center justify-center w-full py-1">
         <svg viewBox="0 0 300 145" className="w-full max-w-65 h-auto overflow-visible select-none">
-          {/* Segment 1: Lime Green (Left) */}
-          <motion.path
-            d={pathGreen}
+          <path
+            d={pathTrack}
             fill="none"
-            stroke="#A3E635"
+            className="stroke-slate-100 dark:stroke-slate-800"
             strokeWidth={strokeWidth}
             strokeLinecap="round"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
           />
+
+          {/* Segment 1: Lime Green (Left) */}
+          {pathGreen && (
+            <motion.path
+              d={pathGreen}
+              fill="none"
+              stroke="#A3E635"
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: 1 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+            />
+          )}
 
           {/* Segment 2: Vibrant Royal Blue (Middle Peak) */}
-          <motion.path
-            d={pathBlue}
-            fill="none"
-            stroke="#5B8BF7"
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.15, ease: "easeOut" }}
-          />
+          {pathBlue && (
+            <motion.path
+              d={pathBlue}
+              fill="none"
+              stroke="#5B8BF7"
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.15, ease: "easeOut" }}
+            />
+          )}
 
           {/* Segment 3: Warm Golden Yellow / Orange (Right) */}
-          <motion.path
-            d={pathYellow}
-            fill="none"
-            stroke="#FBBF24"
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
-          />
+          {pathYellow && (
+            <motion.path
+              d={pathYellow}
+              fill="none"
+              stroke="#FBBF24"
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
+            />
+          )}
 
           {/* Center Metric Text inside Arc */}
           <text
