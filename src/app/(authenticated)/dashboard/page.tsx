@@ -283,6 +283,7 @@ export default function DashboardPage() {
             salesTotal={finance.totalSales}
             salesCount={finance.salesCount}
             expenseTotal={expenseQuery.data?.total ?? 0}
+            expenseCount={expenseQuery.data?.count ?? 0}
             series={salesExpenseSeries}
             isLoading={financeLoading || expenseQuery.isLoading || expenseSeriesQuery.isLoading}
           />
