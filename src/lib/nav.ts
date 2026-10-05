@@ -6,7 +6,6 @@ import {
   MessagesSquare,
   RadioTower,
   ReceiptText,
-  BarChart3,
   Activity,
   UserCog,
   Package,
@@ -59,10 +58,7 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Analytics",
-    items: [
-      { title: "Reports", url: "/reports", icon: BarChart3 },
-      { title: "Agent Activity", url: "/agent-activity", icon: Activity },
-    ],
+    items: [{ title: "Agent Activity", url: "/agent-activity", icon: Activity }],
   },
   {
     label: "Administration",

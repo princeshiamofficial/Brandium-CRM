@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { getContrastTextColor, resolveOrderStatus, type CrmOrder } from "@/lib/orders";
+import { resolveOrderStatus, type CrmOrder } from "@/lib/orders";
 
 interface StatusReasonDialogProps {
   order: CrmOrder;
@@ -33,7 +33,6 @@ export function StatusReasonDialog({
   onConfirm,
 }: StatusReasonDialogProps) {
   const [reason, setReason] = useState("");
-  const from = resolveOrderStatus(order.status);
   const to = resolveOrderStatus(statusId);
   const canSubmit = reason.trim().length > 0 && !isSaving;
 
@@ -53,16 +52,6 @@ export function StatusReasonDialog({
         </DialogHeader>
 
         <div className="py-2 space-y-4">
-          <div className="flex items-center justify-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50 text-sm">
-            <span className="text-muted-foreground">{from.name}</span>
-            <ArrowRight className="h-4 w-4 text-muted-foreground/50" />
-            <span
-              className="rounded-md px-2 py-0.5 text-xs font-semibold"
-              style={{ backgroundColor: to.color, color: getContrastTextColor(to.color) }}
-            >
-              {to.name}
-            </span>
-          </div>
           <div className="space-y-2">
             <Label htmlFor="order-status-reason" className="text-sm font-medium">
               Reason <span className="text-destructive">*</span>
