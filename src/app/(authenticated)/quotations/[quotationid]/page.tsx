@@ -43,6 +43,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { runMySQLQuery } from "@/lib/mysql-api";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
+import { SalesPdfActions } from "@/components/sales/sales-pdf-actions";
+import { formatPdfBdt, formatPdfDate, type SalesPdfData } from "@/lib/sales-pdf";
 
 interface QuotationOrderItem {
   id: string;
@@ -661,8 +663,83 @@ export default function QuotationDetailPage() {
     );
   }
 
+  // Same content as the on-screen sheet, rendered by @react-pdf/renderer for Print / Download PDF
+  const buildPdfData = (): SalesPdfData => {
+    const code = String(quotation.quotation_code || quotation.id);
+    const totals: SalesPdfData["totals"] = [
+      { label: "Items Total:", value: formatPdfBdt(orderSubtotal) },
+    ];
+    if (specialDiscount > 0) {
+      totals.push({
+        label: "Special Discount:",
+        value: `- ${formatPdfBdt(specialDiscount)}`,
+        tone: "minus",
+      });
+    }
+    totals.push({ label: "Net Payable:", value: formatPdfBdt(netPayable), tone: "strong" });
+    if (totalPaid > 0) {
+      totals.push({
+        label: isPaid ? "Total Paid:" : "Total Advance Paid:",
+        value: `- ${formatPdfBdt(totalPaid)}`,
+        tone: "paid",
+      });
+    }
+    return {
+      documentTitle: `Quotation ${code}`,
+      fileName: `Quotation-${code}.pdf`,
+      codeLabel: "Quotation No:",
+      code,
+      billTo: {
+        name: quotation.client_name || quotation.title,
+        company:
+          quotation.title && quotation.title !== quotation.client_name ? quotation.title : null,
+        address: quotation.client_address,
+        phone: quotation.client_phone,
+      },
+      dates: [
+        {
+          label: "Quotation Date:",
+          value: formatPdfDate(quotation.order_date || quotation.created_at),
+        },
+        ...(quotation.deadline
+          ? [{ label: "Valid Until:", value: formatPdfDate(quotation.deadline, false) }]
+          : []),
+      ],
+      itemsTitle: "Quotation Items",
+      items: orderItems.map((item) => ({
+        name: item.model,
+        quantity: item.quantity,
+        unitPrice: formatPdfBdt(item.unitPrice),
+        total: formatPdfBdt(item.lineItemTotalPrice),
+        isGift: item.isGift,
+      })),
+      notesTitle: "Quotation Notes:",
+      notes: cleanNotes,
+      payments: paymentsHistory.map((p) => ({
+        date: formatPdfDate(p.date, false),
+        amount: formatPdfBdt(p.amount),
+        method: p.paymentMethod || "N/A",
+        notes: p.notes || "N/A",
+        recordedBy: p.recordedBy || "N/A",
+      })),
+      terms: QUOTATION_TERMS,
+      totals,
+      amountDue: !isPaid && amountDue > 0.01 ? formatPdfBdt(amountDue) : null,
+      isPaid,
+    };
+  };
+
   return (
     <div className="selection:bg-primary/20 selection:text-primary print:p-0 print:m-0 print:bg-white pt-0 pb-6 -mt-1 sm:-mt-2">
+      <div className="w-full max-w-[210mm] mx-auto mb-3 px-2 sm:px-0 flex items-center justify-between gap-2 print:hidden">
+        <Button asChild variant="ghost" size="sm" className="cursor-pointer">
+          <Link href="/quotations">
+            <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to Quotations
+          </Link>
+        </Button>
+        <SalesPdfActions getData={buildPdfData} />
+      </div>
+
       {/* Current Status Header Card (Screen Only - Hidden in Print) */}
       {quotation && (
         <div className="w-full max-w-[210mm] mx-auto mb-4 px-2 sm:px-0 print:hidden">

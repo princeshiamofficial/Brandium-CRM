@@ -654,3 +654,23 @@ Single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/agents/d
 - **Dashboard "Your Performance" = Lead Conversion (was fake 88%)**:
   - The gauge shows `round(won_sales / total_prospects * 100)` from `dashboardMetricsQuery` (prospects created in the date range, user-filtered). The rows are Qualified leads (`qualified_leads/total`), Meetings scheduled (`dashboardActivityCountsQuery().meetings`) and Sales won (`won_sales/total`); a row shows ✓ when its count is above 0.
   - `PerformanceGauge` (`src/components/dashboard/performance-gauge.tsx`) used to draw the three coloured arcs at fixed lengths whatever the percentage. It now draws a grey track and fills the coloured segments only up to the percentage, and it has no fake default tasks.
+
+- **Order / Project Stage Change Requires a Reason for Canceled and On Hold**:
+  - `requiresStatusReason(statusId)` (`src/lib/orders.ts`) is true for `canceled` and `on-hold`. Both stage-change paths (Projects board drag-and-drop in `projects-kanban-board.tsx`, Orders page "Change Status" in `orders/page.tsx`) open `StatusReasonDialog` (`src/components/orders/status-reason-dialog.tsx`, required textarea, no from → to box) instead of moving the order directly.
+  - `useUpdateOrderStatusMutation` also throws when the reason is missing for those stages, and saves it in `status_history` as `Order moved to "On Hold". Reason: ...`.
+
+- **`/reports` Page Removed**:
+  - Removed per user request: `src/app/(authenticated)/reports/page.tsx`, its only data source `src/lib/reports.ts`, and the sidebar "Reports" link. The dashboard "Your Performance" View all now links to `/prospects`. Admin "Agent Reports" (`/admin/agent-reports`) is separate and kept.
+  - After deleting a route, `tsc` can still fail on stale `.next/types/validator.ts` (`Cannot find module '.../reports/page.js'`); restarting `next dev` (or running `next build`) regenerates it.
+
+- **App-wide 404 Page (`src/app/not-found.tsx`)**:
+  - Built from the user's reference image. The artwork (both 4s, the 0 and the newspaper reader) is cropped 1:1 from the reference into `public/404/404-artwork.webp` (770×430) and shown at most at that native width (`max-w-192.5`, `w-full h-auto` below it); the two text lines are live Open Sans text (`#222` 20px heading, `#444` 13px line, `#23a0b5` semibold underlined "homepage" link to `/`). Open Sans is loaded through the existing Google Fonts `@import` at the top of `src/styles.css`.
+  - The image uses `unoptimized`: Next's default optimiser re-encoded it at q=75 and upscaled to 828px, which visibly softened the photo. Spacing matches the reference at 991×678 (artwork top 84px, heading top 564px, line top 621px, no scrollbar).
+  - The page has a fixed white background on purpose (the artwork's background is white), including in dark mode.
+
+- **Order Invoice & Quotation PDF (`@react-pdf/renderer`)**:
+  - `/track/[id]` and `/quotations/[quotationid]` have **Print** and **Download PDF** buttons (`SalesPdfActions`, `src/components/sales/sales-pdf-actions.tsx`); the `/orders` "Invoice" action (`?print=1`) prints the PDF once. Both use one A4 layout, `SalesPdfDocument` (`src/components/sales/sales-pdf-document.tsx`): full-page letterhead (`brandium_invoice_bg.jpg`, explicit 595.28×841.89pt + `objectFit: "fill"`), Bill To box, code + dates + CODE128 barcode, items, notes, payments, terms and totals, Paid stamp when fully paid.
+  - `src/lib/sales-pdf.ts` holds the `SalesPdfData` shape, `orderToPdfData()` (same totals rules as the track page), and `printSalesPdf` / `downloadSalesPdf`, which `import()` `@react-pdf/renderer` on click so it never lands in page bundles. The quotation page builds its data inline from its existing `useMemo` values.
+  - Fonts are the built-in Helvetica, so amounts use `BDT` (not `৳`) and Bangla text would not render; register a Bangla-capable font with `Font.register` if that is needed.
+  - Running `npm install` while `next dev` is running left the dev server with two loaded copies of `@tanstack/react-query` ("No QueryClient set, use QueryClientProvider" on pages compiled afterwards). Restart the dev server after installing packages.
+  - When copying working-tree files in PowerShell, paths with `[id]` are wildcards: use `-LiteralPath` everywhere (or bash), or the copy silently skips those pages.

@@ -24,7 +24,6 @@ import {
   Package,
   Percent,
   Phone,
-  Printer,
   ReceiptText,
   ScrollText,
   Send,
@@ -70,6 +69,8 @@ import {
 import { BRANDIUM_TERMS } from "@/components/invoices/torn-paper-terms";
 import { StatusInfoIcon } from "@/components/sales/status-info-icon";
 import { getInitials } from "@/components/orders/assign-stage-dialog";
+import { SalesPdfActions } from "@/components/sales/sales-pdf-actions";
+import { orderToPdfData, printSalesPdf } from "@/lib/sales-pdf";
 
 const MAX_INITIAL_REPLIES_TO_SHOW = 1;
 
@@ -140,13 +141,14 @@ export default function OrderTrackPage() {
     }
   }, [order?.order_number, isLoading]);
 
-  // "Invoice" action on /orders opens this page with ?print=1
+  // "Invoice" action on /orders opens this page with ?print=1: print the generated PDF once
+  const autoPrintedRef = useRef(false);
   useEffect(() => {
-    if (order && searchParams?.get("print") === "1") {
-      const timer = setTimeout(() => window.print(), 600);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
+    if (!order || autoPrintedRef.current || searchParams?.get("print") !== "1") return;
+    autoPrintedRef.current = true;
+    printSalesPdf(orderToPdfData(order)).catch((err) =>
+      console.error("Invoice PDF print failed:", err),
+    );
   }, [order, searchParams]);
 
   if (isLoading) {
@@ -402,14 +404,7 @@ export default function OrderTrackPage() {
               <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to Orders
             </Link>
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.print()}
-            className="cursor-pointer"
-          >
-            <Printer className="mr-1.5 h-4 w-4" /> Print Invoice
-          </Button>
+          <SalesPdfActions getData={() => orderToPdfData(order)} />
         </div>
 
         {/* Current Status header */}
